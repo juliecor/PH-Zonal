@@ -5,10 +5,17 @@ export const runtime = "nodejs";
 
 type AnyRow = Record<string, any>;
 
+// --- small in-memory cache (per server instance)
+const ZONAL_CACHE: Map<
+  string,
+  { ts: number; rows: AnyRow[] }
+> = (globalThis as any).__ZONAL_CACHE__ ?? new Map();
+
+(globalThis as any).__ZONAL_CACHE__ = ZONAL_CACHE;
+
+const TTL_MS = 1000 * 60 * 30; // 30 minutes
+
 function getVal(row: AnyRow, key: string) {
-  // supports both shapes:
-  // 1) Spread rows: row.cells[key].value / formattedValue
-  // 2) Flattened rows: row[key]
   return (
     row?.cells?.[key]?.value ??
     row?.cells?.[key]?.formattedValue ??
@@ -17,25 +24,40 @@ function getVal(row: AnyRow, key: string) {
   );
 }
 
-/** Normalize PH location text so filters won't "miss" due to formatting differences */
 function norm(s: any) {
   return String(s ?? "")
     .toUpperCase()
-    .replace(/\(.*?\)/g, "")            // remove (...) notes
-    .replace(/\bBRGY\.?\b/g, "")        // remove BRGY / BRGY.
-    .replace(/\bBARANGAY\b/g, "")       // remove BARANGAY word
-    .replace(/Ñ/g, "N")                 // normalize Ñ
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")  // keep letters/numbers/spaces/hyphen
+    .replace(/\(.*?\)/g, "")
+    .replace(/\bBRGY\.?\b/g, "")
+    .replace(/\bBARANGAY\b/g, "")
+    .replace(/Ñ/g, "N")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-/** Loose match: exact OR contains (either direction) */
 function matchesLoose(value: any, want: any) {
   const v = norm(value);
   const w = norm(want);
   if (!w) return true;
   return v === w || v.includes(w) || w.includes(v);
+}
+
+async function getDomainRows(domain: string) {
+  const cached = ZONAL_CACHE.get(domain);
+  if (cached && Date.now() - cached.ts < TTL_MS) return cached.rows;
+
+  // IMPORTANT: do NOT pass search to upstream anymore (keeps cache reusable)
+  const data = await fetchZonalValuesByDomain({
+    domain,
+    page: 1,
+    itemsPerPage: 5000,
+    search: "", // <-- keep empty so cache always valid
+  });
+
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  ZONAL_CACHE.set(domain, { ts: Date.now(), rows });
+  return rows;
 }
 
 export async function GET(req: Request) {
@@ -53,35 +75,28 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "domain is required" }, { status: 400 });
     }
 
-    // Fetch a big chunk once
-    const data = await fetchZonalValuesByDomain({
-      domain,
-      page: 1,
-      itemsPerPage: 5000,
-      search: q, // still ok
-    });
+    const base = await getDomainRows(domain);
 
-    let filtered = Array.isArray(data?.rows) ? data.rows : [];
+    let filtered = base;
 
-    // ✅ city filter (loose)
-    if (city) {
-      filtered = filtered.filter((row) => matchesLoose(getVal(row, "City-"), city));
+    // enforce city+barangay together (prevents wrong mixing)
+    if (city && barangay) {
+      filtered = filtered.filter((row) => {
+        return (
+          matchesLoose(getVal(row, "City-"), city) &&
+          matchesLoose(getVal(row, "Barangay-"), barangay)
+        );
+      });
+    } else {
+      if (city) filtered = filtered.filter((row) => matchesLoose(getVal(row, "City-"), city));
+      if (barangay) filtered = filtered.filter((row) => matchesLoose(getVal(row, "Barangay-"), barangay));
     }
 
-    // ✅ barangay filter (loose)
-    if (barangay) {
-      filtered = filtered.filter((row) => matchesLoose(getVal(row, "Barangay-"), barangay));
-    }
-
-    // ✅ classification filter (loose contains)
     if (classification) {
-      filtered = filtered.filter((row) =>
-        matchesLoose(getVal(row, "Classification-"), classification)
-      );
+      filtered = filtered.filter((row) => matchesLoose(getVal(row, "Classification-"), classification));
     }
 
-    // ✅ optional: if q is empty, still allow client-side text search for better results
-    // (only do this when q exists but backend search isn't reliable)
+    // local text search (fast, no upstream call)
     if (q) {
       const qn = norm(q);
       filtered = filtered.filter((row) => {
@@ -91,7 +106,7 @@ export async function GET(req: Request) {
       });
     }
 
-    // ✅ paginate
+    // paginate
     const itemsPerPage = 16;
     const totalRows = filtered.length;
     const pageCount = Math.ceil(totalRows / itemsPerPage) || 1;
@@ -110,13 +125,6 @@ export async function GET(req: Request) {
       pageCount,
       hasPrev: validPage > 1,
       hasNext: validPage < pageCount,
-
-      // ✅ helpful debug (remove later if you want)
-      debug: {
-        city,
-        barangay,
-        sampleBarangayValues: filtered.slice(0, 10).map((r) => getVal(r, "Barangay-")),
-      },
     });
   } catch (e: any) {
     console.error("Zonal API error:", e);
