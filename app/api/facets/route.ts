@@ -1,107 +1,117 @@
 import { NextResponse } from "next/server";
-import { fetchZonalValuesByDomain } from "../../lib/zonalByDomain";
+import { fetchZonalValuesByDomain, fetchZonalIndex } from "../../lib/zonalByDomain";
 
-const norm = (v: any) => String(v ?? "").trim();
+export const runtime = "nodejs";
 
-const CACHE_TTL_MS = 1000 * 60 * 60; // 1 hour
-const cache = new Map<string, { ts: number; data: any }>();
+type AnyRow = Record<string, any>;
 
-const SOURCE_PAGE_SIZE = 500; // fewer requests
-const MAX_SOURCE_PAGES = 2000;
-
-function cacheGet(key: string) {
-  const hit = cache.get(key);
-  if (!hit) return null;
-  if (Date.now() - hit.ts > CACHE_TTL_MS) {
-    cache.delete(key);
-    return null;
-  }
-  return hit.data;
+function norm(v: any) {
+  return String(v ?? "").trim();
 }
-function cacheSet(key: string, data: any) {
-  cache.set(key, { ts: Date.now(), data });
+
+function getVal(row: AnyRow, key: string) {
+  return (
+    row?.cells?.[key]?.value ??
+    row?.cells?.[key]?.formattedValue ??
+    row?.[key] ??
+    ""
+  );
+}
+
+// cache: domain -> rows
+const FACET_CACHE: Map<string, { ts: number; rows: AnyRow[] }> =
+  (globalThis as any).__FACET_CACHE__ ?? new Map();
+(globalThis as any).__FACET_CACHE__ = FACET_CACHE;
+
+const TTL_MS = 1000 * 60 * 30; // 30 mins
+const PAGE_SIZE = 1000;        // good balance (few calls, not too heavy)
+const HARD_CAP_PAGES = 120;    // safety (~120k rows)
+
+function cityMatches(rowCity: string, wantCity: string) {
+  const a = norm(rowCity).toUpperCase();
+  const b = norm(wantCity).toUpperCase();
+  if (!b) return true;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+async function getAllDomainRows(domain: string) {
+  const cached = FACET_CACHE.get(domain);
+  if (cached && Date.now() - cached.ts < TTL_MS) return cached.rows;
+
+  // ✅ dynamic page count based on rowsLimit
+  const idx = await fetchZonalIndex(domain);
+  const rowsLimit = Number(idx?.rowsLimit ?? 5000);
+  const pagesNeeded = Math.min(
+    HARD_CAP_PAGES,
+    Math.max(1, Math.ceil(rowsLimit / PAGE_SIZE))
+  );
+
+  const all: AnyRow[] = [];
+
+  for (let p = 1; p <= pagesNeeded; p++) {
+    const result = await fetchZonalValuesByDomain({
+      domain,
+      page: p,
+      itemsPerPage: PAGE_SIZE,
+      search: "", // IMPORTANT: keep empty so we fetch everything
+    });
+
+    const batch = Array.isArray(result?.rows) ? result.rows : [];
+    all.push(...batch);
+
+    // stop when last page (extra safety)
+    if (batch.length < PAGE_SIZE) break;
+  }
+
+  FACET_CACHE.set(domain, { ts: Date.now(), rows: all });
+  return all;
 }
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
+  try {
+    const { searchParams } = new URL(req.url);
 
-  const domain = norm(searchParams.get("domain") ?? "");
-  const mode = norm(searchParams.get("mode") ?? "cities"); // "cities" | "barangays"
-  const city = norm(searchParams.get("city") ?? "");
+    const domain = norm(searchParams.get("domain"));
+    const mode = norm(searchParams.get("mode") ?? "cities");
+    const city = norm(searchParams.get("city"));
 
-  if (!domain || !domain.includes(".") || domain.includes(" ")) {
-    return NextResponse.json({ error: "Invalid domain", domain }, { status: 400 });
-  }
+    if (!domain || !domain.includes(".") || domain.includes(" ")) {
+      return NextResponse.json({ error: "Invalid domain", domain }, { status: 400 });
+    }
 
-  // Mode: cities
-  if (mode === "cities") {
-    const key = `cities:${domain}`;
-    const cached = cacheGet(key);
-    if (cached) return NextResponse.json({ domain, cities: cached, cached: true });
+    const rows = await getAllDomainRows(domain);
 
-    const citiesSet = new Set<string>();
+    if (mode === "cities") {
+      const set = new Set<string>();
+      for (const r of rows) {
+        const c = norm(getVal(r, "City-"));
+        if (c) set.add(c);
+      }
+      const cities = Array.from(set).sort((a, b) => a.localeCompare(b));
+      return NextResponse.json({ domain, cities, cached: true });
+    }
 
-    for (let p = 1; p <= MAX_SOURCE_PAGES; p++) {
-      const result = await fetchZonalValuesByDomain({
-        domain,
-        page: p,
-        itemsPerPage: SOURCE_PAGE_SIZE,
-        search: "", // no search
-      });
-
-      const batch = result.rows ?? [];
-      for (const r of batch) {
-        const c = norm(r["City-"]);
-        if (c) citiesSet.add(c);
+    if (mode === "barangays") {
+      if (!city) {
+        return NextResponse.json({ error: "city is required" }, { status: 400 });
       }
 
-      if (batch.length < SOURCE_PAGE_SIZE) break;
-    }
+      const set = new Set<string>();
+      for (const r of rows) {
+        const rowCity = String(getVal(r, "City-") ?? "");
+        if (!cityMatches(rowCity, city)) continue;
 
-    const cities = Array.from(citiesSet).sort((a, b) => a.localeCompare(b));
-    cacheSet(key, cities);
-
-    return NextResponse.json({ domain, cities, cached: false });
-  }
-
-  // Mode: barangays for a selected city
-  if (mode === "barangays") {
-    if (!city) {
-      return NextResponse.json(
-        { error: "city is required for mode=barangays" },
-        { status: 400 }
-      );
-    }
-
-    const key = `barangays:${domain}:${city}`;
-    const cached = cacheGet(key);
-    if (cached) return NextResponse.json({ domain, city, barangays: cached, cached: true });
-
-    const brgySet = new Set<string>();
-
-    for (let p = 1; p <= MAX_SOURCE_PAGES; p++) {
-      const result = await fetchZonalValuesByDomain({
-        domain,
-        page: p,
-        itemsPerPage: SOURCE_PAGE_SIZE,
-        search: city, // helps narrow quickly
-      });
-
-      const batch = result.rows ?? [];
-      for (const r of batch) {
-        if (norm(r["City-"]) !== city) continue;
-        const b = norm(r["Barangay-"]);
-        if (b) brgySet.add(b);
+        const b = norm(getVal(r, "Barangay-"));
+        if (b) set.add(b);
       }
 
-      if (batch.length < SOURCE_PAGE_SIZE) break;
+      const barangays = Array.from(set).sort((a, b) => a.localeCompare(b));
+      return NextResponse.json({ domain, city, barangays, cached: true });
     }
 
-    const barangays = Array.from(brgySet).sort((a, b) => a.localeCompare(b));
-    cacheSet(key, barangays);
-
-    return NextResponse.json({ domain, city, barangays, cached: false });
+    return NextResponse.json({ error: "Invalid mode (use cities|barangays)" }, { status: 400 });
+  } catch (e: any) {
+    console.error("Facets API error:", e);
+    return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
   }
-
-  return NextResponse.json({ error: "Invalid mode. Use cities or barangays." }, { status: 400 });
 }

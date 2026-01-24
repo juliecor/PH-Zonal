@@ -39,5 +39,5 @@ const fetchZonalRegions = async (search) => {
   const data = response.data;
   console.log(BASE_URL);
 };
-fetchZonalValues(`davaodelsur.zonalvalue.com`);
+fetchZonalValues(`ncr1stdistrict.zonalvalue.com`);
  //fetchZonalRegions("cebu");

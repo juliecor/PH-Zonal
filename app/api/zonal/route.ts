@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
-import { fetchZonalValuesByDomain } from "../../lib/zonalByDomain";
+import { fetchZonalValuesByDomain, fetchZonalIndex } from "../../lib/zonalByDomain";
 
 export const runtime = "nodejs";
 
 type AnyRow = Record<string, any>;
 
-// --- small in-memory cache (per server instance)
-const ZONAL_CACHE: Map<
-  string,
-  { ts: number; rows: AnyRow[] }
-> = (globalThis as any).__ZONAL_CACHE__ ?? new Map();
-
+// ---- cache (per server instance) ----
+const ZONAL_CACHE: Map<string, { ts: number; rows: AnyRow[] }> =
+  (globalThis as any).__ZONAL_CACHE__ ?? new Map();
 (globalThis as any).__ZONAL_CACHE__ = ZONAL_CACHE;
 
 const TTL_MS = 1000 * 60 * 30; // 30 minutes
+
+// tune this (1000 is a great default)
+const PAGE_SIZE = 1000;
+const HARD_CAP_PAGES = 120; // safety cap (~120k rows)
 
 function getVal(row: AnyRow, key: string) {
   return (
@@ -36,28 +37,67 @@ function norm(s: any) {
     .trim();
 }
 
+// for CITY / PROVINCE / CLASSIFICATION loose matching
 function matchesLoose(value: any, want: any) {
   const v = norm(value);
   const w = norm(want);
   if (!w) return true;
+  // keep loose matching here (useful for "CITY OF MANILA" vs "MANILA")
   return v === w || v.includes(w) || w.includes(v);
+}
+
+// ✅ barangay must be numeric-exact (prevents 102 matching 1)
+function extractBarangayNumber(s: any): string | null {
+  const t = String(s ?? "").toUpperCase();
+  const m = t.match(/\b(?:BARANGAY|BRGY\.?)\s*(\d{1,4})\b/);
+  if (m?.[1]) return m[1];
+  const m2 = t.match(/\d{1,4}/);
+  return m2 ? m2[0] : null;
+}
+
+function matchesBarangay(value: any, want: any) {
+  const vn = extractBarangayNumber(value);
+  const wn = extractBarangayNumber(want);
+
+  // If both have numbers, compare exact number
+  if (vn && wn) return vn === wn;
+
+  // Otherwise strict compare (no includes)
+  return norm(value) === norm(want);
 }
 
 async function getDomainRows(domain: string) {
   const cached = ZONAL_CACHE.get(domain);
   if (cached && Date.now() - cached.ts < TTL_MS) return cached.rows;
 
-  // IMPORTANT: do NOT pass search to upstream anymore (keeps cache reusable)
-  const data = await fetchZonalValuesByDomain({
-    domain,
-    page: 1,
-    itemsPerPage: 5000,
-    search: "", // <-- keep empty so cache always valid
-  });
+  // rowsLimit tells us how many pages we need
+  const idx = await fetchZonalIndex(domain);
+  const rowsLimit = Number(idx?.rowsLimit ?? 5000);
 
-  const rows = Array.isArray(data?.rows) ? data.rows : [];
-  ZONAL_CACHE.set(domain, { ts: Date.now(), rows });
-  return rows;
+  const pagesNeeded = Math.min(
+    HARD_CAP_PAGES,
+    Math.max(1, Math.ceil(rowsLimit / PAGE_SIZE))
+  );
+
+  const all: AnyRow[] = [];
+
+  for (let p = 1; p <= pagesNeeded; p++) {
+    const data = await fetchZonalValuesByDomain({
+      domain,
+      page: p,
+      itemsPerPage: PAGE_SIZE,
+      search: "", // IMPORTANT: keep empty so cache includes everything
+    });
+
+    const batch = Array.isArray(data?.rows) ? data.rows : [];
+    all.push(...batch);
+
+    // source ended early
+    if (batch.length < PAGE_SIZE) break;
+  }
+
+  ZONAL_CACHE.set(domain, { ts: Date.now(), rows: all });
+  return all;
 }
 
 export async function GET(req: Request) {
@@ -79,21 +119,28 @@ export async function GET(req: Request) {
 
     let filtered = base;
 
-    // enforce city+barangay together (prevents wrong mixing)
+    // ✅ enforce city+barangay together (prevents mixing)
     if (city && barangay) {
-      filtered = filtered.filter((row) => {
-        return (
+      filtered = filtered.filter(
+        (row) =>
           matchesLoose(getVal(row, "City-"), city) &&
-          matchesLoose(getVal(row, "Barangay-"), barangay)
-        );
-      });
+          matchesBarangay(getVal(row, "Barangay-"), barangay)
+      );
     } else {
-      if (city) filtered = filtered.filter((row) => matchesLoose(getVal(row, "City-"), city));
-      if (barangay) filtered = filtered.filter((row) => matchesLoose(getVal(row, "Barangay-"), barangay));
+      if (city) {
+        filtered = filtered.filter((row) => matchesLoose(getVal(row, "City-"), city));
+      }
+      if (barangay) {
+        filtered = filtered.filter((row) =>
+          matchesBarangay(getVal(row, "Barangay-"), barangay)
+        );
+      }
     }
 
     if (classification) {
-      filtered = filtered.filter((row) => matchesLoose(getVal(row, "Classification-"), classification));
+      filtered = filtered.filter((row) =>
+        matchesLoose(getVal(row, "Classification-"), classification)
+      );
     }
 
     // local text search (fast, no upstream call)
@@ -101,7 +148,9 @@ export async function GET(req: Request) {
       const qn = norm(q);
       filtered = filtered.filter((row) => {
         const joined =
-          `${getVal(row, "Street/Subdivision-")} ${getVal(row, "Vicinity-")} ${getVal(row, "Barangay-")} ${getVal(row, "City-")} ${getVal(row, "Province-")} ${getVal(row, "Classification-")}`;
+          `${getVal(row, "Street/Subdivision-")} ${getVal(row, "Vicinity-")} ` +
+          `${getVal(row, "Barangay-")} ${getVal(row, "City-")} ${getVal(row, "Province-")} ` +
+          `${getVal(row, "Classification-")}`;
         return norm(joined).includes(qn);
       });
     }
@@ -114,12 +163,11 @@ export async function GET(req: Request) {
 
     const start = (validPage - 1) * itemsPerPage;
     const end = start + itemsPerPage;
-    const paginatedRows = filtered.slice(start, end);
 
     return NextResponse.json({
       domain,
       page: validPage,
-      rows: paginatedRows,
+      rows: filtered.slice(start, end),
       itemsPerPage,
       totalRows,
       pageCount,
