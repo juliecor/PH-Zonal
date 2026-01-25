@@ -2,90 +2,102 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-type CacheItem = { ts: number; data: any };
-const POI_CACHE = new Map<string, CacheItem>();
-const TTL_MS = 1000 * 60 * 30; // 30 minutes
+type PoiItem = { name: string; lat?: number; lon?: number; type?: string };
 
-function key(lat: number, lon: number, r: number) {
-  // round for better cache hit rate
-  const la = lat.toFixed(4);
-  const lo = lon.toFixed(4);
-  return `${la},${lo},${r}`;
+function pickName(tags: any) {
+  return String(tags?.name ?? tags?.["name:en"] ?? "").trim();
 }
 
-async function overpass(query: string) {
-  const url = "https://overpass-api.de/api/interpreter";
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain" },
-    body: query,
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Overpass ${res.status}: ${text.slice(0, 140)}`);
-  return JSON.parse(text);
+function pushItem(map: Map<string, PoiItem>, it: PoiItem) {
+  const key = (it.name || "").toLowerCase();
+  if (!key) return;
+  if (!map.has(key)) map.set(key, it);
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const lat = Number(body.lat);
-    const lon = Number(body.lon);
-    const radius = Math.max(100, Math.min(5000, Number(body.radius ?? 1500)));
+    const lat = Number(body?.lat);
+    const lon = Number(body?.lon);
+    const radius = Math.max(200, Math.min(5000, Number(body?.radius ?? 1500)));
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      return NextResponse.json({ ok: false, error: "Invalid lat/lon" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "lat/lon required" }, { status: 400 });
     }
 
-    const k = key(lat, lon, radius);
-    const cached = POI_CACHE.get(k);
-    if (cached && Date.now() - cached.ts < TTL_MS) {
-      return NextResponse.json(cached.data);
-    }
-
-    // We query multiple amenity types in one request
+    // We fetch elements for each category and return names.
     const q = `
 [out:json][timeout:25];
 (
-  nwr(around:${radius},${lat},${lon})[amenity=hospital];
-  nwr(around:${radius},${lat},${lon})[amenity=school];
-  nwr(around:${radius},${lat},${lon})[amenity=police];
-  nwr(around:${radius},${lat},${lon})[amenity=fire_station];
-  nwr(around:${radius},${lat},${lon})[amenity=pharmacy];
-  nwr(around:${radius},${lat},${lon})[amenity=clinic];
+  nwr(around:${radius},${lat},${lon})["amenity"="hospital"];
+  nwr(around:${radius},${lat},${lon})["amenity"="school"];
+  nwr(around:${radius},${lat},${lon})["amenity"="police"];
+  nwr(around:${radius},${lat},${lon})["amenity"="fire_station"];
+  nwr(around:${radius},${lat},${lon})["amenity"="pharmacy"];
+  nwr(around:${radius},${lat},${lon})["amenity"="clinic"];
 );
-out tags;
+out center;
 `;
 
-    const data = await overpass(q);
-    const els = Array.isArray(data?.elements) ? data.elements : [];
+    const res = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: q,
+    });
 
-    const counts = {
-      hospitals: 0,
-      schools: 0,
-      policeStations: 0,
-      fireStations: 0,
-      pharmacies: 0,
-      clinics: 0,
-    };
-
-    for (const el of els) {
-      const a = el?.tags?.amenity;
-      if (a === "hospital") counts.hospitals++;
-      else if (a === "school") counts.schools++;
-      else if (a === "police") counts.policeStations++;
-      else if (a === "fire_station") counts.fireStations++;
-      else if (a === "pharmacy") counts.pharmacies++;
-      else if (a === "clinic") counts.clinics++;
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.elements) {
+      return NextResponse.json({ ok: false, error: "Overpass failed" }, { status: 502 });
     }
 
-    const payload = { ok: true, counts };
-    POI_CACHE.set(k, { ts: Date.now(), data: payload });
+    // collect per type
+    const hospitals = new Map<string, PoiItem>();
+    const schools = new Map<string, PoiItem>();
+    const policeStations = new Map<string, PoiItem>();
+    const fireStations = new Map<string, PoiItem>();
+    const pharmacies = new Map<string, PoiItem>();
+    const clinics = new Map<string, PoiItem>();
 
-    return NextResponse.json(payload);
+    for (const el of data.elements as any[]) {
+      const tags = el?.tags ?? {};
+      const amenity = String(tags.amenity ?? "");
+      const name = pickName(tags);
+
+      const cLat = el?.center?.lat ?? el?.lat;
+      const cLon = el?.center?.lon ?? el?.lon;
+
+      const item: PoiItem = { name, lat: cLat, lon: cLon, type: amenity };
+
+      if (amenity === "hospital") pushItem(hospitals, item);
+      else if (amenity === "school") pushItem(schools, item);
+      else if (amenity === "police") pushItem(policeStations, item);
+      else if (amenity === "fire_station") pushItem(fireStations, item);
+      else if (amenity === "pharmacy") pushItem(pharmacies, item);
+      else if (amenity === "clinic") pushItem(clinics, item);
+    }
+
+    const out = (m: Map<string, PoiItem>) => Array.from(m.values()).slice(0, 30);
+
+    return NextResponse.json({
+      ok: true,
+      counts: {
+        hospitals: hospitals.size,
+        schools: schools.size,
+        policeStations: policeStations.size,
+        fireStations: fireStations.size,
+        pharmacies: pharmacies.size,
+        clinics: clinics.size,
+      },
+      items: {
+        hospitals: out(hospitals),
+        schools: out(schools),
+        policeStations: out(policeStations),
+        fireStations: out(fireStations),
+        pharmacies: out(pharmacies),
+        clinics: out(clinics),
+      },
+    });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e?.message ?? "POI counts failed" },
-      { status: 502 }
-    );
+    return NextResponse.json({ ok: false, error: e?.message ?? "POI failed" }, { status: 500 });
   }
 }
