@@ -2,14 +2,12 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-// -------------------- cache --------------------
-const GEO_CACHE = new Map<string, { ts: number; lat: number; lon: number; label: string }>();
-const POLY_CACHE = new Map<string, { ts: number; poly: string }>();
+const GEO_CACHE = new Map<string, { ts: number; lat: number; lon: number; label: string; boundary?: any }>();
+const POLY_CACHE = new Map<string, { ts: number; poly: string; boundary: Array<[number, number]> | null }>();
 
 const GEO_TTL = 1000 * 60 * 60 * 24 * 14; // 14d
 const POLY_TTL = 1000 * 60 * 60 * 24 * 30; // 30d
 
-// -------------------- helpers --------------------
 function cleanName(s: any) {
   return String(s ?? "")
     .replace(/\(.*?\)/g, "")
@@ -24,7 +22,13 @@ function normalizePH(s: any) {
     .replace(/\bSTO\b/gi, "Santo")
     .replace(/\bSTA\b/gi, "Santa")
     .replace(/NIÑO/gi, "Nino")
-    .replace(/Ñ/gi, "N");
+    .replace(/Ñ/gi, "N")
+    .replace(/\bST\.?\b/gi, "Street")
+    .replace(/\bRD\.?\b/gi, "Road")
+    .replace(/\bAVE\.?\b/gi, "Avenue")
+    .replace(/\bBLVD\.?\b/gi, "Boulevard")
+    .replace(/\bDR\.?\b/gi, "Drive")
+    .replace(/\bLN\.?\b/gi, "Lane");
 }
 
 function normLoose(s: any) {
@@ -38,7 +42,7 @@ function includesLoose(hay: any, needle: any) {
   return h.includes(n);
 }
 
-// Rough bounding box around anchor (km)
+// Bounding box around anchor (km)
 function mkViewbox(lat: number, lon: number, km = 6) {
   const dLat = km / 111;
   const dLon = km / (111 * Math.cos((lat * Math.PI) / 180));
@@ -46,22 +50,11 @@ function mkViewbox(lat: number, lon: number, km = 6) {
   const right = lon + dLon;
   const top = lat + dLat;
   const bottom = lat - dLat;
-  return `${left},${top},${right},${bottom}`; // left,top,right,bottom
+  return `${left},${top},${right},${bottom}`;
 }
 
-// area for ring coords [lon,lat]
-function ringArea(coords: number[][]) {
-  let sum = 0;
-  for (let i = 0; i < coords.length - 1; i++) {
-    const [x1, y1] = coords[i];
-    const [x2, y2] = coords[i + 1];
-    sum += x1 * y2 - x2 * y1;
-  }
-  return Math.abs(sum) / 2;
-}
-
-// Convert GeoJSON polygon/multipolygon to Overpass poly string ("lat lon lat lon ...")
-function geojsonToPoly(geojson: any, maxPoints = 220): string | null {
+// Convert GeoJSON -> (a) boundary coords [lat,lon] (b) overpass poly string "lat lon ..."
+function geojsonOuterRing(geojson: any) {
   if (!geojson) return null;
 
   let rings: number[][][] = [];
@@ -83,66 +76,98 @@ function geojsonToPoly(geojson: any, maxPoints = 220): string | null {
 
   if (!rings.length) return null;
 
-  // pick largest ring
+  // pick largest ring by rough area (shoelace)
+  const area = (coords: number[][]) => {
+    let sum = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const [x1, y1] = coords[i];
+      const [x2, y2] = coords[i + 1];
+      sum += x1 * y2 - x2 * y1;
+    }
+    return Math.abs(sum) / 2;
+  };
+
   let best = rings[0];
-  let bestA = ringArea(best);
+  let bestA = area(best);
   for (const r of rings.slice(1)) {
-    const a = ringArea(r);
+    const a = area(r);
     if (a > bestA) {
       best = r;
       bestA = a;
     }
   }
 
-  // downsample
-  const step = Math.max(1, Math.ceil(best.length / maxPoints));
-  const sampled: number[][] = [];
-  for (let i = 0; i < best.length; i += step) sampled.push(best[i]);
+  return best; // [ [lon,lat], ... ]
+}
 
-  // close ring
+function downsampleRingLonLatToBoundary(ring: number[][], maxPoints = 220) {
+  if (!ring?.length) return null;
+
+  const step = Math.max(1, Math.ceil(ring.length / maxPoints));
+  const sampled: number[][] = [];
+  for (let i = 0; i < ring.length; i += step) sampled.push(ring[i]);
+
   const first = sampled[0];
   const last = sampled[sampled.length - 1];
-  if (first && last && (first[0] !== last[0] || first[1] !== last[1])) {
-    sampled.push(first);
-  }
+  if (first && last && (first[0] !== last[0] || first[1] !== last[1])) sampled.push(first);
 
-  // Overpass poly wants "lat lon"
-  return sampled.map(([lon, lat]) => `${lat} ${lon}`).join(" ");
+  // boundary for Leaflet wants [lat,lon]
+  const boundary: Array<[number, number]> = sampled.map(([lon, lat]) => [lat, lon]);
+
+  // poly string for Overpass wants "lat lon"
+  const poly = boundary.map(([lat, lon]) => `${lat} ${lon}`).join(" ");
+
+  return { boundary, poly };
 }
 
-// centroid from Overpass poly string ("lat lon lat lon ...")
-function polyCentroid(poly: string): { lat: number; lon: number } | null {
-  const parts = poly.trim().split(/\s+/);
-  if (parts.length < 6) return null;
-
-  // pairs: lat lon
-  const pts: Array<{ lat: number; lon: number }> = [];
-  for (let i = 0; i + 1 < parts.length; i += 2) {
-    const lat = Number(parts[i]);
-    const lon = Number(parts[i + 1]);
-    if (Number.isFinite(lat) && Number.isFinite(lon)) pts.push({ lat, lon });
-  }
-  if (pts.length < 3) return null;
-
-  // simple average centroid (stable and fast)
+function polyCentroid(boundary: Array<[number, number]>) {
+  if (!boundary || boundary.length < 3) return null;
   let sumLat = 0;
   let sumLon = 0;
-  for (const p of pts) {
-    sumLat += p.lat;
-    sumLon += p.lon;
+  for (const [lat, lon] of boundary) {
+    sumLat += lat;
+    sumLon += lon;
   }
-  return { lat: sumLat / pts.length, lon: sumLon / pts.length };
+  return { lat: sumLat / boundary.length, lon: sumLon / boundary.length };
 }
 
-// -------------------- external calls --------------------
+// Build a regex that tolerates abbreviations and partial tokens
+function escapeRegex(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function makeNameRegex(input: string) {
+  const raw = normalizePH(input);
+  if (!raw) return "";
+  const parts = raw.split(/\s+/).filter(Boolean);
+
+  const mapped = parts.map((tok) => {
+    const t = tok.toUpperCase();
+
+    // abbreviation tolerance
+    if (t === "ST" || t === "STREET") return "(?:ST\\.?|STREET)";
+    if (t === "RD" || t === "ROAD") return "(?:RD\\.?|ROAD)";
+    if (t === "AVE" || t === "AVENUE") return "(?:AVE\\.?|AVENUE)";
+    if (t === "BLVD" || t === "BOULEVARD") return "(?:BLVD\\.?|BOULEVARD)";
+    if (t === "DR" || t === "DRIVE") return "(?:DR\\.?|DRIVE)";
+    if (t === "LN" || t === "LANE") return "(?:LN\\.?|LANE)";
+
+    // Allow partial: "MENDOZA" matches "AH Mendoza Street"
+    // We'll match token as a substring inside a word boundary-ish pattern
+    const safe = escapeRegex(tok);
+    return `(?:${safe})`;
+  });
+
+  // allow other words between tokens
+  return mapped.join(".*");
+}
+
 async function nominatimSearch(query: string, anchor?: { lat: number; lon: number } | null) {
   const base =
     `https://nominatim.openstreetmap.org/search` +
     `?format=jsonv2&addressdetails=1&limit=5&countrycodes=ph&q=${encodeURIComponent(query)}`;
 
-  const url = anchor
-    ? `${base}&viewbox=${encodeURIComponent(mkViewbox(anchor.lat, anchor.lon, 10))}&bounded=1`
-    : base;
+  const url = anchor ? `${base}&viewbox=${encodeURIComponent(mkViewbox(anchor.lat, anchor.lon, 10))}&bounded=1` : base;
 
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 9000);
@@ -161,16 +186,12 @@ async function nominatimSearch(query: string, anchor?: { lat: number; lon: numbe
     if (!Array.isArray(data) || data.length === 0) return { ok: false as const, error: "No match" };
     return { ok: true as const, results: data };
   } catch (e: any) {
-    return {
-      ok: false as const,
-      error: e?.name === "AbortError" ? "Timeout" : e?.message ?? "Fetch failed",
-    };
+    return { ok: false as const, error: e?.name === "AbortError" ? "Timeout" : e?.message ?? "Fetch failed" };
   } finally {
     clearTimeout(t);
   }
 }
 
-// Get barangay polygon (Nominatim polygon_geojson), cache it.
 async function getBarangayPoly(args: {
   barangay: string;
   city?: string;
@@ -185,7 +206,7 @@ async function getBarangayPoly(args: {
   const key = `${b}|${c}|${p}|${args.anchor?.lat ?? ""},${args.anchor?.lon ?? ""}`.toLowerCase();
 
   const hit = POLY_CACHE.get(key);
-  if (hit && Date.now() - hit.ts < POLY_TTL) return hit.poly;
+  if (hit && Date.now() - hit.ts < POLY_TTL) return hit;
 
   const q = c ? `${b}, ${c}, ${p}, Philippines` : `${b}, ${p}, Philippines`;
 
@@ -194,9 +215,7 @@ async function getBarangayPoly(args: {
     `?format=jsonv2&addressdetails=1&polygon_geojson=1&limit=3&countrycodes=ph` +
     `&q=${encodeURIComponent(q)}`;
 
-  const url = args.anchor
-    ? `${base}&viewbox=${encodeURIComponent(mkViewbox(args.anchor.lat, args.anchor.lon, 10))}&bounded=1`
-    : base;
+  const url = args.anchor ? `${base}&viewbox=${encodeURIComponent(mkViewbox(args.anchor.lat, args.anchor.lon, 10))}&bounded=1` : base;
 
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 9000);
@@ -213,7 +232,6 @@ async function getBarangayPoly(args: {
     const data = await res.json().catch(() => null);
     if (!res.ok || !Array.isArray(data) || data.length === 0) return null;
 
-    // choose best by city/prov hints
     const best =
       data.find((x: any) => {
         const addr = x?.address ?? {};
@@ -224,11 +242,16 @@ async function getBarangayPoly(args: {
         return okCity && okProv;
       }) ?? data[0];
 
-    const poly = geojsonToPoly(best?.geojson, 220);
-    if (!poly) return null;
+    const ring = geojsonOuterRing(best?.geojson);
+    if (!ring) return null;
 
-    POLY_CACHE.set(key, { ts: Date.now(), poly });
-    return poly;
+    const pack = downsampleRingLonLatToBoundary(ring, 240);
+    if (!pack) return null;
+
+    const payload = { ts: Date.now(), poly: pack.poly, boundary: pack.boundary };
+
+    POLY_CACHE.set(key, payload);
+    return payload;
   } catch {
     return null;
   } finally {
@@ -266,15 +289,15 @@ function pickCenter(el: any) {
 }
 
 async function overpassFindInsidePoly(name: string, poly: string) {
-  const safe = normalizePH(name);
-  if (!safe) return null;
+  const rx = makeNameRegex(name);
+  if (!rx) return null;
 
-  // 1) streets/roads by name
+  // 1) highways by name inside polygon
   const qStreet = `
 [out:json][timeout:18];
 (
-  way["highway"]["name"~"${safe}",i](poly:"${poly}");
-  relation["highway"]["name"~"${safe}",i](poly:"${poly}");
+  way["highway"]["name"~"${rx}",i](poly:"${poly}");
+  relation["highway"]["name"~"${rx}",i](poly:"${poly}");
 );
 out center 10;`;
 
@@ -282,14 +305,14 @@ out center 10;`;
   if (data?.elements?.length) {
     const el = data.elements.find((x: any) => pickCenter(x)) ?? data.elements[0];
     const c = pickCenter(el);
-    if (c) return { ...c, label: el?.tags?.name ? String(el.tags.name) : safe };
+    if (c) return { ...c, label: el?.tags?.name ? String(el.tags.name) : name };
   }
 
-  // 2) building/poi by name (condos etc)
+  // 2) POIs/buildings by name inside polygon
   const qPoi = `
 [out:json][timeout:18];
 (
-  nwr["name"~"${safe}",i](poly:"${poly}");
+  nwr["name"~"${rx}",i](poly:"${poly}");
 );
 out center 10;`;
 
@@ -297,22 +320,22 @@ out center 10;`;
   if (data?.elements?.length) {
     const el = data.elements.find((x: any) => pickCenter(x)) ?? data.elements[0];
     const c = pickCenter(el);
-    if (c) return { ...c, label: el?.tags?.name ? String(el.tags.name) : safe };
+    if (c) return { ...c, label: el?.tags?.name ? String(el.tags.name) : name };
   }
 
   return null;
 }
 
 async function overpassNearAnchor(name: string, anchor: { lat: number; lon: number }, radius = 3000) {
-  const safe = normalizePH(name);
-  if (!safe) return null;
+  const rx = makeNameRegex(name);
+  if (!rx) return null;
 
   const q = `
 [out:json][timeout:18];
 (
-  way(around:${radius},${anchor.lat},${anchor.lon})["highway"]["name"~"${safe}",i];
-  relation(around:${radius},${anchor.lat},${anchor.lon})["highway"]["name"~"${safe}",i];
-  nwr(around:${radius},${anchor.lat},${anchor.lon})["name"~"${safe}",i];
+  way(around:${radius},${anchor.lat},${anchor.lon})["highway"]["name"~"${rx}",i];
+  relation(around:${radius},${anchor.lat},${anchor.lon})["highway"]["name"~"${rx}",i];
+  nwr(around:${radius},${anchor.lat},${anchor.lon})["name"~"${rx}",i];
 );
 out center 10;`;
 
@@ -323,10 +346,9 @@ out center 10;`;
   const c = pickCenter(el);
   if (!c) return null;
 
-  return { ...c, label: el?.tags?.name ? String(el.tags.name) : safe };
+  return { ...c, label: el?.tags?.name ? String(el.tags.name) : name };
 }
 
-// -------------------- route --------------------
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -353,62 +375,65 @@ export async function POST(req: Request) {
 
     const cached = GEO_CACHE.get(cacheKey);
     if (cached && Date.now() - cached.ts < GEO_TTL) {
-      return NextResponse.json({ ok: true, lat: cached.lat, lon: cached.lon, displayName: cached.label });
+      return NextResponse.json({ ok: true, lat: cached.lat, lon: cached.lon, displayName: cached.label, boundary: cached.boundary ?? null });
     }
 
-    // ✅ STRICT MODE: polygon lock when we have barangay + anchor
+    // STRICT: if we have barangay + anchor -> polygon lock
     if (hintBarangay && anchor) {
-      const poly = await getBarangayPoly({
+      const polyPack = await getBarangayPoly({
         barangay: hintBarangay,
         city: hintCity,
         province: hintProvince,
         anchor,
       });
 
-      if (poly) {
-        // try street first, then vicinity, then query
+      if (polyPack?.poly) {
         const nameToTry = street || vicinity || query;
 
-        const inside = await overpassFindInsidePoly(nameToTry, poly);
+        const inside = await overpassFindInsidePoly(nameToTry, polyPack.poly);
         if (inside) {
           const payload = {
             ts: Date.now(),
             lat: inside.lat,
             lon: inside.lon,
             label: `${inside.label} (inside ${hintBarangay})`,
+            boundary: polyPack.boundary,
           };
           GEO_CACHE.set(cacheKey, payload);
-          return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label });
+          return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: payload.boundary ?? null });
         }
 
-        // ✅ CENTROID FALLBACK (NEW): center inside polygon
-        const c = polyCentroid(poly);
-        if (c) {
-          const label = [hintBarangay, hintCity, hintProvince].filter(Boolean).join(", ");
-          const payload = {
-            ts: Date.now(),
-            lat: c.lat,
-            lon: c.lon,
-            label: label ? `${label} (centroid)` : "Barangay centroid",
-          };
-          GEO_CACHE.set(cacheKey, payload);
-          return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label });
+        // centroid fallback BUT STILL inside barangay polygon
+        if (polyPack.boundary?.length) {
+          const c = polyCentroid(polyPack.boundary);
+          if (c) {
+            const label = [hintBarangay, hintCity, hintProvince].filter(Boolean).join(", ");
+            const payload = {
+              ts: Date.now(),
+              lat: c.lat,
+              lon: c.lon,
+              label: label ? `${label} (centroid)` : "Barangay centroid",
+              boundary: polyPack.boundary,
+            };
+            GEO_CACHE.set(cacheKey, payload);
+            return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: payload.boundary ?? null });
+          }
         }
       }
     }
 
-    // ✅ fallback: Overpass near anchor (prevents huge jumps)
+    // fallback: Overpass near anchor (still reduces jumping)
     if (anchor) {
       const nameToTry = street || vicinity || query;
       const near = await overpassNearAnchor(nameToTry, anchor, 3000);
       if (near) {
         const payload = { ts: Date.now(), lat: near.lat, lon: near.lon, label: `${near.label} (near anchor)` };
         GEO_CACHE.set(cacheKey, payload);
-        return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label });
+        return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: null });
       }
     }
 
-    // ✅ fallback: bounded Nominatim
+    // last fallback: bounded Nominatim
     const r = await nominatimSearch(query, anchor);
     if (!r.ok) return NextResponse.json({ ok: false, error: r.error }, { status: 404 });
 
@@ -431,11 +456,12 @@ export async function POST(req: Request) {
       lat: Number(best.lat),
       lon: Number(best.lon),
       label: String(best.display_name ?? query),
+      boundary: null,
     };
 
     GEO_CACHE.set(cacheKey, payload);
 
-    return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label });
+    return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: null });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "geocode failed" }, { status: 500 });
   }
