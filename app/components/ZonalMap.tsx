@@ -1,95 +1,39 @@
-"use client";
+import dynamic from "next/dynamic";
+import { useEffect, useRef, useState } from "react";
 
-import { useEffect, useMemo, useRef } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-  useMap,
-  useMapEvents,
-  ZoomControl,
-  Polygon,
-  Circle,
-} from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-
-import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
-import markerIcon from "leaflet/dist/images/marker-icon.png";
-import markerShadow from "leaflet/dist/images/marker-shadow.png";
-
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: (markerIcon2x as any).src ?? markerIcon2x,
-  iconUrl: (markerIcon as any).src ?? markerIcon,
-  shadowUrl: (markerShadow as any).src ?? markerShadow,
-});
+const L = dynamic(() => import("leaflet"), { ssr: false });
 
 type LatLng = { lat: number; lon: number };
-type Boundary = Array<[number, number]>; // [lat, lon]
+type Boundary = Array<[number, number]>;
+type MapType = "street" | "terrain" | "satellite";
 
-function MapIdleEmitter() {
-  const map = useMap();
-
-  useEffect(() => {
-    const emit = () => {
-      // wait 1 frame so overlays are positioned correctly
-      requestAnimationFrame(() => {
-        window.dispatchEvent(new CustomEvent("zonalmap:idle"));
-      });
-    };
-
-    map.whenReady(() => emit());
-
-    map.on("moveend", emit);
-    map.on("zoomend", emit);
-    map.on("layeradd", emit);
-
-    return () => {
-      map.off("moveend", emit);
-      map.off("zoomend", emit);
-      map.off("layeradd", emit);
-    };
-  }, [map]);
-
-  return null;
+interface ZonalMapProps {
+  selected?: LatLng | null;
+  onPickOnMap?: (lat: number, lon: number) => void;
+  popupLabel?: string;
+  boundary?: Boundary | null;
+  highlightRadiusMeters?: number;
+  containerId?: string;
+  mapType?: MapType;
 }
 
-function MapEffects({ selected, zoom = 16 }: { selected: LatLng | null; zoom?: number }) {
-  const map = useMap();
-
-  useEffect(() => {
-    const t = setTimeout(() => map.invalidateSize(), 50);
-    return () => clearTimeout(t);
-  }, [map]);
-
-  useEffect(() => {
-    if (!selected) return;
-
-    const target: [number, number] = [selected.lat, selected.lon];
-    map.invalidateSize();
-
-    try {
-      map.flyTo(target, zoom, { duration: 0.8 });
-    } catch {
-      map.setView(target, zoom);
-    }
-
-    const t = setTimeout(() => map.invalidateSize(), 250);
-    return () => clearTimeout(t);
-  }, [selected?.lat, selected?.lon, zoom, map]);
-
-  return null;
-}
-
-function ClickToSet({ onPick }: { onPick: (lat: number, lon: number) => void }) {
-  useMapEvents({
-    click(e) {
-      onPick(e.latlng.lat, e.latlng.lng);
-    },
-  });
-  return null;
-}
+const TILESERVERS = {
+  street: {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  },
+  terrain: {
+    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    attribution: '© <a href="https://opentopomap.org/">OpenTopoMap</a>',
+    maxZoom: 17,
+  },
+  satellite: {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: '© <a href="https://www.arcgis.com/">Esri</a>',
+    maxZoom: 18,
+  },
+};
 
 export default function ZonalMap({
   selected,
@@ -98,87 +42,201 @@ export default function ZonalMap({
   boundary,
   highlightRadiusMeters = 80,
   containerId = "map-container",
-}: {
-  selected: LatLng | null;
-  onPickOnMap: (lat: number, lon: number) => void;
-  popupLabel?: string;
-  boundary?: Boundary | null;
-  highlightRadiusMeters?: number;
-  containerId?: string;
-}) {
-  const phCenter = useMemo<[number, number]>(() => [12.8797, 121.774], []);
-  const markerRef = useRef<L.Marker | null>(null);
+  mapType = "street",
+}: ZonalMapProps) {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const circleRef = useRef<any>(null);
+  const polylineRef = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
 
+  const emitIdle = () => {
+    const event = new CustomEvent("zonalmap:idle");
+    window.dispatchEvent(event);
+  };
+
+  // Initialize map
   useEffect(() => {
-    if (selected && markerRef.current) markerRef.current.openPopup();
-  }, [selected?.lat, selected?.lon, popupLabel]);
+    if (!mapContainerRef.current || mapRef.current) return;
 
-  const zoom = selected ? 16 : 6;
+    const leafletModule = require("leaflet");
+    const leaflet = leafletModule.default || leafletModule;
+
+    const map = leaflet.map(mapContainerRef.current, {
+      center: [12.8797, 121.774],
+      zoom: 10,
+      dragging: true,
+      touchZoom: true,
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
+      zoomControl: true,
+      attributionControl: true,
+    });
+
+    map.on("click", (e: any) => {
+      if (onPickOnMap) {
+        onPickOnMap(e.latlng.lat, e.latlng.lng);
+      }
+    });
+
+    mapRef.current = map;
+
+    map.on("moveend", () => emitIdle());
+    map.on("zoomend", () => emitIdle());
+
+    return () => {
+      // Don't destroy map on unmount
+    };
+  }, [onPickOnMap]);
+
+  // Update tile layer based on mapType
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const tileServerConfig = TILESERVERS[mapType];
+
+    if (tileLayerRef.current) {
+      mapRef.current.removeLayer(tileLayerRef.current);
+    }
+
+    const newTileLayer = (require("leaflet").default || require("leaflet")).tileLayer(
+      tileServerConfig.url,
+      {
+        attribution: tileServerConfig.attribution,
+        maxZoom: tileServerConfig.maxZoom,
+      }
+    );
+
+    newTileLayer.addTo(mapRef.current);
+    tileLayerRef.current = newTileLayer;
+  }, [mapType]);
+
+  // Update marker and circle (with custom div marker to avoid 404)
+  useEffect(() => {
+    if (!mapRef.current || !selected) {
+      if (markerRef.current) {
+        mapRef.current?.removeLayer(markerRef.current);
+        markerRef.current = null;
+      }
+      if (circleRef.current) {
+        mapRef.current?.removeLayer(circleRef.current);
+        circleRef.current = null;
+      }
+      return;
+    }
+
+    const leafletModule = require("leaflet");
+    const leaflet = leafletModule.default || leafletModule;
+
+    // Remove old marker
+    if (markerRef.current) {
+      mapRef.current.removeLayer(markerRef.current);
+    }
+
+    // Create custom marker using divIcon (no image files needed!)
+    const customMarkerHtml = `
+      <div style="
+        width: 32px;
+        height: 32px;
+        background-color: #2563eb;
+        border: 3px solid white;
+        border-radius: 50%;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <div style="
+          width: 8px;
+          height: 8px;
+          background-color: white;
+          border-radius: 50%;
+        "></div>
+      </div>
+    `;
+
+    const customIcon = leaflet.divIcon({
+      html: customMarkerHtml,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -20],
+      className: "custom-div-icon",
+    });
+
+    // Add new marker
+    const marker = leaflet
+      .marker([selected.lat, selected.lon], {
+        icon: customIcon,
+        title: popupLabel,
+      })
+      .bindPopup(popupLabel || `${selected.lat.toFixed(5)}, ${selected.lon.toFixed(5)}`)
+      .openPopup()
+      .addTo(mapRef.current);
+
+    markerRef.current = marker;
+
+    // Remove old circle
+    if (circleRef.current) {
+      mapRef.current.removeLayer(circleRef.current);
+    }
+
+    // Add new circle
+    const circle = leaflet
+      .circle([selected.lat, selected.lon], {
+        radius: highlightRadiusMeters,
+        color: "#2563eb",
+        weight: 2,
+        opacity: 0.5,
+        fill: true,
+        fillColor: "#3b82f6",
+        fillOpacity: 0.15,
+      })
+      .addTo(mapRef.current);
+
+    circleRef.current = circle;
+
+    // Fly to location
+    mapRef.current.flyTo([selected.lat, selected.lon], 15, { duration: 1 });
+
+    setTimeout(() => emitIdle(), 500);
+  }, [selected, popupLabel, highlightRadiusMeters]);
+
+  // Update boundary polyline
+  useEffect(() => {
+    if (!mapRef.current || !boundary || boundary.length === 0) {
+      if (polylineRef.current) {
+        mapRef.current?.removeLayer(polylineRef.current);
+        polylineRef.current = null;
+      }
+      return;
+    }
+
+    const leafletModule = require("leaflet");
+    const leaflet = leafletModule.default || leafletModule;
+
+    if (polylineRef.current) {
+      mapRef.current.removeLayer(polylineRef.current);
+    }
+
+    const polyline = leaflet
+      .polyline(boundary as any, {
+        color: "#059669",
+        weight: 3,
+        opacity: 0.6,
+        dashArray: "5, 5",
+      })
+      .addTo(mapRef.current);
+
+    polylineRef.current = polyline;
+  }, [boundary]);
 
   return (
-    <div id={containerId} className="h-full w-full">
-      <MapContainer
-        center={selected ? [selected.lat, selected.lon] : phCenter}
-        zoom={zoom}
-        scrollWheelZoom
-        zoomControl={false}
-        preferCanvas={true}
-        style={{ height: "100%", width: "100%" }}
-      >
-        <ZoomControl position="bottomright" />
-
-        <TileLayer
-          attribution='&copy; OpenStreetMap contributors &copy; CARTO'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-          crossOrigin="anonymous"
-        />
-
-        <MapIdleEmitter />
-        <ClickToSet onPick={onPickOnMap} />
-        <MapEffects selected={selected} zoom={16} />
-
-        {boundary?.length ? (
-          <Polygon
-            positions={boundary as any}
-            pathOptions={{
-              color: "#111827",
-              weight: 2,
-              fillColor: "#111827",
-              fillOpacity: 0.08,
-            }}
-          />
-        ) : null}
-
-        {selected ? (
-          <Circle
-            center={[selected.lat, selected.lon]}
-            radius={highlightRadiusMeters}
-            pathOptions={{
-              color: "#2563eb",
-              weight: 2,
-              fillColor: "#2563eb",
-              fillOpacity: 0.2,
-            }}
-          />
-        ) : null}
-
-        {selected ? (
-          <Marker
-            position={[selected.lat, selected.lon]}
-            ref={(r) => {
-              // @ts-ignore
-              markerRef.current = r?.marker ?? null;
-            }}
-          >
-            <Popup>
-              <div className="text-sm">
-                <div className="font-medium">Selected location</div>
-                <div>{popupLabel ?? `${selected.lat.toFixed(5)}, ${selected.lon.toFixed(5)}`}</div>
-              </div>
-            </Popup>
-          </Marker>
-        ) : null}
-      </MapContainer>
-    </div>
+    <div
+      id={containerId}
+      ref={mapContainerRef}
+      className="w-full h-full"
+      style={{ position: "relative", zIndex: 1 }}
+    />
   );
 }
