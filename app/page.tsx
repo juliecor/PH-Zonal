@@ -47,7 +47,7 @@ function cleanName(s: any) {
 }
 
 function normalizePH(s: any) {
-  // keep this “smart” + tolerant to your dataset abbreviations
+  // keep this "smart" + tolerant to your dataset abbreviations
   return cleanName(s)
     .replace(/\bPOB\b/gi, "Poblacion")
     .replace(/\bSTO\b/gi, "Santo")
@@ -79,7 +79,6 @@ function parseZonalNumber(v: string) {
   return Number.isFinite(n) ? n : null;
 }
 
-// Wait for Leaflet to finish moving + tiles + overlay layout (fixes misaligned circle on PDF)
 function waitForZonalMapIdle(opts?: { minEvents?: number; timeoutMs?: number }) {
   const minEvents = Math.max(1, opts?.minEvents ?? 2);
   const timeoutMs = Math.max(500, opts?.timeoutMs ?? 4000);
@@ -117,32 +116,26 @@ function suggestBusinesses(args: {
 
   const ideas: string[] = [];
 
-  // classification hint
   if (cls.includes("COMMERCIAL")) ideas.push("Retail / Convenience Store", "Food & Beverage (Cafe / Quick Service)");
   if (cls.includes("RESIDENTIAL")) ideas.push("Apartment / Boarding House", "Small Grocery / Laundry Shop");
   if (cls.includes("INDUSTRIAL")) ideas.push("Warehouse / Logistics", "Hardware / Building Supplies");
 
-  // zonal value hint (simple tiers)
   if (zonal != null) {
     if (zonal >= 25000) ideas.push("Premium Retail", "Clinics / Professional Services", "Franchise Food");
     else if (zonal >= 12000) ideas.push("Mid-scale Restaurant", "Pharmacy", "Salon / Wellness");
     else ideas.push("Sari-sari / Micro-retail", "Motorcycle Services", "Basic Food Stall");
   }
 
-  // POI hint
   if (poi) {
     if (poi.counts.schools >= 3) ideas.push("School Supplies / Printing", "Snacks / Milk Tea near schools");
     if (poi.counts.hospitals + poi.counts.clinics >= 2) ideas.push("Pharmacy / Medical Supplies", "Convenience near clinics");
     if (poi.counts.policeStations + poi.counts.fireStations >= 1) ideas.push("24/7 Convenience / Safe-area services");
   }
 
-  // unique + short
   return Array.from(new Set(ideas)).slice(0, 6);
 }
 
 function defaultRisks() {
-  // Without a dedicated hazard API layer, we show a “best-effort” template.
-  // You can later connect hazard data (flood/landslide) to replace this automatically.
   return [
     "Flood: Unknown (needs hazard layer)",
     "Landslide: Unknown (needs hazard layer)",
@@ -187,8 +180,9 @@ export default function Home() {
   const [anchorLocation, setAnchorLocation] = useState<LatLng | null>(null);
   const [boundary, setBoundary] = useState<Boundary | null>(null);
 
-  // geo label + POI
+  // geo label + POI + MATCH STATUS (NEW)
   const [geoLabel, setGeoLabel] = useState("");
+  const [matchStatus, setMatchStatus] = useState<string>(""); // Shows match type: "exact", "fuzzy (85%)", etc.
   const [geoLoading, setGeoLoading] = useState(false);
   const [poiLoading, setPoiLoading] = useState(false);
   const [poiData, setPoiData] = useState<PoiData | null>(null);
@@ -201,7 +195,7 @@ export default function Home() {
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const pdfFilenameRef = useRef<string>("zonal-report.pdf");
 
-  // “Right side” PDF fields
+  // "Right side" PDF fields
   const [idealBusinessText, setIdealBusinessText] = useState("");
   const [riskText, setRiskText] = useState("");
 
@@ -381,7 +375,6 @@ export default function Home() {
     return payload;
   }
 
-  // Resolve anchor and boundary for barangay/city/prov
   async function resolveAnchor(next: { barangay?: string; city?: string; province?: string }) {
     const b = normalizePH(next.barangay ?? "");
     const c = normalizePH(next.city ?? "");
@@ -427,13 +420,13 @@ export default function Home() {
       if (myId !== reqIdRef.current) return;
       setSelectedLocation({ lat: center.lat, lon: center.lon });
       setGeoLabel(center.label);
+      setMatchStatus(""); // Clear match status
     } finally {
       if (myId !== reqIdRef.current) return;
       setGeoLoading(false);
     }
   }
 
-  // MAIN: click row -> barangay lock -> street match inside polygon
   async function selectRow(r: Row) {
     const myId = ++reqIdRef.current;
 
@@ -441,6 +434,7 @@ export default function Home() {
     setDetailsErr("");
     setPoiData(null);
     setPdfErr("");
+    setMatchStatus(""); // Clear until we know the match type
 
     setGeoLoading(true);
     try {
@@ -460,11 +454,9 @@ export default function Home() {
 
       const candidates: string[] = [];
 
-      // prioritize street words (even partial)
       if (!isBadStreet(street)) {
         candidates.push(`${street}, ${brgy}, ${cty}, ${prov}, Philippines`);
         candidates.push(`${street}, ${cty}, ${prov}, Philippines`);
-        // partial: first 1–2 tokens (helps when dataset is short like "Mendoza")
         const parts = street.split(" ").filter(Boolean);
         if (parts.length >= 1) candidates.push(`${parts.slice(0, 1).join(" ")}, ${brgy}, ${cty}, ${prov}, Philippines`);
         if (parts.length >= 2) candidates.push(`${parts.slice(0, 2).join(" ")}, ${brgy}, ${cty}, ${prov}, Philippines`);
@@ -474,7 +466,6 @@ export default function Home() {
         candidates.push(`${vicinity}, ${brgy}, ${cty}, ${prov}, Philippines`);
       }
 
-      // final fallback: anchor center (still locked)
       candidates.push(`${normalizePH(brgy)}, ${normalizePH(cty)}, ${normalizePH(prov)}, Philippines`);
 
       let best: { lat: number; lon: number; label: string; boundary?: Boundary | null } | null = null;
@@ -485,7 +476,7 @@ export default function Home() {
           hintBarangay: brgy,
           hintCity: cty,
           hintProvince: prov,
-          anchor: { lat: anchor.lat, lon: anchor.lon }, // still helps even if polygon missing
+          anchor: { lat: anchor.lat, lon: anchor.lon },
           street,
           vicinity,
         });
@@ -493,6 +484,17 @@ export default function Home() {
         if (myId !== reqIdRef.current) return;
         if (g) {
           best = g;
+          // Extract match type from label (fuzzy match indicator)
+          if (g.label.includes("fuzzy match:")) {
+            const match = g.label.match(/fuzzy match: (\d+)%/);
+            if (match) {
+              setMatchStatus(`✓ Fuzzy Match: ${match[1]}% confidence`);
+            }
+          } else if (g.label.includes("inside")) {
+            setMatchStatus("✓ Exact Match (inside barangay)");
+          } else {
+            setMatchStatus("✓ Matched");
+          }
           break;
         }
       }
@@ -511,7 +513,6 @@ export default function Home() {
 
       setPoiData({ counts: poi.counts, items: poi.items });
 
-      // update default “ideal/risk” text for PDF right panel
       const ideas = suggestBusinesses({
         zonalValueText: String(r["ZonalValuepersqm.-"] ?? ""),
         classification: String(r["Classification-"] ?? ""),
@@ -535,6 +536,7 @@ export default function Home() {
     setSelectedRow(null);
     setSelectedLocation({ lat, lon });
     setGeoLabel(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+    setMatchStatus(""); // Map clicks don't have match status
     setPoiData(null);
     setDetailsErr("");
     setPdfErr("");
@@ -545,7 +547,6 @@ export default function Home() {
       if (myId !== reqIdRef.current) return;
       setPoiData({ counts: poi.counts, items: poi.items });
 
-      // defaults if user clicked map
       const ideas = suggestBusinesses({
         zonalValueText: "",
         classification: "",
@@ -598,7 +599,6 @@ export default function Home() {
     const pageH = pdf.internal.pageSize.getHeight();
     const margin = 36;
 
-    // ---------- PAGE 1 LAYOUT ----------
     // Title
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(18);
@@ -610,7 +610,7 @@ export default function Home() {
     pdf.text(`Location: ${locationName}`, margin, 70);
     if (cls) pdf.text(`Classification: ${cls}`, margin, 86);
 
-    // Price (centered, big but not too big)
+    // Price
     const priceY = 125;
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(28);
@@ -618,7 +618,7 @@ export default function Home() {
     const priceW = pdf.getTextWidth(priceText);
     pdf.text(priceText, (pageW - priceW) / 2, priceY);
 
-    // Two-column area: MAP left, Notes right
+    // Two-column area
     const topY = 150;
     const colGap = 14;
     const leftW = Math.floor((pageW - margin * 2 - colGap) * 0.58);
@@ -637,12 +637,11 @@ export default function Home() {
     pdf.setFontSize(11);
     pdf.text("Map", leftX + 12, topY + 20);
 
-    // Add image inside box
     const imgMargin = 10;
     const imgX = leftX + imgMargin;
     const imgY = topY + 28;
     const imgW = leftW - imgMargin * 2;
-    const imgH = mapBoxH - 38; // leave a header area
+    const imgH = mapBoxH - 38;
     pdf.addImage(mapDataUrl, "PNG", imgX, imgY, imgW, imgH);
 
     // Right notes box: Ideal Business
@@ -684,7 +683,7 @@ export default function Home() {
       if (ry > riskY + riskBoxH - 12) break;
     }
 
-    // Signature bottom-right
+    // Signature
     const sigBaseY = pageH - 70;
     const sigX = pageW - margin - 220;
 
@@ -701,7 +700,7 @@ export default function Home() {
     pdf.text("CEO / FOUNDER", sigX, sigBaseY + 34);
     pdf.text("FILIPINO HOMES", sigX, sigBaseY + 48);
 
-    // ---------- PAGE 2 POIs ----------
+    // PAGE 2 POIs
     pdf.addPage();
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(16);
@@ -776,7 +775,6 @@ export default function Home() {
     try {
       const { default: html2canvas } = await import("html2canvas-pro");
 
-      // ensure Leaflet finished moving + overlays aligned
       await waitForZonalMapIdle({ minEvents: 2, timeoutMs: 4500 });
       await new Promise((r) => setTimeout(r, 80));
 
@@ -791,7 +789,6 @@ export default function Home() {
         logging: false,
         removeContainer: true,
         onclone: (clonedDoc) => {
-          // Prevent html2canvas choking on Tailwind v4 lab()/oklch()
           const all = clonedDoc.querySelectorAll<HTMLElement>("*");
           for (const el of Array.from(all)) {
             const style = el.getAttribute("style");
@@ -807,9 +804,7 @@ export default function Home() {
           }
 
           const s = clonedDoc.createElement("style");
-          s.textContent = `
-            * { color-scheme: light !important; }
-          `;
+          s.textContent = `* { color-scheme: light !important; }`;
           clonedDoc.head.appendChild(s);
         },
       });
@@ -819,7 +814,6 @@ export default function Home() {
       const { blob, filename } = await buildPdfBlob(mapDataUrl);
       pdfFilenameRef.current = filename;
 
-      // preview
       if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
       const url = URL.createObjectURL(blob);
       setPdfPreviewUrl(url);
@@ -831,17 +825,14 @@ export default function Home() {
     }
   }
 
-  // auto-search (debounced)
   useEffect(() => {
     const t = setTimeout(() => {
       if (!domain) return;
       searchZonal({ page: 1 });
     }, 350);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [domain, city, barangay, classification, q]);
 
-  // cleanup preview URL on unmount
   useEffect(() => {
     return () => {
       if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
@@ -886,7 +877,7 @@ export default function Home() {
           <div>
             <h1 className="text-lg font-semibold tracking-tight">BIR Zonal Values Lookup</h1>
             <p className="text-sm text-gray-600">
-              ✅ Barangay lock + abbreviation-tolerant matching + boundary highlight + PDF preview.
+              ✅ Barangay lock + <span className="font-medium text-green-700">smart fuzzy matching</span> + boundary highlight + PDF preview.
             </p>
           </div>
 
@@ -1111,6 +1102,12 @@ export default function Home() {
                     </div>
 
                     <div className="text-xs text-gray-500 mt-2">{geoLoading ? "Centering…" : geoLabel}</div>
+
+                    {matchStatus && (
+                      <div className="mt-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-md p-2">
+                        {matchStatus}
+                      </div>
+                    )}
 
                     {detailsErr ? (
                       <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md p-2">

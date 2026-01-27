@@ -5,8 +5,151 @@ export const runtime = "nodejs";
 const GEO_CACHE = new Map<string, { ts: number; lat: number; lon: number; label: string; boundary?: any }>();
 const POLY_CACHE = new Map<string, { ts: number; poly: string; boundary: Array<[number, number]> | null }>();
 
-const GEO_TTL = 1000 * 60 * 60 * 24 * 14; // 14d
-const POLY_TTL = 1000 * 60 * 60 * 24 * 30; // 30d
+const GEO_TTL = 1000 * 60 * 60 * 24 * 14;
+const POLY_TTL = 1000 * 60 * 60 * 24 * 30;
+
+// ============================================================================
+// GOOGLE MAPS API KEY
+// ============================================================================
+const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+
+if (!GOOGLE_API_KEY) {
+  console.warn("⚠️ WARNING: GOOGLE_MAPS_API_KEY not set in environment variables!");
+}
+
+// ============================================================================
+// KEYWORD MATCHING (for incomplete street names)
+// ============================================================================
+
+function extractKeywords(text: string): string[] {
+  let normalized = text.trim().toUpperCase();
+  normalized = normalized.replace(/[^\w\s]/g, ' ');
+  normalized = normalized.replace(/\s+/g, ' ');
+  
+  const words = normalized.split(' ').filter(w => w.length > 0);
+  
+  const stopWords = new Set([
+    'ST', 'AVE', 'RD', 'BLVD', 'LN', 'DR', 'EXT', 'OLD', 'NEW',
+    'NORTH', 'SOUTH', 'EAST', 'WEST', 'EXTENSION', 'STREET', 'AVENUE', 'ROAD',
+    'EXTENSION', 'INTERIOR', 'EXTERIOR', 'PHASE', 'THE', 'OF', 'AND', 'OR', 'TO', 'FROM',
+    'SUBD', 'SUBDIVISION', 'COMPLEX', 'SPORTS', 'CENTER', 'MALL', 'BUILDING'
+  ]);
+  
+  return words.filter(w => !stopWords.has(w) && w.length > 2);
+}
+
+function levenshteinDistance(str1: string, str2: string): number {
+  const len1 = str1.length;
+  const len2 = str2.length;
+  const matrix: number[][] = Array(len2 + 1)
+    .fill(null)
+    .map(() => Array(len1 + 1).fill(0));
+  
+  for (let i = 0; i <= len1; i++) matrix[0][i] = i;
+  for (let j = 0; j <= len2; j++) matrix[j][0] = j;
+  
+  for (let j = 1; j <= len2; j++) {
+    for (let i = 1; i <= len1; i++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[j][i] = Math.min(
+        matrix[j][i - 1] + 1,
+        matrix[j - 1][i] + 1,
+        matrix[j - 1][i - 1] + cost
+      );
+    }
+  }
+  
+  return matrix[len2][len1];
+}
+
+function calculateSimilarity(str1: string, str2: string): number {
+  const distance = levenshteinDistance(str1, str2);
+  const maxLength = Math.max(str1.length, str2.length);
+  if (maxLength === 0) return 1;
+  return 1 - (distance / maxLength);
+}
+
+function keywordMatch(userKeywords: string[], mapStreet: string): number {
+  if (userKeywords.length === 0) return 0;
+  
+  const mapKeywords = extractKeywords(mapStreet);
+  if (mapKeywords.length === 0) return 0;
+  
+  let matches = 0;
+  let totalSimilarity = 0;
+  
+  for (const userKw of userKeywords) {
+    if (mapKeywords.includes(userKw)) {
+      matches++;
+      totalSimilarity += 1.0;
+    } else {
+      for (const mapKw of mapKeywords) {
+        const sim = calculateSimilarity(userKw, mapKw);
+        if (sim > 0.75) {
+          matches++;
+          totalSimilarity += sim;
+          break;
+        }
+      }
+    }
+  }
+  
+  if (matches === 0) return 0;
+  return totalSimilarity / userKeywords.length;
+}
+
+function findBestStreetMatch(
+  userStreet: string,
+  availableStreets: string[],
+  threshold: number = 0.45
+): { street: string; similarity: number; method: string } | null {
+  
+  const userKeywords = extractKeywords(userStreet);
+  const userNormalized = userStreet.trim().toUpperCase();
+  
+  if (userKeywords.length === 0) return null;
+  
+  let bestMatch: { street: string; similarity: number; method: string } | null = null;
+  let bestScore = 0;
+  
+  for (const mapStreet of availableStreets) {
+    const mapNormalized = mapStreet.trim().toUpperCase();
+    
+    if (userNormalized === mapNormalized) {
+      return { street: mapStreet, similarity: 1.0, method: "exact" };
+    }
+    
+    const keywordScore = keywordMatch(userKeywords, mapStreet);
+    
+    if (keywordScore > bestScore && keywordScore >= threshold) {
+      bestScore = keywordScore;
+      bestMatch = {
+        street: mapStreet,
+        similarity: parseFloat(keywordScore.toFixed(3)),
+        method: "keyword"
+      };
+    }
+    
+    if (bestScore < 0.80) {
+      const fuzzyScore = calculateSimilarity(userNormalized, mapNormalized);
+      
+      if (fuzzyScore > bestScore && fuzzyScore >= threshold) {
+        bestScore = fuzzyScore;
+        bestMatch = {
+          street: mapStreet,
+          similarity: parseFloat(fuzzyScore.toFixed(3)),
+          method: "fuzzy"
+        };
+      }
+    }
+  }
+  
+  return bestMatch;
+}
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
 
 function cleanName(s: any) {
   return String(s ?? "")
@@ -28,7 +171,8 @@ function normalizePH(s: any) {
     .replace(/\bAVE\.?\b/gi, "Avenue")
     .replace(/\bBLVD\.?\b/gi, "Boulevard")
     .replace(/\bDR\.?\b/gi, "Drive")
-    .replace(/\bLN\.?\b/gi, "Lane");
+    .replace(/\bLN\.?\b/gi, "Lane")
+    .replace(/\bEXT\.?\b/gi, "Extension");
 }
 
 function normLoose(s: any) {
@@ -42,7 +186,6 @@ function includesLoose(hay: any, needle: any) {
   return h.includes(n);
 }
 
-// Bounding box around anchor (km)
 function mkViewbox(lat: number, lon: number, km = 6) {
   const dLat = km / 111;
   const dLon = km / (111 * Math.cos((lat * Math.PI) / 180));
@@ -53,10 +196,8 @@ function mkViewbox(lat: number, lon: number, km = 6) {
   return `${left},${top},${right},${bottom}`;
 }
 
-// Convert GeoJSON -> (a) boundary coords [lat,lon] (b) overpass poly string "lat lon ..."
 function geojsonOuterRing(geojson: any) {
   if (!geojson) return null;
-
   let rings: number[][][] = [];
 
   if (geojson.type === "Polygon") {
@@ -76,7 +217,6 @@ function geojsonOuterRing(geojson: any) {
 
   if (!rings.length) return null;
 
-  // pick largest ring by rough area (shoelace)
   const area = (coords: number[][]) => {
     let sum = 0;
     for (let i = 0; i < coords.length - 1; i++) {
@@ -97,7 +237,7 @@ function geojsonOuterRing(geojson: any) {
     }
   }
 
-  return best; // [ [lon,lat], ... ]
+  return best;
 }
 
 function downsampleRingLonLatToBoundary(ring: number[][], maxPoints = 220) {
@@ -111,10 +251,7 @@ function downsampleRingLonLatToBoundary(ring: number[][], maxPoints = 220) {
   const last = sampled[sampled.length - 1];
   if (first && last && (first[0] !== last[0] || first[1] !== last[1])) sampled.push(first);
 
-  // boundary for Leaflet wants [lat,lon]
   const boundary: Array<[number, number]> = sampled.map(([lon, lat]) => [lat, lon]);
-
-  // poly string for Overpass wants "lat lon"
   const poly = boundary.map(([lat, lon]) => `${lat} ${lon}`).join(" ");
 
   return { boundary, poly };
@@ -129,67 +266,6 @@ function polyCentroid(boundary: Array<[number, number]>) {
     sumLon += lon;
   }
   return { lat: sumLat / boundary.length, lon: sumLon / boundary.length };
-}
-
-// Build a regex that tolerates abbreviations and partial tokens
-function escapeRegex(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function makeNameRegex(input: string) {
-  const raw = normalizePH(input);
-  if (!raw) return "";
-  const parts = raw.split(/\s+/).filter(Boolean);
-
-  const mapped = parts.map((tok) => {
-    const t = tok.toUpperCase();
-
-    // abbreviation tolerance
-    if (t === "ST" || t === "STREET") return "(?:ST\\.?|STREET)";
-    if (t === "RD" || t === "ROAD") return "(?:RD\\.?|ROAD)";
-    if (t === "AVE" || t === "AVENUE") return "(?:AVE\\.?|AVENUE)";
-    if (t === "BLVD" || t === "BOULEVARD") return "(?:BLVD\\.?|BOULEVARD)";
-    if (t === "DR" || t === "DRIVE") return "(?:DR\\.?|DRIVE)";
-    if (t === "LN" || t === "LANE") return "(?:LN\\.?|LANE)";
-
-    // Allow partial: "MENDOZA" matches "AH Mendoza Street"
-    // We'll match token as a substring inside a word boundary-ish pattern
-    const safe = escapeRegex(tok);
-    return `(?:${safe})`;
-  });
-
-  // allow other words between tokens
-  return mapped.join(".*");
-}
-
-async function nominatimSearch(query: string, anchor?: { lat: number; lon: number } | null) {
-  const base =
-    `https://nominatim.openstreetmap.org/search` +
-    `?format=jsonv2&addressdetails=1&limit=5&countrycodes=ph&q=${encodeURIComponent(query)}`;
-
-  const url = anchor ? `${base}&viewbox=${encodeURIComponent(mkViewbox(anchor.lat, anchor.lon, 10))}&bounded=1` : base;
-
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), 9000);
-
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "BIR-Zonal-Lookup/1.0 (repompojuliecor@gmail.com)",
-        "Accept-Language": "en",
-      },
-      signal: ac.signal,
-    });
-
-    const data = await res.json().catch(() => null);
-    if (!res.ok) return { ok: false as const, error: `Nominatim ${res.status}` };
-    if (!Array.isArray(data) || data.length === 0) return { ok: false as const, error: "No match" };
-    return { ok: true as const, results: data };
-  } catch (e: any) {
-    return { ok: false as const, error: e?.name === "AbortError" ? "Timeout" : e?.message ?? "Fetch failed" };
-  } finally {
-    clearTimeout(t);
-  }
 }
 
 async function getBarangayPoly(args: {
@@ -249,7 +325,6 @@ async function getBarangayPoly(args: {
     if (!pack) return null;
 
     const payload = { ts: Date.now(), poly: pack.poly, boundary: pack.boundary };
-
     POLY_CACHE.set(key, payload);
     return payload;
   } catch {
@@ -288,66 +363,9 @@ function pickCenter(el: any) {
   return { lat, lon };
 }
 
-async function overpassFindInsidePoly(name: string, poly: string) {
-  const rx = makeNameRegex(name);
-  if (!rx) return null;
-
-  // 1) highways by name inside polygon
-  const qStreet = `
-[out:json][timeout:18];
-(
-  way["highway"]["name"~"${rx}",i](poly:"${poly}");
-  relation["highway"]["name"~"${rx}",i](poly:"${poly}");
-);
-out center 10;`;
-
-  let data = await overpass(qStreet, 16000);
-  if (data?.elements?.length) {
-    const el = data.elements.find((x: any) => pickCenter(x)) ?? data.elements[0];
-    const c = pickCenter(el);
-    if (c) return { ...c, label: el?.tags?.name ? String(el.tags.name) : name };
-  }
-
-  // 2) POIs/buildings by name inside polygon
-  const qPoi = `
-[out:json][timeout:18];
-(
-  nwr["name"~"${rx}",i](poly:"${poly}");
-);
-out center 10;`;
-
-  data = await overpass(qPoi, 16000);
-  if (data?.elements?.length) {
-    const el = data.elements.find((x: any) => pickCenter(x)) ?? data.elements[0];
-    const c = pickCenter(el);
-    if (c) return { ...c, label: el?.tags?.name ? String(el.tags.name) : name };
-  }
-
-  return null;
-}
-
-async function overpassNearAnchor(name: string, anchor: { lat: number; lon: number }, radius = 3000) {
-  const rx = makeNameRegex(name);
-  if (!rx) return null;
-
-  const q = `
-[out:json][timeout:18];
-(
-  way(around:${radius},${anchor.lat},${anchor.lon})["highway"]["name"~"${rx}",i];
-  relation(around:${radius},${anchor.lat},${anchor.lon})["highway"]["name"~"${rx}",i];
-  nwr(around:${radius},${anchor.lat},${anchor.lon})["name"~"${rx}",i];
-);
-out center 10;`;
-
-  const data = await overpass(q, 16000);
-  if (!data?.elements?.length) return null;
-
-  const el = data.elements.find((x: any) => pickCenter(x)) ?? data.elements[0];
-  const c = pickCenter(el);
-  if (!c) return null;
-
-  return { ...c, label: el?.tags?.name ? String(el.tags.name) : name };
-}
+// ============================================================================
+// MAIN GEOCODE ENDPOINT - GOOGLE MAPS + OPENSTREETMAP FALLBACK
+// ============================================================================
 
 export async function POST(req: Request) {
   try {
@@ -375,11 +393,63 @@ export async function POST(req: Request) {
 
     const cached = GEO_CACHE.get(cacheKey);
     if (cached && Date.now() - cached.ts < GEO_TTL) {
+      console.log(`[CACHE HIT] Using cached result for ${query}`);
       return NextResponse.json({ ok: true, lat: cached.lat, lon: cached.lon, displayName: cached.label, boundary: cached.boundary ?? null });
     }
 
-    // STRICT: if we have barangay + anchor -> polygon lock
+    // ========================================================================
+    // TRY GOOGLE MAPS FIRST (if API key available)
+    // ========================================================================
+    if (GOOGLE_API_KEY) {
+      console.log(`[GOOGLE] Trying Google Maps for: ${query}`);
+      
+      const googleAddress = [street || query, vicinity, hintBarangay, hintCity, hintProvince, "Philippines"]
+        .filter(Boolean)
+        .join(", ");
+
+      const googleUrl = `https://maps.googleapis.com/maps/api/geocode/json?` +
+        `address=${encodeURIComponent(googleAddress)}&key=${GOOGLE_API_KEY}`;
+
+      try {
+        const ac = new AbortController();
+        const t = setTimeout(() => ac.abort(), 8000);
+
+        const res = await fetch(googleUrl, { signal: ac.signal });
+        const data = await res.json();
+        clearTimeout(t);
+
+        if (data.results?.length > 0) {
+          const result = data.results[0];
+          const { lat, lng } = result.geometry.location;
+
+          console.log(`[GOOGLE] ✓ Found: ${result.formatted_address}`);
+
+          const payload = {
+            ts: Date.now(),
+            lat: lat,
+            lon: lng,
+            label: result.formatted_address,
+            boundary: null,
+          };
+
+          GEO_CACHE.set(cacheKey, payload);
+          return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: payload.boundary });
+        } else {
+          console.log(`[GOOGLE] ✗ No results found`);
+        }
+      } catch (e: any) {
+        console.log(`[GOOGLE] ✗ Error: ${e?.message}`);
+      }
+    } else {
+      console.log(`[GOOGLE] ⚠️ API key not configured, skipping Google Maps`);
+    }
+
+    // ========================================================================
+    // FALLBACK: BARANGAY POLYGON LOCK (if barangay selected)
+    // ========================================================================
     if (hintBarangay && anchor) {
+      console.log(`[POLYGON] Searching in ${hintBarangay} polygon`);
+      
       const polyPack = await getBarangayPoly({
         barangay: hintBarangay,
         city: hintCity,
@@ -388,23 +458,49 @@ export async function POST(req: Request) {
       });
 
       if (polyPack?.poly) {
-        const nameToTry = street || vicinity || query;
+        const qAllStreets = `
+[out:json][timeout:18];
+(
+  way["highway"](poly:"${polyPack.poly}");
+);
+out center;`;
 
-        const inside = await overpassFindInsidePoly(nameToTry, polyPack.poly);
-        if (inside) {
-          const payload = {
-            ts: Date.now(),
-            lat: inside.lat,
-            lon: inside.lon,
-            label: `${inside.label} (inside ${hintBarangay})`,
-            boundary: polyPack.boundary,
-          };
-          GEO_CACHE.set(cacheKey, payload);
-          return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: payload.boundary ?? null });
+        const streetData = await overpass(qAllStreets, 16000);
+
+        if (streetData?.elements?.length) {
+          const allStreets = streetData.elements
+            .map((el: any) => el?.tags?.name)
+            .filter((name: any) => name);
+
+          console.log(`[POLYGON] Found ${allStreets.length} streets in ${hintBarangay}`);
+
+          const nameToTry = street || vicinity || query;
+          const match = findBestStreetMatch(nameToTry, allStreets, 0.45);
+
+          if (match && match.similarity >= 0.45) {
+            console.log(`[POLYGON] ✓ Match: "${match.street}" (${(match.similarity * 100).toFixed(0)}%)`);
+            
+            const matchedEl = streetData.elements.find((el: any) => el?.tags?.name === match.street);
+            if (matchedEl) {
+              const c = pickCenter(matchedEl);
+              if (c) {
+                const payload = {
+                  ts: Date.now(),
+                  lat: c.lat,
+                  lon: c.lon,
+                  label: `${match.street} (${hintBarangay}) [OSM: ${(match.similarity * 100).toFixed(0)}%]`,
+                  boundary: polyPack.boundary,
+                };
+                GEO_CACHE.set(cacheKey, payload);
+                return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: payload.boundary ?? null });
+              }
+            }
+          }
         }
 
-        // centroid fallback BUT STILL inside barangay polygon
+        // Use barangay centroid as fallback (stay in barangay!)
         if (polyPack.boundary?.length) {
+          console.log(`[POLYGON] Using ${hintBarangay} centroid`);
           const c = polyCentroid(polyPack.boundary);
           if (c) {
             const label = [hintBarangay, hintCity, hintProvince].filter(Boolean).join(", ");
@@ -412,7 +508,7 @@ export async function POST(req: Request) {
               ts: Date.now(),
               lat: c.lat,
               lon: c.lon,
-              label: label ? `${label} (centroid)` : "Barangay centroid",
+              label: `${label} (centroid)`,
               boundary: polyPack.boundary,
             };
             GEO_CACHE.set(cacheKey, payload);
@@ -422,35 +518,40 @@ export async function POST(req: Request) {
       }
     }
 
-    // fallback: Overpass near anchor (still reduces jumping)
-    if (anchor) {
-      const nameToTry = street || vicinity || query;
-      const near = await overpassNearAnchor(nameToTry, anchor, 3000);
-      if (near) {
-        const payload = { ts: Date.now(), lat: near.lat, lon: near.lon, label: `${near.label} (near anchor)` };
-        GEO_CACHE.set(cacheKey, payload);
-        return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: null });
-      }
+    // ========================================================================
+    // FINAL FALLBACK: Nominatim (free OpenStreetMap)
+    // ========================================================================
+    console.log(`[NOMINATIM] Final fallback to Nominatim`);
+
+    const base =
+      `https://nominatim.openstreetmap.org/search` +
+      `?format=jsonv2&addressdetails=1&limit=5&countrycodes=ph&q=${encodeURIComponent(query)}`;
+
+    const url = anchor ? `${base}&viewbox=${encodeURIComponent(mkViewbox(anchor.lat, anchor.lon, 10))}&bounded=1` : base;
+
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 9000);
+
+    let nominatimData: any;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": "BIR-Zonal-Lookup/1.0 (repompojuliecor@gmail.com)",
+          "Accept-Language": "en",
+        },
+        signal: ac.signal,
+      });
+
+      nominatimData = await res.json().catch(() => null);
+      if (!res.ok) return NextResponse.json({ ok: false, error: `Nominatim ${res.status}` }, { status: 404 });
+      if (!Array.isArray(nominatimData) || nominatimData.length === 0) return NextResponse.json({ ok: false, error: "No match found" }, { status: 404 });
+    } catch (e: any) {
+      return NextResponse.json({ ok: false, error: e?.name === "AbortError" ? "Timeout" : e?.message ?? "Fetch failed" }, { status: 500 });
+    } finally {
+      clearTimeout(t);
     }
 
-    // last fallback: bounded Nominatim
-    const r = await nominatimSearch(query, anchor);
-    if (!r.ok) return NextResponse.json({ ok: false, error: r.error }, { status: 404 });
-
-    const best =
-      r.results.find((x: any) => {
-        const addr = x?.address ?? {};
-        const cityLike = `${addr.city ?? ""} ${addr.town ?? ""} ${addr.municipality ?? ""} ${addr.county ?? ""}`;
-        const stateLike = `${addr.state ?? ""} ${addr.region ?? ""}`;
-        const suburbLike = `${addr.suburb ?? ""} ${addr.neighbourhood ?? ""} ${addr.quarter ?? ""}`;
-
-        const okCity = hintCity ? includesLoose(cityLike, hintCity) : true;
-        const okProv = hintProvince ? includesLoose(stateLike, hintProvince) : true;
-        const okBrgy = hintBarangay ? includesLoose(suburbLike, hintBarangay) : true;
-
-        return okCity && okProv && okBrgy;
-      }) || r.results[0];
-
+    const best = nominatimData[0];
     const payload = {
       ts: Date.now(),
       lat: Number(best.lat),
@@ -463,6 +564,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: null });
   } catch (e: any) {
+    console.error("[GEOCODE ERROR]", e);
     return NextResponse.json({ ok: false, error: e?.message ?? "geocode failed" }, { status: 500 });
   }
 }
