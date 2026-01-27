@@ -774,7 +774,7 @@ export default function Home() {
 
     setPdfLoading(true);
     try {
-      const { default: html2canvas } = await import("html2canvas");
+      const { default: html2canvas } = await import("html2canvas-pro");
 
       // ensure Leaflet finished moving + overlays aligned
       await waitForZonalMapIdle({ minEvents: 2, timeoutMs: 4500 });
