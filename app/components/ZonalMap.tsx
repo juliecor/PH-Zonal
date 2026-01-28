@@ -1,7 +1,8 @@
 import dynamic from "next/dynamic";
+
 import { useEffect, useRef, useState } from "react";
 
-const L = dynamic(() => import("leaflet"), { ssr: false });
+
 
 type LatLng = { lat: number; lon: number };
 type Boundary = Array<[number, number]>;
