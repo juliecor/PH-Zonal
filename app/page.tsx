@@ -889,7 +889,7 @@ export default function Home() {
               {/* ✅ Description below map */}
               <div className="border-t border-gray-200 bg-white p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-gray-700">Area Description (AI)</p>
+                  <p className="text-xs font-semibold text-gray-700">Area Description </p>
                   {areaDescLoading && <p className="text-xs text-gray-500">Generating…</p>}
                 </div>
 
