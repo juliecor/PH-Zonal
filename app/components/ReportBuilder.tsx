@@ -5,6 +5,58 @@ import type { LatLng, PoiData, PoiItem, Row } from "../lib/types";
 import PdfPreviewModal from "./PdfPreviewModal";
 import { waitForZonalMapIdle } from "../lib/zonal-util";
 
+function toTitleSafe(s: string) {
+  return String(s ?? "").trim();
+}
+
+function formatMoneyLikeSample(v: string) {
+  const n = Number(String(v ?? "").replace(/,/g, "").trim());
+  if (!Number.isFinite(n)) return "PHP - / sqm";
+  return `PHP ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / sqm`;
+}
+
+async function fetchAsDataURL(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { cache: "force-cache" });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string>((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+function arrayBufferToBase64(buf: ArrayBuffer) {
+  let binary = "";
+  const bytes = new Uint8Array(buf);
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function tryRegisterHurricaneFont(pdf: any) {
+  // Put this file at: public/fonts/Hurricane-Regular.ttf
+  // Then it will be available at: /fonts/Hurricane-Regular.ttf
+  try {
+    const res = await fetch("/fonts/Hurricane-Regular.ttf");
+    if (!res.ok) return false;
+    const buf = await res.arrayBuffer();
+    const base64 = arrayBufferToBase64(buf);
+
+    pdf.addFileToVFS("Hurricane-Regular.ttf", base64);
+    pdf.addFont("Hurricane-Regular.ttf", "Hurricane", "normal");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function ReportBuilder(props: {
   selectedLocation: LatLng | null;
   selectedRow: Row | null;
@@ -66,124 +118,307 @@ export default function ReportBuilder(props: {
   async function buildPdfBlob(mapDataUrl: string) {
     const { jsPDF } = await import("jspdf");
 
-    const locationName = selectedRow
-      ? `${String(selectedRow["Street/Subdivision-"] ?? "").trim()} — ${String(selectedRow["Barangay-"] ?? "").trim()}, ${String(
-          selectedRow["City-"] ?? ""
-        ).trim()}`
-      : geoLabel || "Selected location";
+    const locationLine = selectedRow
+      ? `Location: ${toTitleSafe(selectedRow["Street/Subdivision-"])} - ${toTitleSafe(
+          selectedRow["Barangay-"]
+        )}, ${toTitleSafe(selectedRow["City-"])}`
+      : `Location: ${geoLabel || "Selected location"}`;
 
-    const zonalValue = selectedRow ? String(selectedRow["ZonalValuepersqm.-"] ?? "") : "-";
-    const cls = selectedRow ? String(selectedRow["Classification-"] ?? "") : "";
+    const classLine = selectedRow
+      ? `Classification: ${toTitleSafe(selectedRow["Classification-"])}`
+      : `Classification: -`;
+
+    const zonalText = selectedRow
+      ? formatMoneyLikeSample(String(selectedRow["ZonalValuepersqm.-"] ?? ""))
+      : "PHP - / sqm";
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
-    const margin = 36;
+    const margin = 40;
 
+    // Load images (logos/watermark)
+    const headerLogo = await fetchAsDataURL("/pictures/FilipinoHomes.png");
+    const watermark = await fetchAsDataURL("/pictures/LeuterioRealty.png");
+
+    const hasHurricane = await tryRegisterHurricaneFont(pdf);
+
+    // =========================
+    // PAGE 1
+    // =========================
+
+    // Header logo (centered)
+    if (headerLogo) {
+      const logoW = 260;
+      const logoH = 60;
+      pdf.addImage(headerLogo, "PNG", (pageW - logoW) / 2, 28, logoW, logoH);
+    } else {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(18);
+      pdf.text("FILIPINO HOMES", pageW / 2, 60, { align: "center" });
+    }
+
+    // Price big centered
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(18);
-    pdf.text("FILIPINO HOMES ZONAL FINDER", margin, 48);
+    pdf.text(zonalText, pageW / 2, 125, { align: "center" });
 
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(11);
-    pdf.text(`Location: ${locationName}`, margin, 70);
-    if (cls) pdf.text(`Classification: ${cls}`, margin, 86);
-
-    const priceY = 125;
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(28);
-    const priceText = zonalValue ? `PHP ${zonalValue} / sqm` : "₱ - / sqm";
-    const priceW = pdf.getTextWidth(priceText);
-    pdf.text(priceText, (pageW - priceW) / 2, priceY);
-
-    const topY = 150;
-    const colGap = 14;
-    const leftW = Math.floor((pageW - margin * 2 - colGap) * 0.58);
-    const rightW = pageW - margin * 2 - colGap - leftW;
-
-    const leftX = margin;
-    const rightX = margin + leftW + colGap;
-
-    const mapBoxH = 290;
-    pdf.setDrawColor(30);
-    pdf.setLineWidth(1);
-    pdf.roundedRect(leftX, topY, leftW, mapBoxH, 10, 10);
-
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(11);
-    pdf.text("Map", leftX + 12, topY + 20);
-
-    const imgMargin = 10;
-    const imgX = leftX + imgMargin;
-    const imgY = topY + 28;
-    const imgW = leftW - imgMargin * 2;
-    const imgH = mapBoxH - 38;
-    pdf.addImage(mapDataUrl, "PNG", imgX, imgY, imgW, imgH);
-
-    const boxGapY = 12;
-    const noteBoxH = 140;
-    pdf.roundedRect(rightX, topY, rightW, noteBoxH, 10, 10);
-
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(11);
-    pdf.text("Ideal for this place", rightX + 12, topY + 20);
-
+    // Location + classification (center)
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(10);
-    let y = topY + 40;
-    const maxRightTextW = rightW - 24;
-    const idealLines = pdf.splitTextToSize(idealBusinessText || "• (Add notes here)", maxRightTextW);
-    for (const line of idealLines.slice(0, 10)) {
-      pdf.text(line, rightX + 12, y);
-      y += 12;
-      if (y > topY + noteBoxH - 12) break;
+    pdf.text(locationLine, pageW / 2, 145, { align: "center" });
+    pdf.text(classLine, pageW / 2, 158, { align: "center" });
+
+    // Layout numbers
+    const topY = 190;
+    const mapW = 240;
+    const mapH = 240;
+
+    const mapX = margin;
+    const mapY = topY;
+
+    const rightX = mapX + mapW + 36;
+
+    // Map box
+    pdf.setDrawColor(140);
+    pdf.setLineWidth(1);
+    pdf.roundedRect(mapX, mapY, mapW, mapH, 10, 10);
+
+    // map image inside
+    pdf.addImage(mapDataUrl, "PNG", mapX + 8, mapY + 8, mapW - 16, mapH - 16);
+
+    // Right side: HBU + Risks (bullet lists)
+    const bulletsFromText = (t: string) =>
+      String(t || "")
+        .split("\n")
+        .map((x: string) => x.replace(/^•\s*/, "").trim())
+        .filter(Boolean);
+
+    const hbuItems = bulletsFromText(idealBusinessText).slice(0, 6);
+    const riskItems = bulletsFromText(riskText).slice(0, 6);
+
+    let y = mapY + 30;
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(12);
+    pdf.text("Highest and Best Use (HBU)", rightX, y);
+
+    y += 18;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(11);
+
+    for (const item of hbuItems.length ? hbuItems : ["(Add items)"]) {
+      pdf.text(`• ${item}`, rightX, y);
+      y += 14;
     }
 
-    const riskY = topY + noteBoxH + boxGapY;
-    const riskBoxH = 138;
-    pdf.roundedRect(rightX, riskY, rightW, riskBoxH, 10, 10);
-
+    y += 10;
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(11);
-    pdf.text("Risk / Hazards", rightX + 12, riskY + 20);
+    pdf.setFontSize(12);
+    pdf.text("Risk / Hazards", rightX, y);
 
+    y += 18;
     pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
-    let ry = riskY + 40;
-    const riskLines = pdf.splitTextToSize(riskText || "• (Add notes here)", maxRightTextW);
-    for (const line of riskLines.slice(0, 10)) {
-      pdf.text(line, rightX + 12, ry);
-      ry += 12;
-      if (ry > riskY + riskBoxH - 12) break;
+    pdf.setFontSize(11);
+
+    for (const item of riskItems.length ? riskItems : ["(Add items)"]) {
+      pdf.text(`• ${item}`, rightX, y);
+      y += 14;
     }
 
-    const sigBaseY = pageH - 70;
-    const sigX = pageW - margin - 220;
+    // Watermark (make it visible but not overpowering)
+    if (watermark) {
+      try {
+        const GState = (pdf as any).GState;
+        if (GState) pdf.setGState(new GState({ opacity: 0.80 })); // clearer than before
+      } catch {}
 
-    pdf.setDrawColor(50);
+      const wmW = pageW * 0.9;
+      const wmH = (wmW * 200) / 520;
+      const wmY = pageH - wmH - 180; // move up a bit
+      pdf.addImage(watermark, "PNG", (pageW - wmW) / 2, wmY, wmW, wmH);
+
+      try {
+        const GState = (pdf as any).GState;
+        if (GState) pdf.setGState(new GState({ opacity: 1 }));
+      } catch {}
+    }
+
+    // Signature area (bottom-right)
+    const sigBaseY = pageH - 110;
+    const sigX = pageW - margin - 240;
+
+    pdf.setDrawColor(60);
     pdf.setLineWidth(1);
-    pdf.line(sigX, sigBaseY, sigX + 200, sigBaseY);
+    pdf.line(sigX, sigBaseY, sigX + 220, sigBaseY);
 
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(11);
-    pdf.text("ANTHONY LEUTERIO", sigX, sigBaseY + 18);
+    // Signature name in Hurricane if available
+    if (hasHurricane) {
+      pdf.setFont("Hurricane", "normal");
+      pdf.setFontSize(26);
+      pdf.text("Anthony Gerard Leuterio", sigX, sigBaseY - 8);
+    } else {
+      pdf.setFont("times", "italic");
+      pdf.setFontSize(18);
+      pdf.text("Anthony Gerard Leuterio", sigX, sigBaseY - 10);
+    }
 
     pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
-    pdf.text("CEO / FOUNDER", sigX, sigBaseY + 34);
-    pdf.text("FILIPINO HOMES", sigX, sigBaseY + 48);
+    pdf.setFontSize(11);
+    pdf.text("CEO / Founder of Filipino Homes", sigX, sigBaseY + 24);
 
+    // =========================
+    // PAGE 2 (cards)
+    // =========================
     pdf.addPage();
+
+    if (headerLogo) {
+      const logoW = 260;
+      const logoH = 60;
+      pdf.addImage(headerLogo, "PNG", (pageW - logoW) / 2, 28, logoW, logoH);
+    }
+
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(16);
-    pdf.text("Nearby Facilities / POIs (within 1.5km)", margin, 56);
+    pdf.setFontSize(12);
+    pdf.text("Nearby Facilities / POIs (within 1.5km)", pageW / 2, 115, { align: "center" });
+
+    const gridTop = 145;
+    const gap = 18;
+    const cardW = (pageW - margin * 2 - gap) / 2;
+    const cardH = 130;
+
+    const leftColX = margin;
+    const rightColX = margin + cardW + gap;
+
+    const row1Y = gridTop;
+    const row2Y = gridTop + cardH + gap;
+    const row3Y = gridTop + (cardH + gap) * 2;
+
+    const cards: Array<{ title: string; items: PoiItem[] }> = poiData
+      ? [
+          { title: `Hospitals (${poiData.items.hospitals.length})`, items: poiData.items.hospitals },
+          { title: `Police Stations (${poiData.items.policeStations.length})`, items: poiData.items.policeStations },
+          { title: `Schools (${poiData.items.schools.length})`, items: poiData.items.schools },
+          { title: `Fire Stations (${poiData.items.fireStations.length})`, items: poiData.items.fireStations },
+          { title: `Pharmacies (${poiData.items.pharmacies.length})`, items: poiData.items.pharmacies },
+          { title: `Clinics (${poiData.items.clinics.length})`, items: poiData.items.clinics },
+        ]
+      : [
+          { title: "Hospitals (0)", items: [] },
+          { title: "Police Stations (0)", items: [] },
+          { title: "Schools (0)", items: [] },
+          { title: "Fire Stations (0)", items: [] },
+          { title: "Pharmacies (0)", items: [] },
+          { title: "Clinics (0)", items: [] },
+        ];
+
+    const cardPositions = [
+      { x: leftColX, y: row1Y },
+      { x: rightColX, y: row1Y },
+      { x: leftColX, y: row2Y },
+      { x: rightColX, y: row2Y },
+      { x: leftColX, y: row3Y },
+      { x: rightColX, y: row3Y },
+    ];
+
+    // Card drawer: shows as many as fit + "...and N more"
+    const drawCard = (x: number, y: number, title: string, items: PoiItem[]) => {
+      pdf.setDrawColor(80);
+      pdf.setLineWidth(1);
+      pdf.roundedRect(x, y, cardW, cardH, 14, 14);
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.text(title, x + 14, y + 22);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9.5);
+
+      let ty = y + 40;
+
+      if (!items.length) {
+        pdf.text("• None found", x + 14, ty);
+        return;
+      }
+
+      let shownItems = 0;
+
+      for (const it of items) {
+        const name = it?.name ? String(it.name) : "(unnamed)";
+        const wrapped = pdf.splitTextToSize(`• ${name}`, cardW - 28);
+
+        for (const line of wrapped) {
+          // reserve space for the "...and N more"
+          if (ty > y + cardH - 26) {
+            const remaining = items.length - shownItems;
+            if (remaining > 0) {
+              pdf.setFont("helvetica", "italic");
+              pdf.setFontSize(9);
+              pdf.text(`…and ${remaining} more`, x + 14, y + cardH - 14);
+            }
+            return;
+          }
+
+          pdf.text(line, x + 14, ty);
+          ty += 12;
+        }
+
+        shownItems += 1;
+      }
+    };
+
+    for (let i = 0; i < 6; i++) {
+      const pos = cardPositions[i];
+      const c = cards[i];
+      drawCard(pos.x, pos.y, c.title, c.items);
+    }
+
+    // Watermark page 2
+    if (watermark) {
+      try {
+        const GState = (pdf as any).GState;
+        if (GState) pdf.setGState(new GState({ opacity: 0.18 }));
+      } catch {}
+
+      const wmW = pageW * 0.9;
+      const wmH = (wmW * 120) / 520;
+      const wmY = pageH - wmH - 240;
+      pdf.addImage(watermark, "PNG", (pageW - wmW) / 2, wmY, wmW, wmH);
+
+      try {
+        const GState = (pdf as any).GState;
+        if (GState) pdf.setGState(new GState({ opacity: 1 }));
+      } catch {}
+    }
+
+    // Footer page 2
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.text("Copyright © 2026 All rights reserved. Filipino Homes | Developers", pageW / 2, pageH - 26, {
+      align: "center",
+    });
+
+    // =========================
+    // PAGE 3+: FULL POI LISTS (prints ALL)
+    // =========================
+    pdf.addPage();
+
+    if (headerLogo) {
+      const logoW = 260;
+      const logoH = 60;
+      pdf.addImage(headerLogo, "PNG", (pageW - logoW) / 2, 28, logoW, logoH);
+    }
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.text("Full Nearby Facilities List (within 1.5km)", pageW / 2, 110, { align: "center" });
 
     pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(11);
+    pdf.setFontSize(10);
 
-    let py = 82;
+    let py = 140;
 
-    const groups: Array<[string, PoiItem[]]> = poiData
+    const sections: Array<[string, PoiItem[]]> = poiData
       ? [
           ["Hospitals", poiData.items.hospitals],
           ["Schools", poiData.items.schools],
@@ -194,49 +429,78 @@ export default function ReportBuilder(props: {
         ]
       : [];
 
-    if (!groups.length) {
-      pdf.text("No POI data loaded. Select a row first to load POIs.", margin, py);
-    } else {
-      for (const [title, list] of groups) {
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(12);
-        pdf.text(`${title} (${list.length})`, margin, py);
-        py += 16;
+    for (const [title, list] of sections) {
+      if (py > pageH - 80) {
+        pdf.addPage();
+        py = 60;
+      }
 
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(10);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.text(`${title} (${list.length})`, margin, py);
+      py += 16;
 
-        const names = list.slice(0, 28).map((x) => `• ${x.name || "(unnamed)"}`);
-        if (!names.length) {
-          pdf.text("• None found", margin, py);
-          py += 14;
-        } else {
-          for (const line of names) {
-            const wrapped = pdf.splitTextToSize(line, pageW - margin * 2);
-            for (const wLine of wrapped) {
-              if (py > pageH - 60) {
-                pdf.addPage();
-                py = 60;
-              }
-              pdf.text(wLine, margin, py);
-              py += 12;
-            }
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(10);
+
+      if (!list.length) {
+        pdf.text("• None found", margin, py);
+        py += 14;
+        continue;
+      }
+
+      for (const it of list) {
+        const name = it?.name ? String(it.name) : "(unnamed)";
+        const wrapped = pdf.splitTextToSize(`• ${name}`, pageW - margin * 2);
+
+        for (const w of wrapped) {
+          if (py > pageH - 60) {
+            pdf.addPage();
+            py = 60;
           }
-        }
-
-        py += 12;
-        if (py > pageH - 60) {
-          pdf.addPage();
-          py = 60;
+          pdf.text(w, margin, py);
+          py += 12;
         }
       }
+
+      py += 14;
     }
 
+    // Optional watermark on full list pages (light)
+    if (watermark) {
+      try {
+        const GState = (pdf as any).GState;
+        if (GState) pdf.setGState(new GState({ opacity: 0.08 }));
+      } catch {}
+
+      const wmW = pageW * 0.9;
+      const wmH = (wmW * 120) / 520;
+      const wmY = pageH - wmH - 240;
+      pdf.addImage(watermark, "PNG", (pageW - wmW) / 2, wmY, wmW, wmH);
+
+      try {
+        const GState = (pdf as any).GState;
+        if (GState) pdf.setGState(new GState({ opacity: 1 }));
+      } catch {}
+    }
+
+    // Footer on last page (simple)
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.text("Copyright © 2026 All rights reserved. Filipino Homes | Developers", pageW / 2, pageH - 26, {
+      align: "center",
+    });
+
     const blob = pdf.output("blob");
-    return {
-      blob,
-      filename: `zonal-report-${String(locationName).replace(/[^\w]+/g, "-").slice(0, 60)}.pdf`,
-    };
+
+    const safeName = (selectedRow
+      ? `${String(selectedRow["Street/Subdivision-"] ?? "")}-${String(selectedRow["City-"] ?? "")}`
+      : geoLabel || "location"
+    )
+      .replace(/[^\w]+/g, "-")
+      .slice(0, 60);
+
+    return { blob, filename: `zonal-report-${safeName}.pdf` };
   }
 
   async function generatePdfPreview() {
@@ -277,7 +541,6 @@ export default function ReportBuilder(props: {
               );
             }
           }
-
           const s = clonedDoc.createElement("style");
           s.textContent = `* { color-scheme: light !important; }`;
           clonedDoc.head.appendChild(s);
@@ -301,7 +564,12 @@ export default function ReportBuilder(props: {
 
   return (
     <>
-      <PdfPreviewModal open={pdfPreviewOpen} url={pdfPreviewUrl} onClose={closePreview} onDownload={downloadPreviewPdf} />
+      <PdfPreviewModal
+        open={pdfPreviewOpen}
+        url={pdfPreviewUrl}
+        onClose={closePreview}
+        onDownload={downloadPreviewPdf}
+      />
 
       <aside className="w-80 border-l border-gray-200 bg-white p-5 overflow-auto">
         <h3 className="text-sm font-semibold text-gray-900 mb-4">Report Builder</h3>
@@ -313,7 +581,7 @@ export default function ReportBuilder(props: {
               className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={idealBusinessText}
               onChange={(e) => setIdealBusinessText(e.target.value)}
-              placeholder={"• Cafe\n• Retail Shop\n• Clinic"}
+              placeholder={"• Basic Food Stall\n• Sari-sari / Micro-retail\n• Pharmacy / Medical Supplies"}
               rows={5}
             />
           </div>
@@ -324,7 +592,7 @@ export default function ReportBuilder(props: {
               className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={riskText}
               onChange={(e) => setRiskText(e.target.value)}
-              placeholder={"• Flood Risk: Low\n• Landslide: Minimal"}
+              placeholder={"• Flood Risk - High\n• Landslide Risk - Low\n• Earthquake Risk - Moderate\n• Crime Risk - Low"}
               rows={4}
             />
           </div>
@@ -375,7 +643,8 @@ export default function ReportBuilder(props: {
                   </div>
                 </div>
 
-                <div className="text-xs space-y-2 max-h-40 overflow-auto">
+                {/* SHOW ALL POIs */}
+                <div className="text-xs space-y-3 max-h-80 overflow-auto">
                   {(
                     [
                       ["Hospitals", poiData.items.hospitals],
@@ -387,15 +656,18 @@ export default function ReportBuilder(props: {
                     ] as const
                   ).map(([label, list], idx) => (
                     <div key={`poi-${idx}`}>
-                      {list.length > 0 && (
-                        <>
-                          <p className="font-semibold text-gray-900">{label}</p>
-                          <ul className="list-disc pl-4 text-gray-600 text-[11px]">
-                            {list.slice(0, 3).map((x, i) => (
-                              <li key={`${idx}-${i}`}>{x.name || "(unnamed)"}</li>
-                            ))}
-                          </ul>
-                        </>
+                      <p className="font-semibold text-gray-900">
+                        {label} <span className="text-gray-500">({list.length})</span>
+                      </p>
+
+                      {list.length ? (
+                        <ul className="list-disc pl-4 text-gray-600 text-[11px] mt-1 space-y-0.5">
+                          {list.map((x: PoiItem, i: number) => (
+                            <li key={`${idx}-${i}`}>{x.name || "(unnamed)"}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-[11px] text-gray-500 mt-1">None found</p>
                       )}
                     </div>
                   ))}
