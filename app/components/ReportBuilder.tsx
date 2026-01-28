@@ -120,9 +120,13 @@ export default function ReportBuilder(props: {
         )}, ${toTitleSafe(selectedRow["City-"])}`
       : `Location: ${geoLabel || "Selected location"}`;
 
-    const classLine = selectedRow ? `Classification: ${toTitleSafe(selectedRow["Classification-"])}` : `Classification: -`;
+    const classLine = selectedRow
+      ? `Classification: ${toTitleSafe(selectedRow["Classification-"])}`
+      : `Classification: -`;
 
-    const zonalText = selectedRow ? formatMoneyLikeSample(String(selectedRow["ZonalValuepersqm.-"] ?? "")) : "PHP - / sqm";
+    const zonalText = selectedRow
+      ? formatMoneyLikeSample(String(selectedRow["ZonalValuepersqm.-"] ?? ""))
+      : "PHP - / sqm";
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
     const pageW = pdf.internal.pageSize.getWidth();
@@ -131,6 +135,7 @@ export default function ReportBuilder(props: {
 
     const headerLogo = await fetchAsDataURL("/pictures/FilipinoHomes.png");
     const watermark = await fetchAsDataURL("/pictures/LeuterioRealty.png");
+
     const hasHurricane = await tryRegisterHurricaneFont(pdf);
 
     // =========================
@@ -165,30 +170,12 @@ export default function ReportBuilder(props: {
 
     const rightX = mapX + mapW + 36;
 
-    // Map box + image
     pdf.setDrawColor(140);
     pdf.setLineWidth(1);
     pdf.roundedRect(mapX, mapY, mapW, mapH, 10, 10);
+
     pdf.addImage(mapDataUrl, "PNG", mapX + 8, mapY + 8, mapW - 16, mapH - 16);
 
-    // ✅ Area Description under the map (left side)
-    const descTitleY = mapY + mapH + 24;
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(11);
-    pdf.text("Area Description", mapX, descTitleY);
-
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
-
-    const safeDesc = String(areaDescription || "").trim() || "No description available yet.";
-    const descLines = pdf.splitTextToSize(safeDesc, mapW);
-    let dy = descTitleY + 14;
-    for (const line of descLines.slice(0, 5)) {
-      pdf.text(line, mapX, dy);
-      dy += 12;
-    }
-
-    // Right side: HBU bullets
     const bulletsFromText = (t: string) =>
       String(t || "")
         .split("\n")
@@ -199,6 +186,7 @@ export default function ReportBuilder(props: {
 
     let y = mapY + 30;
 
+    // HBU
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(12);
     pdf.text("Highest and Best Use (HBU)", rightX, y);
@@ -212,7 +200,27 @@ export default function ReportBuilder(props: {
       y += 14;
     }
 
-    // Watermark
+    // ✅ Area description (AI)
+    y += 12;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(12);
+    pdf.text("Area Description", rightX, y);
+
+    y += 16;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10.5);
+
+    const desc =
+      String(areaDescription || "").trim() || "(No description yet — select a property to generate.)";
+
+    const wrappedDesc = pdf.splitTextToSize(desc, pageW - rightX - margin);
+    const maxLines = 6;
+    for (const line of wrappedDesc.slice(0, maxLines)) {
+      pdf.text(line, rightX, y);
+      y += 12;
+    }
+
+    // Watermark (visible but not overpowering)
     if (watermark) {
       try {
         const GState = (pdf as any).GState;
@@ -355,7 +363,6 @@ export default function ReportBuilder(props: {
       drawCard(pos.x, pos.y, c.title, c.items);
     }
 
-    // watermark page 2
     if (watermark) {
       try {
         const GState = (pdf as any).GState;
@@ -379,9 +386,7 @@ export default function ReportBuilder(props: {
       align: "center",
     });
 
-    // =========================
-    // PAGE 3+ full POI list
-    // =========================
+    // PAGE 3+ (full list)
     pdf.addPage();
 
     if (headerLogo) {
@@ -556,7 +561,7 @@ export default function ReportBuilder(props: {
               value={idealBusinessText}
               onChange={(e) => setIdealBusinessText(e.target.value)}
               placeholder={"• Basic Food Stall\n• Sari-sari / Micro-retail\n• Pharmacy / Medical Supplies"}
-              rows={5}
+              rows={6}
             />
           </div>
 
@@ -568,7 +573,9 @@ export default function ReportBuilder(props: {
             {pdfLoading ? "Generating PDF…" : "Preview PDF Report"}
           </button>
 
-          {pdfErr && <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{pdfErr}</div>}
+          {pdfErr && (
+            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{pdfErr}</div>
+          )}
 
           <div className="border-t border-gray-200 pt-4 mt-4">
             <h4 className="text-sm font-semibold text-gray-900 mb-3">Nearby Facilities (1.5km)</h4>

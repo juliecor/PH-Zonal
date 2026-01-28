@@ -18,57 +18,6 @@ type CompsResp =
     }
   | null;
 
-// ---- small helper: build a short area description (<= 50 words-ish) ----
-function buildAreaDescription(args: {
-  geoLabel: string;
-  selectedRow: Row | null;
-  poi: { counts: PoiData["counts"] } | null;
-}) {
-  const cls = String(args.selectedRow?.["Classification-"] ?? "").trim();
-  const zonalRaw = String(args.selectedRow?.["ZonalValuepersqm.-"] ?? "").replace(/,/g, "");
-  const zonal = Number(zonalRaw);
-  const priceBand =
-    Number.isFinite(zonal) && zonal > 0
-      ? zonal >= 80000
-        ? "high-value"
-        : zonal >= 30000
-        ? "mid-range"
-        : "budget-friendly"
-      : "variable";
-
-  const c = args.poi?.counts;
-  const access =
-    c
-      ? [
-          c.schools ? "schools nearby" : "",
-          c.hospitals || c.clinics ? "health services nearby" : "",
-          c.policeStations || c.fireStations ? "public safety access" : "",
-          c.pharmacies ? "pharmacies close" : "",
-        ].filter(Boolean)
-      : [];
-
-  const clsHint =
-    cls.toUpperCase().includes("RES")
-      ? "good for residential living"
-      : cls.toUpperCase().includes("COMM")
-      ? "good for business activity"
-      : cls
-      ? `suited for ${cls.toLowerCase()} use`
-      : "a mixed-use area";
-
-  const label = args.geoLabel ? args.geoLabel.split(",").slice(0, 2).join(",").trim() : "this area";
-
-  const sentence1 = `${label} is a ${priceBand} zone and is ${clsHint}.`;
-  const sentence2 = access.length ? `Nearby: ${access.slice(0, 3).join(", ")}.` : "Nearby facilities vary by location.";
-
-  // keep it short
-  const out = `${sentence1} ${sentence2}`.trim();
-
-  // safety trim: keep under ~50 words
-  const words = out.split(/\s+/).filter(Boolean);
-  return words.length <= 50 ? out : words.slice(0, 50).join(" ") + "…";
-}
-
 export default function Home() {
   // region selection
   const [regionSearch, setRegionSearch] = useState("");
@@ -117,11 +66,13 @@ export default function Home() {
   const [poiData, setPoiData] = useState<PoiData | null>(null);
   const [detailsErr, setDetailsErr] = useState("");
 
-  // Right side fields
+  // Right side fields (NO RISK)
   const [idealBusinessText, setIdealBusinessText] = useState("");
 
-  // ✅ NEW: area description shown under map + printed to PDF
+  // ✅ Area description under map (AI)
   const [areaDescription, setAreaDescription] = useState("");
+  const [areaDescLoading, setAreaDescLoading] = useState(false);
+  const [areaDescErr, setAreaDescErr] = useState("");
 
   // comps
   const [comps, setComps] = useState<CompsResp>(null);
@@ -366,11 +317,47 @@ export default function Home() {
       setGeoLabel(center.label);
       setMatchStatus("");
       setComps(null);
-      setPoiData(null);
-      setAreaDescription("");
     } finally {
       if (myId !== reqIdRef.current) return;
       setGeoLoading(false);
+    }
+  }
+
+  async function describeArea(payload: {
+    lat: number;
+    lon: number;
+    label: string;
+    row?: Row | null;
+    poi?: PoiData | null;
+  }) {
+    setAreaDescErr("");
+    setAreaDescLoading(true);
+    try {
+      const res = await fetch("/api/describe-area", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lat: payload.lat,
+          lon: payload.lon,
+          label: payload.label,
+          city: String(payload.row?.["City-"] ?? ""),
+          barangay: String(payload.row?.["Barangay-"] ?? ""),
+          province: String(payload.row?.["Province-"] ?? ""),
+          classification: String(payload.row?.["Classification-"] ?? ""),
+          zonalValuePerSqm: String(payload.row?.["ZonalValuepersqm.-"] ?? ""),
+          poiCounts: payload.poi?.counts ?? null,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Failed to describe area");
+
+      setAreaDescription(String(data.text ?? "").trim());
+    } catch (e: any) {
+      setAreaDescErr(e?.message ?? "Failed to generate description");
+      setAreaDescription("");
+    } finally {
+      setAreaDescLoading(false);
     }
   }
 
@@ -383,6 +370,7 @@ export default function Home() {
     setMatchStatus("");
     setComps(null);
     setAreaDescription("");
+    setAreaDescErr("");
 
     setGeoLoading(true);
     try {
@@ -410,7 +398,9 @@ export default function Home() {
         if (parts.length >= 2) candidates.push(`${parts.slice(0, 2).join(" ")}, ${brgy}, ${cty}, ${prov}, Philippines`);
       }
 
-      if (vicinity) candidates.push(`${vicinity}, ${brgy}, ${cty}, ${prov}, Philippines`);
+      if (vicinity) {
+        candidates.push(`${vicinity}, ${brgy}, ${cty}, ${prov}, Philippines`);
+      }
 
       candidates.push(`${normalizePH(brgy)}, ${normalizePH(cty)}, ${normalizePH(prov)}, Philippines`);
 
@@ -467,11 +457,17 @@ export default function Home() {
         classification: String(r["Classification-"] ?? ""),
         poi,
       });
+
       setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
 
-      // ✅ build the area description now that we have POI
-      const desc = buildAreaDescription({ geoLabel: best?.label ?? anchor.label, selectedRow: r, poi });
-      setAreaDescription(desc);
+      // ✅ AI description (after POI so it can use counts)
+      describeArea({
+        lat: finalCenter.lat,
+        lon: finalCenter.lon,
+        label: best?.label ?? anchor.label,
+        row: r,
+        poi: { counts: poi.counts, items: poi.items } as any,
+      });
     } catch (e: any) {
       if (myId !== reqIdRef.current) return;
       setDetailsErr(e?.message ?? "Failed to load details");
@@ -493,12 +489,12 @@ export default function Home() {
     setDetailsErr("");
     setComps(null);
     setAreaDescription("");
+    setAreaDescErr("");
 
     setPoiLoading(true);
     try {
       const poi = await fetchPoi(lat, lon);
       if (myId !== reqIdRef.current) return;
-
       setPoiData({ counts: poi.counts, items: poi.items });
 
       const ideas = suggestBusinesses({
@@ -506,11 +502,17 @@ export default function Home() {
         classification: "",
         poi,
       });
+
       setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
 
-      // ✅ description for map-picked location (no row/classification)
-      const desc = buildAreaDescription({ geoLabel: `${lat.toFixed(5)}, ${lon.toFixed(5)}`, selectedRow: null, poi });
-      setAreaDescription(desc);
+      // ✅ AI description for clicked point (no row context)
+      describeArea({
+        lat,
+        lon,
+        label: `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
+        row: null,
+        poi: { counts: poi.counts, items: poi.items } as any,
+      });
     } catch (e: any) {
       if (myId !== reqIdRef.current) return;
       setDetailsErr(e?.message ?? "Failed to load POI");
@@ -538,7 +540,9 @@ export default function Home() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-gray-900">BIR Zonal Values Lookup</h1>
-              <p className="text-sm text-gray-500 mt-1">Advanced property assessment tool with smart geocoding and facility analysis</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Advanced property assessment tool with smart geocoding and facility analysis
+              </p>
             </div>
             <div className="text-right">
               <div className="text-xs font-medium text-gray-500">Page</div>
@@ -600,6 +604,7 @@ export default function Home() {
                     setBoundary(null);
                     setComps(null);
                     setAreaDescription("");
+                    setAreaDescErr("");
 
                     await loadCities(m.domain);
                     searchZonal({ page: 1 });
@@ -743,7 +748,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Main Content - 3 Panels */}
+        {/* Main Content */}
         <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
           <div className="flex h-[80vh]">
             {/* LEFT PANEL */}
@@ -780,10 +785,18 @@ export default function Home() {
                       <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs">
                         <p className="font-semibold text-gray-900">Comps (same barangay)</p>
                         <div className="mt-1 space-y-1 text-gray-700">
-                          <div>Count: <span className="font-semibold">{comps.stats.count}</span></div>
-                          <div>Min: <span className="font-semibold">{comps.stats.min == null ? "-" : comps.stats.min.toLocaleString()}</span></div>
-                          <div>Median: <span className="font-semibold">{comps.stats.median == null ? "-" : comps.stats.median.toLocaleString()}</span></div>
-                          <div>Max: <span className="font-semibold">{comps.stats.max == null ? "-" : comps.stats.max.toLocaleString()}</span></div>
+                          <div>
+                            Count: <span className="font-semibold">{comps.stats.count}</span>
+                          </div>
+                          <div>
+                            Min: <span className="font-semibold">{comps.stats.min == null ? "-" : comps.stats.min.toLocaleString()}</span>
+                          </div>
+                          <div>
+                            Median: <span className="font-semibold">{comps.stats.median == null ? "-" : comps.stats.median.toLocaleString()}</span>
+                          </div>
+                          <div>
+                            Max: <span className="font-semibold">{comps.stats.max == null ? "-" : comps.stats.max.toLocaleString()}</span>
+                          </div>
                         </div>
                       </div>
                     ) : null}
@@ -835,7 +848,7 @@ export default function Home() {
               </div>
             </aside>
 
-            {/* CENTER PANEL - Map + description */}
+            {/* CENTER PANEL */}
             <div className="flex-1 flex flex-col relative bg-gray-50">
               <div className="absolute top-4 right-4 z-10 bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
                 <button
@@ -873,16 +886,24 @@ export default function Home() {
                 />
               </div>
 
-              {/* ✅ new description under the map */}
+              {/* ✅ Description below map */}
               <div className="border-t border-gray-200 bg-white p-4">
-                <p className="text-xs font-semibold text-gray-900">Area Description</p>
-                <p className="text-sm text-gray-700 mt-1 leading-relaxed">
-                  {areaDescription || "Select a property or click the map to generate a short description of the area."}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-700">Area Description (AI)</p>
+                  {areaDescLoading && <p className="text-xs text-gray-500">Generating…</p>}
+                </div>
+
+                {areaDescErr ? (
+                  <p className="text-xs text-red-600 mt-2">{areaDescErr}</p>
+                ) : (
+                  <p className="text-sm text-gray-800 mt-2 leading-relaxed">
+                    {areaDescription || "Select a property or click the map to generate a short description."}
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* RIGHT PANEL - Report Builder */}
+            {/* RIGHT PANEL */}
             <ReportBuilder
               selectedLocation={selectedLocation}
               selectedRow={selectedRow}
