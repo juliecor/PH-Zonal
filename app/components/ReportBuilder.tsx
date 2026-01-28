@@ -92,7 +92,7 @@ export default function ReportBuilder(props: {
     const priceY = 125;
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(28);
-    const priceText = zonalValue ? `₱ ${zonalValue} / sqm` : "₱ - / sqm";
+    const priceText = zonalValue ? `PHP ${zonalValue} / sqm` : "₱ - / sqm";
     const priceW = pdf.getTextWidth(priceText);
     pdf.text(priceText, (pageW - priceW) / 2, priceY);
 

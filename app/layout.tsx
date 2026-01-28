@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PH Zonal Finder",
+  title: "FH Zonal Finder",
   description: "BIR zonal lookup + map + nearby facilities",
 };
 
