@@ -5,10 +5,69 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Map as MapIcon, Satellite as SatelliteIcon, Mountain as TerrainIcon } from "lucide-react";
 
 import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "./lib/types";
-import { defaultRisks, isBadStreet, normalizePH, suggestBusinesses } from "./lib/zonal-util";
+import { isBadStreet, normalizePH, suggestBusinesses } from "./lib/zonal-util";
 import ReportBuilder from "./components/ReportBuilder";
 
 const ZonalMap = dynamic(() => import("./components/ZonalMap"), { ssr: false });
+
+type CompsResp =
+  | {
+      ok: true;
+      stats: { min: number | null; median: number | null; max: number | null; count: number };
+      rows: any[];
+    }
+  | null;
+
+// ---- small helper: build a short area description (<= 50 words-ish) ----
+function buildAreaDescription(args: {
+  geoLabel: string;
+  selectedRow: Row | null;
+  poi: { counts: PoiData["counts"] } | null;
+}) {
+  const cls = String(args.selectedRow?.["Classification-"] ?? "").trim();
+  const zonalRaw = String(args.selectedRow?.["ZonalValuepersqm.-"] ?? "").replace(/,/g, "");
+  const zonal = Number(zonalRaw);
+  const priceBand =
+    Number.isFinite(zonal) && zonal > 0
+      ? zonal >= 80000
+        ? "high-value"
+        : zonal >= 30000
+        ? "mid-range"
+        : "budget-friendly"
+      : "variable";
+
+  const c = args.poi?.counts;
+  const access =
+    c
+      ? [
+          c.schools ? "schools nearby" : "",
+          c.hospitals || c.clinics ? "health services nearby" : "",
+          c.policeStations || c.fireStations ? "public safety access" : "",
+          c.pharmacies ? "pharmacies close" : "",
+        ].filter(Boolean)
+      : [];
+
+  const clsHint =
+    cls.toUpperCase().includes("RES")
+      ? "good for residential living"
+      : cls.toUpperCase().includes("COMM")
+      ? "good for business activity"
+      : cls
+      ? `suited for ${cls.toLowerCase()} use`
+      : "a mixed-use area";
+
+  const label = args.geoLabel ? args.geoLabel.split(",").slice(0, 2).join(",").trim() : "this area";
+
+  const sentence1 = `${label} is a ${priceBand} zone and is ${clsHint}.`;
+  const sentence2 = access.length ? `Nearby: ${access.slice(0, 3).join(", ")}.` : "Nearby facilities vary by location.";
+
+  // keep it short
+  const out = `${sentence1} ${sentence2}`.trim();
+
+  // safety trim: keep under ~50 words
+  const words = out.split(/\s+/).filter(Boolean);
+  return words.length <= 50 ? out : words.slice(0, 50).join(" ") + "…";
+}
 
 export default function Home() {
   // region selection
@@ -58,9 +117,14 @@ export default function Home() {
   const [poiData, setPoiData] = useState<PoiData | null>(null);
   const [detailsErr, setDetailsErr] = useState("");
 
-  // "Right side" PDF fields
+  // Right side fields
   const [idealBusinessText, setIdealBusinessText] = useState("");
-  const [riskText, setRiskText] = useState("");
+
+  // ✅ NEW: area description shown under map + printed to PDF
+  const [areaDescription, setAreaDescription] = useState("");
+
+  // comps
+  const [comps, setComps] = useState<CompsResp>(null);
 
   // guards / cache
   const reqIdRef = useRef(0);
@@ -192,6 +256,23 @@ export default function Home() {
     return data as { ok: true; counts: PoiData["counts"]; items: PoiData["items"] };
   }
 
+  async function fetchCompsForRow(r: Row) {
+    try {
+      const res = await fetch(
+        `/api/comps?domain=${encodeURIComponent(domain)}&city=${encodeURIComponent(
+          String(r["City-"] ?? "")
+        )}&barangay=${encodeURIComponent(String(r["Barangay-"] ?? ""))}&classification=${encodeURIComponent(
+          String(r["Classification-"] ?? "")
+        )}&limit=10`
+      );
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) return null;
+      return data as CompsResp;
+    } catch {
+      return null;
+    }
+  }
+
   async function geocodeLocked(args: {
     query: string;
     hintBarangay?: string;
@@ -284,6 +365,9 @@ export default function Home() {
       setSelectedLocation({ lat: center.lat, lon: center.lon });
       setGeoLabel(center.label);
       setMatchStatus("");
+      setComps(null);
+      setPoiData(null);
+      setAreaDescription("");
     } finally {
       if (myId !== reqIdRef.current) return;
       setGeoLoading(false);
@@ -297,6 +381,8 @@ export default function Home() {
     setDetailsErr("");
     setPoiData(null);
     setMatchStatus("");
+    setComps(null);
+    setAreaDescription("");
 
     setGeoLoading(true);
     try {
@@ -324,9 +410,7 @@ export default function Home() {
         if (parts.length >= 2) candidates.push(`${parts.slice(0, 2).join(" ")}, ${brgy}, ${cty}, ${prov}, Philippines`);
       }
 
-      if (vicinity) {
-        candidates.push(`${vicinity}, ${brgy}, ${cty}, ${prov}, Philippines`);
-      }
+      if (vicinity) candidates.push(`${vicinity}, ${brgy}, ${cty}, ${prov}, Philippines`);
 
       candidates.push(`${normalizePH(brgy)}, ${normalizePH(cty)}, ${normalizePH(prov)}, Philippines`);
 
@@ -366,6 +450,12 @@ export default function Home() {
       setGeoLabel(best?.label ?? anchor.label);
       setBoundary(finalCenter.boundary ?? anchor.boundary ?? null);
 
+      // comps (async)
+      fetchCompsForRow(r).then((c) => {
+        if (myId !== reqIdRef.current) return;
+        if (c?.ok) setComps(c);
+      });
+
       setPoiLoading(true);
       const poi = await fetchPoi(finalCenter.lat, finalCenter.lon);
       if (myId !== reqIdRef.current) return;
@@ -378,7 +468,10 @@ export default function Home() {
         poi,
       });
       setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
-      setRiskText(defaultRisks().map((x) => `• ${x}`).join("\n"));
+
+      // ✅ build the area description now that we have POI
+      const desc = buildAreaDescription({ geoLabel: best?.label ?? anchor.label, selectedRow: r, poi });
+      setAreaDescription(desc);
     } catch (e: any) {
       if (myId !== reqIdRef.current) return;
       setDetailsErr(e?.message ?? "Failed to load details");
@@ -398,11 +491,14 @@ export default function Home() {
     setMatchStatus("");
     setPoiData(null);
     setDetailsErr("");
+    setComps(null);
+    setAreaDescription("");
 
     setPoiLoading(true);
     try {
       const poi = await fetchPoi(lat, lon);
       if (myId !== reqIdRef.current) return;
+
       setPoiData({ counts: poi.counts, items: poi.items });
 
       const ideas = suggestBusinesses({
@@ -411,7 +507,10 @@ export default function Home() {
         poi,
       });
       setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
-      setRiskText(defaultRisks().map((x) => `• ${x}`).join("\n"));
+
+      // ✅ description for map-picked location (no row/classification)
+      const desc = buildAreaDescription({ geoLabel: `${lat.toFixed(5)}, ${lon.toFixed(5)}`, selectedRow: null, poi });
+      setAreaDescription(desc);
     } catch (e: any) {
       if (myId !== reqIdRef.current) return;
       setDetailsErr(e?.message ?? "Failed to load POI");
@@ -434,15 +533,12 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-50 text-gray-900">
-      {/* Header */}
       <header className="border-b bg-white shadow-sm">
         <div className="mx-auto max-w-7xl px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-gray-900">BIR Zonal Values Lookup</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Advanced property assessment tool with smart geocoding and facility analysis
-              </p>
+              <p className="text-sm text-gray-500 mt-1">Advanced property assessment tool with smart geocoding and facility analysis</p>
             </div>
             <div className="text-right">
               <div className="text-xs font-medium text-gray-500">Page</div>
@@ -502,6 +598,8 @@ export default function Home() {
                     setFacetCities([]);
                     setFacetBarangays([]);
                     setBoundary(null);
+                    setComps(null);
+                    setAreaDescription("");
 
                     await loadCities(m.domain);
                     searchZonal({ page: 1 });
@@ -648,7 +746,7 @@ export default function Home() {
         {/* Main Content - 3 Panels */}
         <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
           <div className="flex h-[80vh]">
-            {/* LEFT PANEL - Records & Details */}
+            {/* LEFT PANEL */}
             <aside className="w-80 border-r border-gray-200 bg-white flex flex-col">
               <div className="p-5 border-b border-gray-200">
                 <h3 className="text-sm font-semibold text-gray-900">Selected Property</h3>
@@ -659,9 +757,7 @@ export default function Home() {
                   <div className="mt-4 space-y-3">
                     <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4">
                       <p className="text-xs font-medium text-gray-600">Zonal Value</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        ₱{String(selectedRow["ZonalValuepersqm.-"] ?? "")}
-                      </p>
+                      <p className="text-2xl font-bold text-gray-900">₱{String(selectedRow["ZonalValuepersqm.-"] ?? "")}</p>
                       <p className="text-xs text-gray-600 mt-1">per square meter</p>
                     </div>
 
@@ -670,18 +766,27 @@ export default function Home() {
                         <span className="font-medium text-gray-700">City:</span> {String(selectedRow["City-"] ?? "")}
                       </div>
                       <div>
-                        <span className="font-medium text-gray-700">Barangay:</span>{" "}
-                        {String(selectedRow["Barangay-"] ?? "")}
+                        <span className="font-medium text-gray-700">Barangay:</span> {String(selectedRow["Barangay-"] ?? "")}
                       </div>
                       <div>
-                        <span className="font-medium text-gray-700">Street:</span>{" "}
-                        {String(selectedRow["Street/Subdivision-"] ?? "")}
+                        <span className="font-medium text-gray-700">Street:</span> {String(selectedRow["Street/Subdivision-"] ?? "")}
                       </div>
                       <div>
-                        <span className="font-medium text-gray-700">Classification:</span>{" "}
-                        {String(selectedRow["Classification-"] ?? "")}
+                        <span className="font-medium text-gray-700">Classification:</span> {String(selectedRow["Classification-"] ?? "")}
                       </div>
                     </div>
+
+                    {comps?.ok && comps.stats ? (
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs">
+                        <p className="font-semibold text-gray-900">Comps (same barangay)</p>
+                        <div className="mt-1 space-y-1 text-gray-700">
+                          <div>Count: <span className="font-semibold">{comps.stats.count}</span></div>
+                          <div>Min: <span className="font-semibold">{comps.stats.min == null ? "-" : comps.stats.min.toLocaleString()}</span></div>
+                          <div>Median: <span className="font-semibold">{comps.stats.median == null ? "-" : comps.stats.median.toLocaleString()}</span></div>
+                          <div>Max: <span className="font-semibold">{comps.stats.max == null ? "-" : comps.stats.max.toLocaleString()}</span></div>
+                        </div>
+                      </div>
+                    ) : null}
 
                     {geoLoading && (
                       <p className="text-xs text-gray-500 flex items-center gap-2">
@@ -719,9 +824,7 @@ export default function Home() {
                       onClick={() => selectRow(r)}
                       className="w-full text-left p-3 hover:bg-blue-50 transition border-b border-gray-200 last:border-b-0"
                     >
-                      <div className="font-semibold text-sm text-gray-900">
-                        {String(r["Street/Subdivision-"] ?? "").slice(0, 25)}
-                      </div>
+                      <div className="font-semibold text-sm text-gray-900">{String(r["Street/Subdivision-"] ?? "").slice(0, 25)}</div>
                       <div className="text-xs text-gray-500 mt-1">
                         {String(r["Barangay-"] ?? "")}, {String(r["City-"] ?? "")}
                       </div>
@@ -732,7 +835,7 @@ export default function Home() {
               </div>
             </aside>
 
-            {/* CENTER PANEL - Map */}
+            {/* CENTER PANEL - Map + description */}
             <div className="flex-1 flex flex-col relative bg-gray-50">
               <div className="absolute top-4 right-4 z-10 bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
                 <button
@@ -758,18 +861,28 @@ export default function Home() {
                 </button>
               </div>
 
-              <ZonalMap
-                selected={selectedLocation}
-                onPickOnMap={selectLocationFromMap}
-                popupLabel={geoLabel}
-                boundary={boundary}
-                highlightRadiusMeters={80}
-                containerId="map-container"
-                mapType={mapType as "street" | "terrain" | "satellite"}
-              />
+              <div className="flex-1">
+                <ZonalMap
+                  selected={selectedLocation}
+                  onPickOnMap={selectLocationFromMap}
+                  popupLabel={geoLabel}
+                  boundary={boundary}
+                  highlightRadiusMeters={80}
+                  containerId="map-container"
+                  mapType={mapType as "street" | "terrain" | "satellite"}
+                />
+              </div>
+
+              {/* ✅ new description under the map */}
+              <div className="border-t border-gray-200 bg-white p-4">
+                <p className="text-xs font-semibold text-gray-900">Area Description</p>
+                <p className="text-sm text-gray-700 mt-1 leading-relaxed">
+                  {areaDescription || "Select a property or click the map to generate a short description of the area."}
+                </p>
+              </div>
             </div>
 
-            {/* RIGHT PANEL - Report Builder (EXTRACTED) */}
+            {/* RIGHT PANEL - Report Builder */}
             <ReportBuilder
               selectedLocation={selectedLocation}
               selectedRow={selectedRow}
@@ -778,8 +891,7 @@ export default function Home() {
               poiData={poiData}
               idealBusinessText={idealBusinessText}
               setIdealBusinessText={setIdealBusinessText}
-              riskText={riskText}
-              setRiskText={setRiskText}
+              areaDescription={areaDescription}
               mapContainerId="map-container"
             />
           </div>

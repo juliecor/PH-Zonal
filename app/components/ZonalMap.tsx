@@ -1,12 +1,18 @@
-import dynamic from "next/dynamic";
+// components/ZonalMap.tsx
+"use client";
 
-import { useEffect, useRef, useState } from "react";
-
-
+import { useEffect, useRef } from "react";
 
 type LatLng = { lat: number; lon: number };
 type Boundary = Array<[number, number]>;
 type MapType = "street" | "terrain" | "satellite";
+
+type HazardLayers = {
+  flood?: GeoJSON.FeatureCollection | null;
+  landslide?: GeoJSON.FeatureCollection | null;
+  liquefaction?: GeoJSON.FeatureCollection | null;
+  faults?: GeoJSON.FeatureCollection | null;
+};
 
 interface ZonalMapProps {
   selected?: LatLng | null;
@@ -16,9 +22,18 @@ interface ZonalMapProps {
   highlightRadiusMeters?: number;
   containerId?: string;
   mapType?: MapType;
+
+  // ✅ hazards
+  hazardLayers?: HazardLayers | null;
+  hazardEnabled?: {
+    flood?: boolean;
+    landslide?: boolean;
+    liquefaction?: boolean;
+    faults?: boolean;
+  };
 }
 
-const TILESERVERS = {
+const TILESERVERS: Record<MapType, { url: string; attribution: string; maxZoom: number }> = {
   street: {
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -44,6 +59,8 @@ export default function ZonalMap({
   highlightRadiusMeters = 80,
   containerId = "map-container",
   mapType = "street",
+  hazardLayers,
+  hazardEnabled,
 }: ZonalMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -52,12 +69,19 @@ export default function ZonalMap({
   const polylineRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
 
+  const hazardRefs = useRef<{ [k: string]: any | null }>({
+    flood: null,
+    landslide: null,
+    liquefaction: null,
+    faults: null,
+  });
+
   const emitIdle = () => {
     const event = new CustomEvent("zonalmap:idle");
     window.dispatchEvent(event);
   };
 
-  // Initialize map
+  // Init map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
@@ -76,9 +100,7 @@ export default function ZonalMap({
     });
 
     map.on("click", (e: any) => {
-      if (onPickOnMap) {
-        onPickOnMap(e.latlng.lat, e.latlng.lng);
-      }
+      if (onPickOnMap) onPickOnMap(e.latlng.lat, e.latlng.lng);
     });
 
     mapRef.current = map;
@@ -87,33 +109,33 @@ export default function ZonalMap({
     map.on("zoomend", () => emitIdle());
 
     return () => {
-      // Don't destroy map on unmount
+      // keep map
     };
   }, [onPickOnMap]);
 
-  // Update tile layer based on mapType
+  // Tile layer
   useEffect(() => {
     if (!mapRef.current) return;
 
-    const tileServerConfig = TILESERVERS[mapType];
+    const leafletModule = require("leaflet");
+    const leaflet = leafletModule.default || leafletModule;
+
+    const cfg = TILESERVERS[mapType];
 
     if (tileLayerRef.current) {
       mapRef.current.removeLayer(tileLayerRef.current);
     }
 
-    const newTileLayer = (require("leaflet").default || require("leaflet")).tileLayer(
-      tileServerConfig.url,
-      {
-        attribution: tileServerConfig.attribution,
-        maxZoom: tileServerConfig.maxZoom,
-      }
-    );
+    const layer = leaflet.tileLayer(cfg.url, {
+      attribution: cfg.attribution,
+      maxZoom: cfg.maxZoom,
+    });
 
-    newTileLayer.addTo(mapRef.current);
-    tileLayerRef.current = newTileLayer;
+    layer.addTo(mapRef.current);
+    tileLayerRef.current = layer;
   }, [mapType]);
 
-  // Update marker and circle (with custom div marker to avoid 404)
+  // Marker + circle
   useEffect(() => {
     if (!mapRef.current || !selected) {
       if (markerRef.current) {
@@ -130,12 +152,8 @@ export default function ZonalMap({
     const leafletModule = require("leaflet");
     const leaflet = leafletModule.default || leafletModule;
 
-    // Remove old marker
-    if (markerRef.current) {
-      mapRef.current.removeLayer(markerRef.current);
-    }
+    if (markerRef.current) mapRef.current.removeLayer(markerRef.current);
 
-    // Create custom marker using divIcon (no image files needed!)
     const customMarkerHtml = `
       <div style="
         width: 32px;
@@ -157,7 +175,7 @@ export default function ZonalMap({
       </div>
     `;
 
-    const customIcon = leaflet.divIcon({
+    const icon = leaflet.divIcon({
       html: customMarkerHtml,
       iconSize: [32, 32],
       iconAnchor: [16, 16],
@@ -165,24 +183,16 @@ export default function ZonalMap({
       className: "custom-div-icon",
     });
 
-    // Add new marker
     const marker = leaflet
-      .marker([selected.lat, selected.lon], {
-        icon: customIcon,
-        title: popupLabel,
-      })
+      .marker([selected.lat, selected.lon], { icon, title: popupLabel })
       .bindPopup(popupLabel || `${selected.lat.toFixed(5)}, ${selected.lon.toFixed(5)}`)
       .openPopup()
       .addTo(mapRef.current);
 
     markerRef.current = marker;
 
-    // Remove old circle
-    if (circleRef.current) {
-      mapRef.current.removeLayer(circleRef.current);
-    }
+    if (circleRef.current) mapRef.current.removeLayer(circleRef.current);
 
-    // Add new circle
     const circle = leaflet
       .circle([selected.lat, selected.lon], {
         radius: highlightRadiusMeters,
@@ -197,13 +207,12 @@ export default function ZonalMap({
 
     circleRef.current = circle;
 
-    // Fly to location
     mapRef.current.flyTo([selected.lat, selected.lon], 15, { duration: 1 });
 
     setTimeout(() => emitIdle(), 500);
   }, [selected, popupLabel, highlightRadiusMeters]);
 
-  // Update boundary polyline
+  // Boundary
   useEffect(() => {
     if (!mapRef.current || !boundary || boundary.length === 0) {
       if (polylineRef.current) {
@@ -216,9 +225,7 @@ export default function ZonalMap({
     const leafletModule = require("leaflet");
     const leaflet = leafletModule.default || leafletModule;
 
-    if (polylineRef.current) {
-      mapRef.current.removeLayer(polylineRef.current);
-    }
+    if (polylineRef.current) mapRef.current.removeLayer(polylineRef.current);
 
     const polyline = leaflet
       .polyline(boundary as any, {
@@ -231,6 +238,43 @@ export default function ZonalMap({
 
     polylineRef.current = polyline;
   }, [boundary]);
+
+  // ✅ Hazard overlays
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const leafletModule = require("leaflet");
+    const leaflet = leafletModule.default || leafletModule;
+
+    const addOrRemove = (key: keyof HazardLayers, style: any) => {
+      if (hazardRefs.current[key]) {
+        mapRef.current.removeLayer(hazardRefs.current[key]);
+        hazardRefs.current[key] = null;
+      }
+
+      const enabled = hazardEnabled?.[key] ?? false;
+      const fc = hazardLayers?.[key];
+
+      if (!enabled || !fc) return;
+
+      const layer = leaflet.geoJSON(fc as any, style);
+      layer.addTo(mapRef.current);
+      hazardRefs.current[key] = layer;
+    };
+
+    addOrRemove("flood", { style: { color: "#2563eb", weight: 1, fillOpacity: 0.12 } });
+    addOrRemove("landslide", { style: { color: "#b45309", weight: 1, fillOpacity: 0.12 } });
+    addOrRemove("liquefaction", { style: { color: "#7c3aed", weight: 1, fillOpacity: 0.12 } });
+    addOrRemove("faults", { style: { color: "#ef4444", weight: 2, opacity: 0.8 } });
+
+    setTimeout(() => emitIdle(), 200);
+  }, [
+    hazardLayers,
+    hazardEnabled?.flood,
+    hazardEnabled?.landslide,
+    hazardEnabled?.liquefaction,
+    hazardEnabled?.faults,
+  ]);
 
   return (
     <div

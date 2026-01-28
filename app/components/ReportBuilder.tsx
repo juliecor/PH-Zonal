@@ -41,8 +41,6 @@ function arrayBufferToBase64(buf: ArrayBuffer) {
 }
 
 async function tryRegisterHurricaneFont(pdf: any) {
-  // Put this file at: public/fonts/Hurricane-Regular.ttf
-  // Then it will be available at: /fonts/Hurricane-Regular.ttf
   try {
     const res = await fetch("/fonts/Hurricane-Regular.ttf");
     if (!res.ok) return false;
@@ -67,8 +65,7 @@ export default function ReportBuilder(props: {
   idealBusinessText: string;
   setIdealBusinessText: (v: string) => void;
 
-  riskText: string;
-  setRiskText: (v: string) => void;
+  areaDescription: string;
 
   mapContainerId?: string;
 }) {
@@ -80,8 +77,7 @@ export default function ReportBuilder(props: {
     poiData,
     idealBusinessText,
     setIdealBusinessText,
-    riskText,
-    setRiskText,
+    areaDescription,
     mapContainerId = "map-container",
   } = props;
 
@@ -124,30 +120,23 @@ export default function ReportBuilder(props: {
         )}, ${toTitleSafe(selectedRow["City-"])}`
       : `Location: ${geoLabel || "Selected location"}`;
 
-    const classLine = selectedRow
-      ? `Classification: ${toTitleSafe(selectedRow["Classification-"])}`
-      : `Classification: -`;
+    const classLine = selectedRow ? `Classification: ${toTitleSafe(selectedRow["Classification-"])}` : `Classification: -`;
 
-    const zonalText = selectedRow
-      ? formatMoneyLikeSample(String(selectedRow["ZonalValuepersqm.-"] ?? ""))
-      : "PHP - / sqm";
+    const zonalText = selectedRow ? formatMoneyLikeSample(String(selectedRow["ZonalValuepersqm.-"] ?? "")) : "PHP - / sqm";
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     const margin = 40;
 
-    // Load images (logos/watermark)
     const headerLogo = await fetchAsDataURL("/pictures/FilipinoHomes.png");
     const watermark = await fetchAsDataURL("/pictures/LeuterioRealty.png");
-
     const hasHurricane = await tryRegisterHurricaneFont(pdf);
 
     // =========================
     // PAGE 1
     // =========================
 
-    // Header logo (centered)
     if (headerLogo) {
       const logoW = 260;
       const logoH = 60;
@@ -158,18 +147,15 @@ export default function ReportBuilder(props: {
       pdf.text("FILIPINO HOMES", pageW / 2, 60, { align: "center" });
     }
 
-    // Price big centered
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(18);
     pdf.text(zonalText, pageW / 2, 125, { align: "center" });
 
-    // Location + classification (center)
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(10);
     pdf.text(locationLine, pageW / 2, 145, { align: "center" });
     pdf.text(classLine, pageW / 2, 158, { align: "center" });
 
-    // Layout numbers
     const topY = 190;
     const mapW = 240;
     const mapH = 240;
@@ -179,15 +165,30 @@ export default function ReportBuilder(props: {
 
     const rightX = mapX + mapW + 36;
 
-    // Map box
+    // Map box + image
     pdf.setDrawColor(140);
     pdf.setLineWidth(1);
     pdf.roundedRect(mapX, mapY, mapW, mapH, 10, 10);
-
-    // map image inside
     pdf.addImage(mapDataUrl, "PNG", mapX + 8, mapY + 8, mapW - 16, mapH - 16);
 
-    // Right side: HBU + Risks (bullet lists)
+    // ✅ Area Description under the map (left side)
+    const descTitleY = mapY + mapH + 24;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.text("Area Description", mapX, descTitleY);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+
+    const safeDesc = String(areaDescription || "").trim() || "No description available yet.";
+    const descLines = pdf.splitTextToSize(safeDesc, mapW);
+    let dy = descTitleY + 14;
+    for (const line of descLines.slice(0, 5)) {
+      pdf.text(line, mapX, dy);
+      dy += 12;
+    }
+
+    // Right side: HBU bullets
     const bulletsFromText = (t: string) =>
       String(t || "")
         .split("\n")
@@ -195,7 +196,6 @@ export default function ReportBuilder(props: {
         .filter(Boolean);
 
     const hbuItems = bulletsFromText(idealBusinessText).slice(0, 6);
-    const riskItems = bulletsFromText(riskText).slice(0, 6);
 
     let y = mapY + 30;
 
@@ -212,30 +212,16 @@ export default function ReportBuilder(props: {
       y += 14;
     }
 
-    y += 10;
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(12);
-    pdf.text("Risk / Hazards", rightX, y);
-
-    y += 18;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(11);
-
-    for (const item of riskItems.length ? riskItems : ["(Add items)"]) {
-      pdf.text(`• ${item}`, rightX, y);
-      y += 14;
-    }
-
-    // Watermark (make it visible but not overpowering)
+    // Watermark
     if (watermark) {
       try {
         const GState = (pdf as any).GState;
-        if (GState) pdf.setGState(new GState({ opacity: 0.80 })); // clearer than before
+        if (GState) pdf.setGState(new GState({ opacity: 0.22 }));
       } catch {}
 
       const wmW = pageW * 0.9;
       const wmH = (wmW * 200) / 520;
-      const wmY = pageH - wmH - 180; // move up a bit
+      const wmY = pageH - wmH - 180;
       pdf.addImage(watermark, "PNG", (pageW - wmW) / 2, wmY, wmW, wmH);
 
       try {
@@ -252,7 +238,6 @@ export default function ReportBuilder(props: {
     pdf.setLineWidth(1);
     pdf.line(sigX, sigBaseY, sigX + 220, sigBaseY);
 
-    // Signature name in Hurricane if available
     if (hasHurricane) {
       pdf.setFont("Hurricane", "normal");
       pdf.setFontSize(26);
@@ -321,7 +306,6 @@ export default function ReportBuilder(props: {
       { x: rightColX, y: row3Y },
     ];
 
-    // Card drawer: shows as many as fit + "...and N more"
     const drawCard = (x: number, y: number, title: string, items: PoiItem[]) => {
       pdf.setDrawColor(80);
       pdf.setLineWidth(1);
@@ -348,7 +332,6 @@ export default function ReportBuilder(props: {
         const wrapped = pdf.splitTextToSize(`• ${name}`, cardW - 28);
 
         for (const line of wrapped) {
-          // reserve space for the "...and N more"
           if (ty > y + cardH - 26) {
             const remaining = items.length - shownItems;
             if (remaining > 0) {
@@ -358,7 +341,6 @@ export default function ReportBuilder(props: {
             }
             return;
           }
-
           pdf.text(line, x + 14, ty);
           ty += 12;
         }
@@ -373,7 +355,7 @@ export default function ReportBuilder(props: {
       drawCard(pos.x, pos.y, c.title, c.items);
     }
 
-    // Watermark page 2
+    // watermark page 2
     if (watermark) {
       try {
         const GState = (pdf as any).GState;
@@ -391,7 +373,6 @@ export default function ReportBuilder(props: {
       } catch {}
     }
 
-    // Footer page 2
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
     pdf.text("Copyright © 2026 All rights reserved. Filipino Homes | Developers", pageW / 2, pageH - 26, {
@@ -399,7 +380,7 @@ export default function ReportBuilder(props: {
     });
 
     // =========================
-    // PAGE 3+: FULL POI LISTS (prints ALL)
+    // PAGE 3+ full POI list
     // =========================
     pdf.addPage();
 
@@ -466,7 +447,6 @@ export default function ReportBuilder(props: {
       py += 14;
     }
 
-    // Optional watermark on full list pages (light)
     if (watermark) {
       try {
         const GState = (pdf as any).GState;
@@ -484,7 +464,6 @@ export default function ReportBuilder(props: {
       } catch {}
     }
 
-    // Footer on last page (simple)
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
     pdf.text("Copyright © 2026 All rights reserved. Filipino Homes | Developers", pageW / 2, pageH - 26, {
@@ -564,12 +543,7 @@ export default function ReportBuilder(props: {
 
   return (
     <>
-      <PdfPreviewModal
-        open={pdfPreviewOpen}
-        url={pdfPreviewUrl}
-        onClose={closePreview}
-        onDownload={downloadPreviewPdf}
-      />
+      <PdfPreviewModal open={pdfPreviewOpen} url={pdfPreviewUrl} onClose={closePreview} onDownload={downloadPreviewPdf} />
 
       <aside className="w-80 border-l border-gray-200 bg-white p-5 overflow-auto">
         <h3 className="text-sm font-semibold text-gray-900 mb-4">Report Builder</h3>
@@ -586,17 +560,6 @@ export default function ReportBuilder(props: {
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">Risks & Hazards</label>
-            <textarea
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={riskText}
-              onChange={(e) => setRiskText(e.target.value)}
-              placeholder={"• Flood Risk - High\n• Landslide Risk - Low\n• Earthquake Risk - Moderate\n• Crime Risk - Low"}
-              rows={4}
-            />
-          </div>
-
           <button
             onClick={generatePdfPreview}
             disabled={pdfLoading || !selectedLocation}
@@ -605,9 +568,7 @@ export default function ReportBuilder(props: {
             {pdfLoading ? "Generating PDF…" : "Preview PDF Report"}
           </button>
 
-          {pdfErr && (
-            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{pdfErr}</div>
-          )}
+          {pdfErr && <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{pdfErr}</div>}
 
           <div className="border-t border-gray-200 pt-4 mt-4">
             <h4 className="text-sm font-semibold text-gray-900 mb-3">Nearby Facilities (1.5km)</h4>
@@ -643,7 +604,6 @@ export default function ReportBuilder(props: {
                   </div>
                 </div>
 
-                {/* SHOW ALL POIs */}
                 <div className="text-xs space-y-3 max-h-80 overflow-auto">
                   {(
                     [
