@@ -484,7 +484,6 @@ export default function Home() {
   async function selectLocationFromMap(lat: number, lon: number) {
     const myId = ++reqIdRef.current;
 
-    setSelectedRow(null);
     setSelectedLocation({ lat, lon });
     setGeoLabel(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
     setMatchStatus("");
@@ -506,7 +505,7 @@ export default function Home() {
         poi,
       });
 
-      setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
+      setIdealBusinessText(ideas.map((x) => `• ${x}`).join(""));
 
       // ✅ AI description for clicked point (no row context)
       describeArea({
@@ -572,10 +571,9 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-8 space-y-6">
+      <div className="w-full px-3 sm:px-4 py-4 space-y-4">
         {/* Region Selector */}
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Select Province/City Database</h2>
+        <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow">         <h2 className="text-base font-semibold text-gray-900 mb-4">Select Province/City Database</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4">
             <div className="md:col-span-9">
@@ -644,36 +642,23 @@ export default function Home() {
         {/* Currently Selected Region Display */}
         {selectedProvince && (
           <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 shadow">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
                 <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Currently Selected Province</p>
                 <p className="text-3xl font-bold text-gray-900 mt-2">{selectedProvince}</p>
                 <p className="text-sm text-gray-700 mt-2">Database: <span className="font-semibold text-blue-600">{domain}</span></p>
-              </div>
-              <div className="text-right">
-                <button
-                  onClick={() => {
-                    setRegionSearch("");
-                    setMatches([]);
-                    setCity("");
-                    setBarangay("");
-                  }}
-                  className="px-5 py-2.5 rounded-lg border border-blue-300 bg-white text-blue-600 text-sm font-medium hover:bg-blue-50 transition shadow-sm"
-                >
-                  Change Region
-                </button>
               </div>
             </div>
           </div>
         )}
 
         {/* Filters */}
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow">
+        <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow">
           <h2 className="text-lg font-bold text-gray-900 mb-6">Search & Filter Properties</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4">
             {/* City Selection */}
-            <div className="md:col-span-3">
+            <div className="sm:col-span-1 lg:col-span-3">
               <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">City in {selectedProvince}</label>
               <select
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
@@ -705,7 +690,7 @@ export default function Home() {
             </div>
 
             {/* Barangay Selection */}
-            <div className="md:col-span-3">
+            <div className="sm:col-span-1 lg:col-span-3">
               <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Barangay {city && `in ${city}`}</label>
               <select
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
@@ -734,7 +719,7 @@ export default function Home() {
             </div>
 
             {/* Classification */}
-            <div className="md:col-span-3">
+            <div className="sm:col-span-1 lg:col-span-3">
               <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Classification</label>
               <input
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -743,16 +728,16 @@ export default function Home() {
                   setClassification(e.target.value);
                   setPage(1);
                 }}
-                placeholder="e.g., COMMERCIAL, RESIDENTIAL"
+                placeholder="e.g., COMMERCIAL"
               />
             </div>
 
             {/* Search/Street */}
-            <div className="md:col-span-3">
+            <div className="sm:col-span-1 lg:col-span-3">
               <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Search Street/Vicinity</label>
               <input
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Type street or vicinity name..."
+                placeholder="Type street name..."
                 value={q}
                 onChange={(e) => {
                   setQ(e.target.value);
@@ -763,11 +748,11 @@ export default function Home() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-3 mt-6">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-5">
             <button
               onClick={() => searchZonal({ page: 1 })}
               disabled={loading}
-              className="px-6 py-2.5 rounded-lg bg-blue-600 text-white font-medium text-sm hover:bg-blue-700 transition disabled:opacity-50"
+              className="px-6 py-2.5 rounded-lg bg-blue-600 text-white font-medium text-sm hover:bg-blue-700 transition disabled:opacity-50 order-1 sm:order-none"
             >
               {loading ? "Searching..." : "Search"}
             </button>
@@ -780,9 +765,9 @@ export default function Home() {
                 setPage(1);
                 setRows([]);
               }}
-              className="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium text-sm hover:bg-gray-50 transition"
+              className="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium text-sm hover:bg-gray-50 transition order-2 sm:order-none"
             >
-              Clear Filters
+              Clear
             </button>
           </div>
 
@@ -826,14 +811,13 @@ export default function Home() {
         <section className="rounded-lg border border-gray-200 bg-white overflow-hidden shadow">
           <div className="flex h-[80vh]">
             {/* LEFT PANEL */}
-            <aside className="w-80 border-r border-gray-200 bg-white flex flex-col">
-              <div className="p-5 border-b border-gray-200">
+            <aside className="w-72 lg:w-80 border-r border-gray-200 bg-white flex flex-col overflow-hidden">              <div className="p-4 border-b border-gray-200 flex-shrink-0">
                 <h3 className="text-sm font-semibold text-gray-900">Selected Property</h3>
 
                 {!selectedRow ? (
-                  <p className="text-sm text-gray-500 mt-3">Select a record to view details</p>
+                  <p className="text-xs text-gray-500 mt-2">Select a property or click the map</p>
                 ) : (
-                  <div className="mt-4 space-y-3">
+                  <div className="mt-3 space-y-2">
                     <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4">
                       <p className="text-xs font-medium text-gray-600">Zonal Value</p>
                       <p className="text-2xl font-bold text-gray-900">₱{String(selectedRow["ZonalValuepersqm.-"] ?? "")}</p>
@@ -897,25 +881,25 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="flex-1 overflow-auto">
-                <div className="p-3 border-b border-gray-200">
-                  <p className="text-xs font-semibold text-gray-600">RECORDS ({rows.length})</p>
+              <div className="flex-1 overflow-auto bg-gray-50">
+                <div className="sticky top-0 p-3 border-b border-gray-200 bg-white">
+                  <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">PROPERTIES ({rows.length})</p>
                 </div>
 
-                {loading && <p className="text-xs text-gray-500 p-3">Loading records…</p>}
+                {loading && <p className="text-xs text-gray-500 p-3">Loading...</p>}
 
                 <div className="divide-y divide-gray-200">
                   {rows.map((r, i) => (
                     <button
                       key={`${r.rowIndex}-${i}`}
                       onClick={() => selectRow(r)}
-                      className="w-full text-left p-3 hover:bg-blue-50 transition border-b border-gray-200 last:border-b-0"
+                      className={`w-full text-left p-3 transition border-b border-gray-200 last:border-b-0 ${selectedRow?.rowIndex === r.rowIndex ? "bg-blue-100 border-l-4 border-l-blue-600" : "hover:bg-blue-50"}`}
                     >
-                      <div className="font-semibold text-sm text-gray-900">{String(r["Street/Subdivision-"] ?? "").slice(0, 25)}</div>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="font-semibold text-xs text-gray-900">{String(r["Street/Subdivision-"] ?? "").slice(0, 28)}</div>
+                      <div className="text-xs text-gray-600 mt-1">
                         {String(r["Barangay-"] ?? "")}, {String(r["City-"] ?? "")}
                       </div>
-                      <div className="font-bold text-blue-600 text-sm mt-1">₱{String(r["ZonalValuepersqm.-"] ?? "")}</div>
+                      <div className="font-bold text-blue-600 text-sm mt-1.5">₱{String(r["ZonalValuepersqm.-"] ?? "")}</div>
                     </button>
                   ))}
                 </div>
