@@ -75,6 +75,8 @@ export default function ZonalMap({
     liquefaction: null,
     faults: null,
   });
+  
+  const polygonRef = useRef<any>(null);
 
   const emitIdle = () => {
     const event = new CustomEvent("zonalmap:idle");
@@ -154,33 +156,14 @@ export default function ZonalMap({
 
     if (markerRef.current) mapRef.current.removeLayer(markerRef.current);
 
-    const customMarkerHtml = `
-      <div style="
-        width: 32px;
-        height: 32px;
-        background-color: #2563eb;
-        border: 3px solid white;
-        border-radius: 50%;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <div style="
-          width: 8px;
-          height: 8px;
-          background-color: white;
-          border-radius: 50%;
-        "></div>
-      </div>
-    `;
-
-    const icon = leaflet.divIcon({
-      html: customMarkerHtml,
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-      popupAnchor: [0, -20],
-      className: "custom-div-icon",
+    const icon = leaflet.icon({
+      iconUrl: "/pictures/filipinohomespointer.png",
+      iconSize: [50, 50],
+      iconAnchor: [25, 50],
+      popupAnchor: [0, -50],
+      shadowUrl: null,
+      shadowSize: [0, 0],
+      shadowAnchor: [0, 0],
     });
 
     const marker = leaflet
@@ -212,12 +195,16 @@ export default function ZonalMap({
     setTimeout(() => emitIdle(), 500);
   }, [selected, popupLabel, highlightRadiusMeters]);
 
-  // Boundary
+  // Boundary - render as filled polygon + outline
   useEffect(() => {
     if (!mapRef.current || !boundary || boundary.length === 0) {
       if (polylineRef.current) {
         mapRef.current?.removeLayer(polylineRef.current);
         polylineRef.current = null;
+      }
+      if (polygonRef.current) {
+        mapRef.current?.removeLayer(polygonRef.current);
+        polygonRef.current = null;
       }
       return;
     }
@@ -226,17 +213,32 @@ export default function ZonalMap({
     const leaflet = leafletModule.default || leafletModule;
 
     if (polylineRef.current) mapRef.current.removeLayer(polylineRef.current);
+    if (polygonRef.current) mapRef.current.removeLayer(polygonRef.current);
 
-    const polyline = leaflet
-      .polyline(boundary as any, {
-        color: "#059669",
-        weight: 3,
-        opacity: 0.6,
-        dashArray: "5, 5",
+    // Create a filled polygon for the area - make it more visible
+    const polygon = leaflet
+      .polygon(boundary as any, {
+        color: "#0891b2",
+        weight: 2.5,
+        opacity: 0.85,
+        fill: true,
+        fillColor: "#06b6d4",
+        fillOpacity: 0.25,
       })
       .addTo(mapRef.current);
 
-    polylineRef.current = polyline;
+    polygonRef.current = polygon;
+
+    // Add solid outline for better visibility
+    const outline = leaflet
+      .polyline(boundary as any, {
+        color: "#0891b2",
+        weight: 2.5,
+        opacity: 0.8,
+      })
+      .addTo(mapRef.current);
+
+    polylineRef.current = outline;
   }, [boundary]);
 
   // ✅ Hazard overlays

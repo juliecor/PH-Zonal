@@ -28,6 +28,54 @@ export function isBadStreet(s: string) {
   return false;
 }
 
+// Levenshtein distance-based fuzzy matching for street names
+export function levenshteinDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array(m + 1)
+    .fill(null)
+    .map(() => Array(n + 1).fill(0));
+
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+  }
+
+  return dp[m][n];
+}
+
+// Find best matches for incomplete street names
+export function fuzzyMatchStreets(query: string, streets: string[], maxDistance: number = 3): string[] {
+  if (!query.trim()) return streets;
+
+  const normalized = normalizePH(query).toUpperCase();
+  const scored = streets
+    .map((street) => ({
+      street,
+      distance: levenshteinDistance(normalized, normalizePH(street).toUpperCase()),
+      exact: normalizePH(street).toUpperCase().includes(normalized),
+    }))
+    .filter((item) => item.exact || item.distance <= maxDistance)
+    .sort((a, b) => {
+      // Prioritize exact substring matches
+      if (a.exact && !b.exact) return -1;
+      if (!a.exact && b.exact) return 1;
+      // Then by distance
+      return a.distance - b.distance;
+    });
+
+  return scored.map((item) => item.street);
+}
+
+
 export function parseZonalNumber(v: string) {
   const s = String(v ?? "").replace(/,/g, "").trim();
   const n = Number(s);

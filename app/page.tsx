@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Map as MapIcon, Satellite as SatelliteIcon, Mountain as TerrainIcon } from "lucide-react";
 
@@ -23,6 +24,8 @@ export default function Home() {
   const [regionSearch, setRegionSearch] = useState("");
   const [matches, setMatches] = useState<RegionMatch[]>([]);
   const [domain, setDomain] = useState("cebu.zonalvalue.com");
+  const [selectedProvince, setSelectedProvince] = useState("Cebu"); // Track selected province name
+  const [selectedProvinceCity, setSelectedProvinceCity] = useState(""); // Track the actual city in the province
 
   // facets
   const [facetCities, setFacetCities] = useState<string[]>([]);
@@ -66,7 +69,7 @@ export default function Home() {
   const [poiData, setPoiData] = useState<PoiData | null>(null);
   const [detailsErr, setDetailsErr] = useState("");
 
-  // Right side fields (NO RISK)
+  // Right side fields
   const [idealBusinessText, setIdealBusinessText] = useState("");
 
   // ✅ Area description under map (AI)
@@ -535,30 +538,44 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-50 text-gray-900">
-      <header className="border-b bg-white shadow-sm">
-        <div className="mx-auto max-w-7xl px-6 py-6">
+      <header className="border-b bg-white shadow-sm sticky top-0 z-40">
+        <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-gray-900">BIR Zonal Values Lookup</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Advanced property assessment tool with smart geocoding and facility analysis
-              </p>
+            <div className="flex items-center gap-4">
+              <Image
+                src="/pictures/FilipinoHomes.png"
+                alt="Filipino Homes"
+                width={180}
+                height={45}
+                className="h-11 w-auto"
+                priority
+              />
+              <div>
+                <h1 className="text-xl font-bold tracking-tight text-gray-900">Zonal Finder</h1>
+                <p className="text-xs text-gray-600">Advanced property assessment & valuation</p>
+              </div>
             </div>
-            <div className="text-right">
-              <div className="text-xs font-medium text-gray-500">Page</div>
-              <div className="text-2xl font-bold text-gray-900">
-                {page}
-                {pageCount ? `/${pageCount}` : ""}
+            <div className="flex items-center gap-8">
+              <div className="text-right">
+                <div className="text-xs font-medium text-gray-500">Total Records</div>
+                <div className="text-2xl font-bold text-gray-900">{totalRows.toLocaleString()}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs font-medium text-gray-500">Page</div>
+                <div className="text-2xl font-bold text-gray-900">
+                  {page}
+                  {pageCount ? `/${pageCount}` : ""}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-6 space-y-6">
+      <div className="mx-auto max-w-7xl px-6 py-8 space-y-6">
         {/* Region Selector */}
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-gray-900 mb-4">Select Province/City Database</h2>
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow">
+          <h2 className="text-base font-semibold text-gray-900 mb-4">Select Province/City Database</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4">
             <div className="md:col-span-9">
@@ -588,6 +605,8 @@ export default function Home() {
                   className="w-full text-left px-4 py-3 text-sm hover:bg-blue-50 border-b last:border-b-0 transition"
                   onClick={async () => {
                     setDomain(m.domain);
+                    setSelectedProvince(m.province); // Set the selected province
+                    setSelectedProvinceCity(m.city); // Store the province's main city
                     setCity("");
                     setBarangay("");
                     setClassification("");
@@ -622,15 +641,42 @@ export default function Home() {
           )}
         </section>
 
-        {/* Filters */}
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-gray-900 mb-4">Filters & Search</h2>
+        {/* Currently Selected Region Display */}
+        {selectedProvince && (
+          <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Currently Selected Province</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{selectedProvince}</p>
+                <p className="text-sm text-gray-700 mt-2">Database: <span className="font-semibold text-blue-600">{domain}</span></p>
+              </div>
+              <div className="text-right">
+                <button
+                  onClick={() => {
+                    setRegionSearch("");
+                    setMatches([]);
+                    setCity("");
+                    setBarangay("");
+                  }}
+                  className="px-5 py-2.5 rounded-lg border border-blue-300 bg-white text-blue-600 text-sm font-medium hover:bg-blue-50 transition shadow-sm"
+                >
+                  Change Region
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4">
+        {/* Filters */}
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow">
+          <h2 className="text-lg font-bold text-gray-900 mb-6">Search & Filter Properties</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            {/* City Selection */}
             <div className="md:col-span-3">
-              <label className="block text-xs font-medium text-gray-700 mb-2">City</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">City in {selectedProvince}</label>
               <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                 value={city}
                 onChange={(e) => {
                   const nextCity = e.target.value;
@@ -655,12 +701,14 @@ export default function Home() {
                   </option>
                 ))}
               </select>
+              {facetsLoading && <p className="text-xs text-blue-600 mt-1">Loading cities...</p>}
             </div>
 
+            {/* Barangay Selection */}
             <div className="md:col-span-3">
-              <label className="block text-xs font-medium text-gray-700 mb-2">Barangay</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Barangay {city && `in ${city}`}</label>
               <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                 value={barangay}
                 onChange={(e) => {
                   const nextBrgy = e.target.value;
@@ -682,11 +730,12 @@ export default function Home() {
                   </option>
                 ))}
               </select>
-              {barangaysLoading && <p className="text-xs text-gray-500 mt-1">Loading barangays…</p>}
+              {barangaysLoading && <p className="text-xs text-blue-600 mt-1">Loading barangays…</p>}
             </div>
 
+            {/* Classification */}
             <div className="md:col-span-3">
-              <label className="block text-xs font-medium text-gray-700 mb-2">Classification</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Classification</label>
               <input
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 value={classification}
@@ -694,15 +743,16 @@ export default function Home() {
                   setClassification(e.target.value);
                   setPage(1);
                 }}
-                placeholder="COMMERCIAL, RESIDENTIAL..."
+                placeholder="e.g., COMMERCIAL, RESIDENTIAL"
               />
             </div>
 
+            {/* Search/Street */}
             <div className="md:col-span-3">
-              <label className="block text-xs font-medium text-gray-700 mb-2">Search</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Search Street/Vicinity</label>
               <input
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Street / vicinity..."
+                placeholder="Type street or vicinity name..."
                 value={q}
                 onChange={(e) => {
                   setQ(e.target.value);
@@ -710,6 +760,30 @@ export default function Home() {
                 }}
               />
             </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={() => searchZonal({ page: 1 })}
+              disabled={loading}
+              className="px-6 py-2.5 rounded-lg bg-blue-600 text-white font-medium text-sm hover:bg-blue-700 transition disabled:opacity-50"
+            >
+              {loading ? "Searching..." : "Search"}
+            </button>
+            <button
+              onClick={() => {
+                setCity("");
+                setBarangay("");
+                setClassification("");
+                setQ("");
+                setPage(1);
+                setRows([]);
+              }}
+              className="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium text-sm hover:bg-gray-50 transition"
+            >
+              Clear Filters
+            </button>
           </div>
 
           {err && (
@@ -749,7 +823,7 @@ export default function Home() {
         </section>
 
         {/* Main Content */}
-        <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+        <section className="rounded-lg border border-gray-200 bg-white overflow-hidden shadow">
           <div className="flex h-[80vh]">
             {/* LEFT PANEL */}
             <aside className="w-80 border-r border-gray-200 bg-white flex flex-col">
@@ -850,28 +924,31 @@ export default function Home() {
 
             {/* CENTER PANEL */}
             <div className="flex-1 flex flex-col relative bg-gray-50">
-              <div className="absolute top-4 right-4 z-10 bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
-                <button
-                  onClick={() => setMapType("street")}
-                  className={`p-2 rounded transition ${mapType === "street" ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
-                  title="Street Map"
-                >
-                  <MapIcon size={18} />
-                </button>
-                <button
-                  onClick={() => setMapType("terrain")}
-                  className={`p-2 rounded transition ${mapType === "terrain" ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
-                  title="Terrain Map"
-                >
-                  <TerrainIcon size={18} />
-                </button>
-                <button
-                  onClick={() => setMapType("satellite")}
-                  className={`p-2 rounded transition ${mapType === "satellite" ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
-                  title="Satellite Map"
-                >
-                  <SatelliteIcon size={18} />
-                </button>
+              <div className="absolute top-4 right-4 z-10 space-y-2">
+                {/* Map type buttons */}
+                <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
+                  <button
+                    onClick={() => setMapType("street")}
+                    className={`p-2 rounded transition ${mapType === "street" ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
+                    title="Street Map"
+                  >
+                    <MapIcon size={18} />
+                  </button>
+                  <button
+                    onClick={() => setMapType("terrain")}
+                    className={`p-2 rounded transition ${mapType === "terrain" ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
+                    title="Terrain Map"
+                  >
+                    <TerrainIcon size={18} />
+                  </button>
+                  <button
+                    onClick={() => setMapType("satellite")}
+                    className={`p-2 rounded transition ${mapType === "satellite" ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
+                    title="Satellite Map"
+                  >
+                    <SatelliteIcon size={18} />
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1">

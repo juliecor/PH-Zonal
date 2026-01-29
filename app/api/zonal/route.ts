@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchZonalValuesByDomain, fetchZonalIndex } from "../../lib/zonalByDomain";
+import { fuzzyMatchStreets } from "../../lib/zonal-util";
 
 export const runtime = "nodejs";
 
@@ -143,15 +144,27 @@ export async function GET(req: Request) {
       );
     }
 
-    // local text search (fast, no upstream call)
+    // local text search with fuzzy matching (fast, no upstream call)
     if (q) {
       const qn = norm(q);
       filtered = filtered.filter((row) => {
-        const joined =
-          `${getVal(row, "Street/Subdivision-")} ${getVal(row, "Vicinity-")} ` +
-          `${getVal(row, "Barangay-")} ${getVal(row, "City-")} ${getVal(row, "Province-")} ` +
-          `${getVal(row, "Classification-")}`;
-        return norm(joined).includes(qn);
+        const street = String(getVal(row, "Street/Subdivision-") ?? "");
+        const vicinity = String(getVal(row, "Vicinity-") ?? "");
+        const barangay = String(getVal(row, "Barangay-") ?? "");
+        const city = String(getVal(row, "City-") ?? "");
+        const province = String(getVal(row, "Province-") ?? "");
+        const classification = String(getVal(row, "Classification-") ?? "");
+        
+        // Try exact match first
+        const joined = `${street} ${vicinity} ${barangay} ${city} ${province} ${classification}`;
+        if (norm(joined).includes(qn)) return true;
+        
+        // Try fuzzy match on street/vicinity names
+        const candidates = [street, vicinity].filter(Boolean);
+        if (candidates.length === 0) return false;
+        
+        const matches = fuzzyMatchStreets(qn, candidates, 3);
+        return matches.length > 0;
       });
     }
 
