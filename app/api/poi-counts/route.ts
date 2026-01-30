@@ -28,7 +28,8 @@ export async function POST(req: Request) {
     const limit = Math.max(0, Math.min(300, Number(body?.limit ?? 60)));
 
     // quick cache check (round lat/lon to ~11m for better hit rate)
-    const key = `${lat.toFixed(4)}|${lon.toFixed(4)}|${radius}|${limit}`;
+    const hasPlacesKey = Boolean(process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY);
+    const key = `${lat.toFixed(4)}|${lon.toFixed(4)}|${radius}|${limit}|G:${hasPlacesKey ? 1 : 0}`;
     const hit = POI_CACHE.get(key);
     if (hit && Date.now() - hit.ts < POI_TTL_MS) {
       return NextResponse.json(hit.payload);
@@ -115,6 +116,53 @@ out center;`;
       }
     }
 
+    // Google Places enrichment for counts (optional)
+    const API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+    async function fetchPlaces(type: string, keyword?: string) {
+      if (!API_KEY) return [] as any[];
+      const url = new URL("https://maps.googleapis.com/maps/api/place/nearbysearch/json");
+      url.searchParams.set("location", `${lat},${lon}`);
+      url.searchParams.set("radius", String(radius));
+      if (type) url.searchParams.set("type", type);
+      if (keyword) url.searchParams.set("keyword", keyword);
+      url.searchParams.set("key", API_KEY as string);
+      try {
+        const res = await fetch(url.toString());
+        const j = await res.json().catch(() => null);
+        const results = Array.isArray(j?.results) ? j.results : [];
+        return results.map((r: any) => ({
+          idKey: `g:${r.place_id}`,
+          name: String(r.name || "").trim(),
+          lat: r?.geometry?.location?.lat,
+          lon: r?.geometry?.location?.lng,
+        }));
+      } catch {
+        return [] as any[];
+      }
+    }
+
+    async function collectPlaces(targetType: "hospitals"|"schools"|"policeStations"|"fireStations"|"pharmacies"|"clinics", target: Map<string, PoiItem>) {
+      if (!API_KEY) return;
+      let arr: any[] = [];
+      if (targetType === "hospitals") arr = await fetchPlaces("hospital");
+      else if (targetType === "schools") {
+        const a = await fetchPlaces("school");
+        const b = await fetchPlaces("university");
+        arr = [...a, ...b];
+      } else if (targetType === "policeStations") arr = await fetchPlaces("police");
+      else if (targetType === "fireStations") arr = await fetchPlaces("fire_station");
+      else if (targetType === "pharmacies") arr = await fetchPlaces("pharmacy");
+      else if (targetType === "clinics") {
+        const a = await fetchPlaces("doctor");
+        const b = await fetchPlaces("hospital", "clinic");
+        arr = [...a, ...b];
+      }
+      for (const p of arr) {
+        const item: PoiItem = { idKey: p.idKey, name: p.name, lat: p.lat, lon: p.lon, type: targetType.slice(0, -1) } as any;
+        addWithNameNear(target, item);
+      }
+    }
+
     // run in parallel to reduce total latency
     await Promise.all([
       collect("hospital", hospitals),
@@ -123,6 +171,12 @@ out center;`;
       collect("fire_station", fireStations),
       collect("pharmacy", pharmacies),
       collect("clinic", clinics),
+      collectPlaces("hospitals", hospitals),
+      collectPlaces("schools", schools),
+      collectPlaces("policeStations", policeStations),
+      collectPlaces("fireStations", fireStations),
+      collectPlaces("pharmacies", pharmacies),
+      collectPlaces("clinics", clinics),
     ]);
 
     const out = (m: Map<string, PoiItem>) => {
