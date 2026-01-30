@@ -1,4 +1,3 @@
-// components/ZonalMap.tsx
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -22,6 +21,7 @@ interface ZonalMapProps {
   highlightRadiusMeters?: number;
   containerId?: string;
   mapType?: MapType;
+  showStreetHighlight?: boolean;
 
   // ✅ hazards
   hazardLayers?: HazardLayers | null;
@@ -31,6 +31,10 @@ interface ZonalMapProps {
     liquefaction?: boolean;
     faults?: boolean;
   };
+
+  // ✅ street highlight (GeoJSON lines)
+  streetGeojson?: GeoJSON.FeatureCollection | null;
+  streetGeojsonEnabled?: boolean;
 }
 
 const TILESERVERS: Record<MapType, { url: string; attribution: string; maxZoom: number }> = {
@@ -59,8 +63,11 @@ export default function ZonalMap({
   highlightRadiusMeters = 80,
   containerId = "map-container",
   mapType = "street",
+  showStreetHighlight = false,
   hazardLayers,
   hazardEnabled,
+  streetGeojson,
+  streetGeojsonEnabled,
 }: ZonalMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -75,8 +82,11 @@ export default function ZonalMap({
     liquefaction: null,
     faults: null,
   });
-  
+
   const polygonRef = useRef<any>(null);
+
+  // ✅ street line layer ref
+  const streetLayerRef = useRef<any>(null);
 
   const emitIdle = () => {
     const event = new CustomEvent("zonalmap:idle");
@@ -195,7 +205,7 @@ export default function ZonalMap({
     setTimeout(() => emitIdle(), 500);
   }, [selected, popupLabel, highlightRadiusMeters]);
 
-  // Boundary - render as filled polygon + outline
+  // Boundary polygon + outline
   useEffect(() => {
     if (!mapRef.current || !boundary || boundary.length === 0) {
       if (polylineRef.current) {
@@ -215,31 +225,70 @@ export default function ZonalMap({
     if (polylineRef.current) mapRef.current.removeLayer(polylineRef.current);
     if (polygonRef.current) mapRef.current.removeLayer(polygonRef.current);
 
-    // Create a filled polygon for the area - make it more visible
+    const polygonColor = showStreetHighlight ? "#1d4ed8" : "#0891b2";
+    const polygonFillColor = showStreetHighlight ? "#2563eb" : "#06b6d4";
+    const polygonOpacity = showStreetHighlight ? 1 : 0.85;
+    const polygonFillOpacity = showStreetHighlight ? 0.35 : 0.15;
+    const polygonWeight = showStreetHighlight ? 3 : 2.5;
+
     const polygon = leaflet
       .polygon(boundary as any, {
-        color: "#0891b2",
-        weight: 2.5,
-        opacity: 0.85,
+        color: polygonColor,
+        weight: polygonWeight,
+        opacity: polygonOpacity,
         fill: true,
-        fillColor: "#06b6d4",
-        fillOpacity: 0.25,
+        fillColor: polygonFillColor,
+        fillOpacity: polygonFillOpacity,
       })
       .addTo(mapRef.current);
 
     polygonRef.current = polygon;
 
-    // Add solid outline for better visibility
     const outline = leaflet
       .polyline(boundary as any, {
-        color: "#0891b2",
-        weight: 2.5,
-        opacity: 0.8,
+        color: polygonColor,
+        weight: polygonWeight,
+        opacity: polygonOpacity,
       })
       .addTo(mapRef.current);
 
     polylineRef.current = outline;
-  }, [boundary]);
+  }, [boundary, showStreetHighlight]);
+
+  // ✅ STREET HIGHLIGHT (draw as thick blue line)
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const leafletModule = require("leaflet");
+    const leaflet = leafletModule.default || leafletModule;
+
+    // remove old street layer
+    if (streetLayerRef.current) {
+      mapRef.current.removeLayer(streetLayerRef.current);
+      streetLayerRef.current = null;
+    }
+
+    if (!streetGeojsonEnabled || !streetGeojson) return;
+
+    const layer = leaflet.geoJSON(streetGeojson as any, {
+      style: {
+        color: "#2563eb",
+        weight: 7,
+        opacity: 0.95,
+      },
+    });
+
+    layer.addTo(mapRef.current);
+    streetLayerRef.current = layer;
+
+    // optional: zoom to street
+    try {
+      const b = layer.getBounds();
+      if (b?.isValid()) mapRef.current.fitBounds(b, { padding: [20, 20] });
+    } catch {}
+
+    setTimeout(() => emitIdle(), 200);
+  }, [streetGeojson, streetGeojsonEnabled]);
 
   // ✅ Hazard overlays
   useEffect(() => {

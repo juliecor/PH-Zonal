@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Heart, BookOpen, Shield, Flame, Pill, Stethoscope } from "lucide-react";
 import type { LatLng, PoiData, PoiItem, Row } from "../lib/types";
 import PdfPreviewModal from "./PdfPreviewModal";
 import { waitForZonalMapIdle } from "../lib/zonal-util";
@@ -585,27 +586,33 @@ export default function ReportBuilder(props: {
             ) : poiData ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg border border-gray-200 p-3 text-center">
+                  <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-red-50 transition">
+                    <Heart size={16} className="text-red-600 mx-auto mb-1" />
                     <p className="text-xs text-gray-600">Hospitals</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.hospitals}</p>
                   </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-center">
+                  <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-blue-50 transition">
+                    <BookOpen size={16} className="text-blue-600 mx-auto mb-1" />
                     <p className="text-xs text-gray-600">Schools</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.schools}</p>
                   </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-center">
+                  <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-amber-50 transition">
+                    <Shield size={16} className="text-amber-600 mx-auto mb-1" />
                     <p className="text-xs text-gray-600">Police</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.policeStations}</p>
                   </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-center">
+                  <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-orange-50 transition">
+                    <Flame size={16} className="text-orange-600 mx-auto mb-1" />
                     <p className="text-xs text-gray-600">Fire</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.fireStations}</p>
                   </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-center">
+                  <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-green-50 transition">
+                    <Pill size={16} className="text-green-600 mx-auto mb-1" />
                     <p className="text-xs text-gray-600">Pharmacy</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.pharmacies}</p>
                   </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-center">
+                  <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-purple-50 transition">
+                    <Stethoscope size={16} className="text-purple-600 mx-auto mb-1" />
                     <p className="text-xs text-gray-600">Clinics</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.clinics}</p>
                   </div>
@@ -614,16 +621,17 @@ export default function ReportBuilder(props: {
                 <div className="text-xs space-y-3 max-h-80 overflow-auto">
                   {(
                     [
-                      ["Hospitals", poiData.items.hospitals],
-                      ["Schools", poiData.items.schools],
-                      ["Police", poiData.items.policeStations],
-                      ["Fire", poiData.items.fireStations],
-                      ["Pharmacy", poiData.items.pharmacies],
-                      ["Clinics", poiData.items.clinics],
+                      ["Hospitals", poiData.items.hospitals, <Heart key="h" size={12} className="text-red-600" />],
+                      ["Schools", poiData.items.schools, <BookOpen key="s" size={12} className="text-blue-600" />],
+                      ["Police", poiData.items.policeStations, <Shield key="p" size={12} className="text-amber-600" />],
+                      ["Fire", poiData.items.fireStations, <Flame key="f" size={12} className="text-orange-600" />],
+                      ["Pharmacy", poiData.items.pharmacies, <Pill key="ph" size={12} className="text-green-600" />],
+                      ["Clinics", poiData.items.clinics, <Stethoscope key="c" size={12} className="text-purple-600" />],
                     ] as const
-                  ).map(([label, list], idx) => (
+                  ).map(([label, list, icon], idx) => (
                     <div key={`poi-${idx}`}>
-                      <p className="font-semibold text-gray-900">
+                      <p className="font-semibold text-gray-900 flex items-center gap-2">
+                        {icon}
                         {label} <span className="text-gray-500">({list.length})</span>
                       </p>
 
