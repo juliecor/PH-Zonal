@@ -268,6 +268,20 @@ function polyCentroid(boundary: Array<[number, number]>) {
   return { lat: sumLat / boundary.length, lon: sumLon / boundary.length };
 }
 
+function pointInBoundary(lat: number, lon: number, boundary: Array<[number, number]>): boolean {
+  if (!boundary || boundary.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = boundary.length - 1; i < boundary.length; j = i++) {
+    const xi = boundary[i][1]; // lon
+    const yi = boundary[i][0]; // lat
+    const xj = boundary[j][1];
+    const yj = boundary[j][0];
+    const intersect = yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
 async function getBarangayPoly(args: {
   barangay: string;
   city?: string;
@@ -373,7 +387,8 @@ export async function POST(req: Request) {
 
     const query = normalizePH(body?.query ?? "");
     const hintBarangay = normalizePH(body?.hintBarangay ?? "");
-    const hintCity = normalizePH(body?.hintCity ?? "");
+    const hintCityAdjRaw = normalizeCityHintForOsm(body?.hintCity ?? "", body?.hintProvince ?? "");
+    const hintCity = normalizePH(hintCityAdjRaw);
     const hintProvince = normalizePH(body?.hintProvince ?? "");
 
     const anchorLat = body?.anchorLat != null ? Number(body.anchorLat) : null;
@@ -403,7 +418,7 @@ export async function POST(req: Request) {
     if (GOOGLE_API_KEY) {
       console.log(`[GOOGLE] Trying Google Maps for: ${query}`);
       
-      const googleAddress = [street || query, vicinity, hintBarangay, hintCity, hintProvince, "Philippines"]
+      const googleAddress = [street || query, vicinity, hintBarangay, hintCityAdjRaw, hintProvince, "Philippines"]
         .filter(Boolean)
         .join(", ");
 
@@ -424,16 +439,68 @@ export async function POST(req: Request) {
 
           console.log(`[GOOGLE] ✓ Found: ${result.formatted_address}`);
 
-          const payload = {
+          let payload = {
             ts: Date.now(),
-            lat: lat,
-            lon: lng,
-            label: result.formatted_address,
-            boundary: null,
+            lat: Number(lat),
+            lon: Number(lng),
+            label: String(result.formatted_address),
+            boundary: null as Array<[number, number]> | null,
           };
 
+          // If barangay hint provided, attach its polygon and keep location inside
+          if (hintBarangay) {
+            const polyPack = await getBarangayPoly({
+              barangay: hintBarangay,
+              city: hintCityAdjRaw,
+              province: hintProvince,
+              anchor: anchor,
+            });
+            if (polyPack?.boundary?.length) {
+              payload.boundary = polyPack.boundary;
+              const inside = pointInBoundary(payload.lat, payload.lon, polyPack.boundary);
+              if (!inside) {
+                const c = polyCentroid(polyPack.boundary);
+                if (c) {
+                  payload.lat = c.lat;
+                  payload.lon = c.lon;
+                  payload.label = `${payload.label} (adjusted to ${hintBarangay} centroid)`;
+                }
+              }
+
+              // Refine: try to match exact street within barangay polygon using OSM
+              const nameToTry = street || vicinity || query;
+              if (nameToTry) {
+                const qAllStreets = `
+[out:json][timeout:16];
+(
+  way["highway"](poly:"${polyPack.poly}");
+);
+out center;`;
+                try {
+                  const streetData = await overpass(qAllStreets, 16000);
+                  if (streetData?.elements?.length) {
+                    const allStreets = streetData.elements
+                      .map((el: any) => el?.tags?.name)
+                      .filter((name: any) => name);
+
+                    const match = findBestStreetMatch(nameToTry, allStreets, 0.6);
+                    if (match) {
+                      const matchedEl = streetData.elements.find((el: any) => el?.tags?.name === match.street);
+                      const c2 = matchedEl ? pickCenter(matchedEl) : null;
+                      if (c2) {
+                        payload.lat = c2.lat;
+                        payload.lon = c2.lon;
+                        payload.label = `${match.street} (${hintBarangay}) [OSM]`;
+                      }
+                    }
+                  }
+                } catch {}
+              }
+            }
+          }
+
           GEO_CACHE.set(cacheKey, payload);
-          return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: payload.boundary });
+          return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: payload.boundary ?? null });
         } else {
           console.log(`[GOOGLE] ✗ No results found`);
         }
@@ -447,12 +514,12 @@ export async function POST(req: Request) {
     // ========================================================================
     // FALLBACK: BARANGAY POLYGON LOCK (if barangay selected)
     // ========================================================================
-    if (hintBarangay && anchor) {
+    if (hintBarangay) {
       console.log(`[POLYGON] Searching in ${hintBarangay} polygon`);
       
       const polyPack = await getBarangayPoly({
         barangay: hintBarangay,
-        city: hintCity,
+        city: hintCityAdjRaw,
         province: hintProvince,
         anchor,
       });
@@ -475,7 +542,7 @@ out center;`;
           console.log(`[POLYGON] Found ${allStreets.length} streets in ${hintBarangay}`);
 
           const nameToTry = street || vicinity || query;
-          const match = findBestStreetMatch(nameToTry, allStreets, 0.45);
+          const match = findBestStreetMatch(nameToTry, allStreets, 0.6);
 
           if (match && match.similarity >= 0.45) {
             console.log(`[POLYGON] ✓ Match: "${match.street}" (${(match.similarity * 100).toFixed(0)}%)`);
@@ -567,4 +634,13 @@ out center;`;
     console.error("[GEOCODE ERROR]", e);
     return NextResponse.json({ ok: false, error: e?.message ?? "geocode failed" }, { status: 500 });
   }
+}
+
+function normalizeCityHintForOsm(city: string, province?: string) {
+  const c = String(city || "").toUpperCase().trim();
+  const p = String(province || "").toUpperCase().trim();
+  if (p.includes("CEBU")) {
+    if (c.includes("CEBU SOUTH") || c.includes("CEBU NORTH")) return "Cebu City";
+  }
+  return city;
 }

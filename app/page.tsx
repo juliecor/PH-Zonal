@@ -101,6 +101,16 @@ export default function Home() {
     []
   );
 
+  // Map BIR display city names to real OSM/Google city names
+  function normalizeCityHint(city: string, province?: string) {
+    const c = String(city || "").toUpperCase().trim();
+    const p = String(province || "").toUpperCase().trim();
+    if (p.includes("CEBU")) {
+      if (c.includes("CEBU SOUTH") || c.includes("CEBU NORTH")) return "Cebu City";
+    }
+    return city;
+  }
+
   async function findRegions() {
     setErr("");
     try {
@@ -210,22 +220,8 @@ export default function Home() {
     return data as { ok: true; counts: PoiData["counts"]; items: PoiData["items"] };
   }
 
-  async function fetchCompsForRow(r: Row) {
-    try {
-      const res = await fetch(
-        `/api/comps?domain=${encodeURIComponent(domain)}&city=${encodeURIComponent(
-          String(r["City-"] ?? "")
-        )}&barangay=${encodeURIComponent(String(r["Barangay-"] ?? ""))}&classification=${encodeURIComponent(
-          String(r["Classification-"] ?? "")
-        )}&limit=10`
-      );
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.ok) return null;
-      return data as CompsResp;
-    } catch {
-      return null;
-    }
-  }
+  // NOTE: /api/comps not implemented; disable comps fetch to avoid 404 noise
+  // async function fetchCompsForRow(r: Row) { return null as any }
 
   async function geocodeLocked(args: {
     query: string;
@@ -275,7 +271,8 @@ export default function Home() {
 
   async function resolveAnchor(next: { barangay?: string; city?: string; province?: string }) {
     const b = normalizePH(next.barangay ?? "");
-    const c = normalizePH(next.city ?? "");
+    const cityHintFixed = normalizeCityHint(next.city ?? "", next.province ?? "");
+    const c = normalizePH(cityHintFixed);
     const p = normalizePH(next.province ?? "");
 
     const q1 = b && c ? `${b}, ${c}, ${p}, Philippines` : "";
@@ -287,14 +284,14 @@ export default function Home() {
         (await geocodeLocked({
           query: q1,
           hintBarangay: next.barangay,
-          hintCity: next.city,
+          hintCity: cityHintFixed,
           hintProvince: next.province,
           anchor: null,
         }))) ||
       (q2 &&
         (await geocodeLocked({
           query: q2,
-          hintCity: next.city,
+          hintCity: cityHintFixed,
           hintProvince: next.province,
           anchor: null,
         }))) ||
@@ -308,6 +305,33 @@ export default function Home() {
     setAnchorLocation({ lat: center.lat, lon: center.lon });
     setBoundary(center.boundary ?? null);
     return center;
+  }
+
+  // Point-in-polygon test (ray casting). Boundary entries are [lat, lon].
+  function isPointInPolygon(lat: number, lon: number, boundary: Boundary): boolean {
+    const x = lon;
+    const y = lat;
+    let inside = false;
+    for (let i = 0, j = boundary.length - 1; i < boundary.length; j = i++) {
+      const xi = boundary[i][1]; // lon
+      const yi = boundary[i][0]; // lat
+      const xj = boundary[j][1];
+      const yj = boundary[j][0];
+      const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  // Haversine distance (km)
+  function getDistanceKm(aLat: number, aLon: number, bLat: number, bLon: number) {
+    const R = 6371;
+    const dLat = ((bLat - aLat) * Math.PI) / 180;
+    const dLon = ((bLon - aLon) * Math.PI) / 180;
+    const s1 = Math.sin(dLat / 2);
+    const s2 = Math.sin(dLon / 2);
+    const c = s1 * s1 + Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * s2 * s2;
+    return 2 * R * Math.atan2(Math.sqrt(c), Math.sqrt(1 - c));
   }
 
   async function flyToFilters(nextCity: string, nextBarangay: string, nextProvince?: string) {
@@ -388,7 +412,7 @@ export default function Home() {
       const street = normalizePH(r["Street/Subdivision-"]);
       const vicinity = normalizePH(r["Vicinity-"]);
       const brgy = r["Barangay-"];
-      const cty = r["City-"];
+      const cty = normalizeCityHint(String(r["City-"] ?? ""), String(r["Province-"] ?? ""));
       const prov = r["Province-"];
 
       const candidates: string[] = [];
@@ -422,6 +446,14 @@ export default function Home() {
 
         if (myId !== reqIdRef.current) return;
         if (g) {
+          // Strict barangay lock: only accept result if it falls INSIDE the barangay boundary
+          if (anchor.boundary && anchor.boundary.length > 0) {
+            const ok = isPointInPolygon(g.lat, g.lon, anchor.boundary as any);
+            if (!ok) {
+              // skip this candidate; try next
+              continue;
+            }
+          }
           best = g;
           if (g.label.includes("fuzzy match:")) {
             const match = g.label.match(/fuzzy match: (\d+)%/);
@@ -437,17 +469,29 @@ export default function Home() {
 
       if (myId !== reqIdRef.current) return;
 
-      const finalCenter = best ?? anchor;
+      // Choose final center but enforce barangay lock strictly
+      let finalCenter = best ?? anchor;
+      if (anchor.boundary && anchor.boundary.length > 0) {
+        const inside = isPointInPolygon(finalCenter.lat, finalCenter.lon, anchor.boundary as any);
+        if (!inside) {
+          // override to barangay center
+          finalCenter = anchor;
+          setMatchStatus("✓ Barangay-locked (centroid)");
+        }
+      } else {
+        // No boundary available: keep within 1.5km of anchor
+        const d = getDistanceKm(finalCenter.lat, finalCenter.lon, anchor.lat, anchor.lon);
+        if (d > 1.5) {
+          finalCenter = anchor;
+          setMatchStatus("✓ Locked near barangay");
+        }
+      }
 
       setSelectedLocation({ lat: finalCenter.lat, lon: finalCenter.lon });
       setGeoLabel(best?.label ?? anchor.label);
       setBoundary(finalCenter.boundary ?? anchor.boundary ?? null);
 
-      // comps (async)
-      fetchCompsForRow(r).then((c) => {
-        if (myId !== reqIdRef.current) return;
-        if (c?.ok) setComps(c);
-      });
+      // comps disabled
 
       setPoiLoading(true);
       const poi = await fetchPoi(finalCenter.lat, finalCenter.lon);
@@ -483,6 +527,15 @@ export default function Home() {
 
   async function selectLocationFromMap(lat: number, lon: number) {
     const myId = ++reqIdRef.current;
+
+    // Enforce barangay lock on map clicks as well
+    if (boundary && boundary.length > 0) {
+      const inside = isPointInPolygon(lat, lon, boundary);
+      if (!inside) {
+        setDetailsErr("Please click inside the selected barangay.");
+        return;
+      }
+    }
 
     setSelectedLocation({ lat, lon });
     setGeoLabel(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
