@@ -755,15 +755,27 @@ export default function Home() {
             {/* Classification */}
             <div className="sm:col-span-1 lg:col-span-3">
               <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Classification</label>
-              <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              <select
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 value={classification}
                 onChange={(e) => {
                   setClassification(e.target.value);
                   setPage(1);
                 }}
-                placeholder="e.g., COMMERCIAL"
-              />
+              >
+                <option value="">All Classifications</option>
+                <option value="COMMERCIAL REGULAR">COMMERCIAL REGULAR</option>
+                <option value="COMMERCIAL CONDOMINIUM">COMMERCIAL CONDOMINIUM</option>
+                <option value="COMMERCIAL">COMMERCIAL</option>
+                <option value="RESIDENTIAL">RESIDENTIAL</option>
+                <option value="RESIDENTIAL CONDOMINIUM">RESIDENTIAL CONDOMINIUM</option>
+                <option value="INDUSTRIAL">INDUSTRIAL</option>
+                <option value="AGRICULTURAL">AGRICULTURAL</option>
+                <option value="SPECIAL">SPECIAL</option>
+                <option value="MIXED-USE">MIXED-USE</option>
+                <option value="ROAD LOT">ROAD LOT</option>
+                <option value="OPEN SPACE">OPEN SPACE</option>
+              </select>
             </div>
 
             {/* Search/Street */}
