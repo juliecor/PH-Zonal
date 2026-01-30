@@ -134,6 +134,7 @@ export async function GET(req: Request) {
     // OPTIONAL: if you want "classifications" facet later
     if (mode === "classifications") {
       let filtered = rows;
+      
 
       if (city) filtered = filtered.filter((r) => matchesLoose(getVal(r, "City-"), city));
       if (barangay) filtered = filtered.filter((r) => matchesBarangay(getVal(r, "Barangay-"), barangay));
