@@ -474,7 +474,7 @@ export async function POST(req: Request) {
               }
 
               // Refine: try to match exact street within barangay polygon using OSM
-              const nameToTry = street || vicinity || query;
+              const nameToTry = streetAdjRaw || vicinityAdjRaw || queryAdjRaw;
               if (nameToTry) {
                 const qAllStreets = `
 [out:json][timeout:16];
@@ -502,6 +502,12 @@ out center;`;
                   }
                 } catch {}
               }
+            } else if (isSrpName(hintBarangay)) {
+              const { boundary, centroid } = srpFallbackBoundary();
+              payload.boundary = boundary;
+              payload.lat = centroid.lat;
+              payload.lon = centroid.lon;
+              payload.label = `South Road Properties (SRP)`;
             }
           }
 
@@ -588,6 +594,13 @@ out center;`;
             return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: payload.boundary ?? null });
           }
         }
+      } else if (isSrpName(hintBarangay)) {
+        // Provide SRP fallback area if polygon not available
+        const { boundary, centroid } = srpFallbackBoundary();
+        const label = ["South Road Properties", hintCityAdjRaw, rawProvince].filter(Boolean).join(", ");
+        const payload = { ts: Date.now(), lat: centroid.lat, lon: centroid.lon, label, boundary };
+        GEO_CACHE.set(cacheKey, payload);
+        return NextResponse.json({ ok: true, lat: payload.lat, lon: payload.lon, displayName: payload.label, boundary: payload.boundary });
       }
     }
 
@@ -660,6 +673,15 @@ function aliasBarangayName(brgy: string, city?: string, province?: string) {
   // Cebu City specific
   if (p.includes("CEBU") && c.includes("CEBU")) {
     if (b === "COGON CENTRAL" || b.includes("COGON CENTRAL")) return "Cogon Ramos"; // official barangay name
+    // SRP synonyms and common misspellings → South Road Properties
+    if (
+      /SOUTH\s+RECLAM\w*\s+PROJECT/.test(b) ||
+      /CEBU\s+SOUTH\s+PROPERTIES?/.test(b) ||
+      /SOUTH\s+ROAD\s+PROPERTIES?/.test(b) ||
+      /\bSRP\b/.test(b)
+    ) {
+      return "South Road Properties";
+    }
   }
   return brgy;
 }
@@ -688,4 +710,31 @@ function aliasFreeTextQuery(text: string, city?: string, province?: string) {
     s = s.replace(/\bSAN\s+REMIO\s+OASIS\b/gi, "San Remo Oasis");
   }
   return s;
+}
+
+function isSrpName(s: string) {
+  const t = String(s || "").toUpperCase();
+  return (
+    /SOUTH\s+RECLAMATION\s+PROJECT/.test(t) ||
+    /CEBU\s+SOUTH\s+PROPERTIES/.test(t) ||
+    /SOUTH\s+ROAD\s+PROPERTIES?/.test(t) ||
+    /\bSRP\b/.test(t)
+  );
+}
+
+function srpFallbackBoundary(): { boundary: Array<[number, number]>; centroid: { lat: number; lon: number } } {
+  // Rough rectangle covering SRP (Basak Pardo/Mambaling waterfront)
+  const north = 10.305;
+  const south = 10.280;
+  const west = 123.870;
+  const east = 123.895;
+  const boundary: Array<[number, number]> = [
+    [north, west],
+    [north, east],
+    [south, east],
+    [south, west],
+    [north, west],
+  ];
+  const centroid = { lat: (north + south) / 2, lon: (east + west) / 2 };
+  return { boundary, centroid };
 }

@@ -25,6 +25,9 @@ export function isBadStreet(s: string) {
   if (!v) return true;
   if (v.includes("ALL OTHER")) return true;
   if (v === "OTHERS") return true;
+  // Generic or non-street descriptors often found in datasets
+  if (/(CONDO(MINIUM)?|HIGH\s*END|LOW\s*END|APARTMENT|BLDG|BUILDING|TOWN\s*CENTER|TOWN\s*CENTRE|PHASE|BLOCK|BLK|CLUSTER)/i.test(v))
+    return true;
   return false;
 }
 
