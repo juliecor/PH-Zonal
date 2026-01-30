@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Heart, BookOpen, Shield, Flame, Pill, Stethoscope } from "lucide-react";
+// use plain <img> for local assets to avoid any Next Image config/caching issues
 import type { LatLng, PoiData, PoiItem, Row } from "../lib/types";
 import PdfPreviewModal from "./PdfPreviewModal";
 import { waitForZonalMapIdle } from "../lib/zonal-util";
@@ -587,32 +587,32 @@ export default function ReportBuilder(props: {
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-red-50 transition">
-                    <Heart size={16} className="text-red-600 mx-auto mb-1" />
+                    <img src="/pictures/hospital.png" alt="Hospitals" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(18%) sepia(87%) saturate(5458%) hue-rotate(351deg) brightness(96%) contrast(102%)'}} loading="lazy" />
                     <p className="text-xs text-gray-600">Hospitals</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.hospitals}</p>
                   </div>
                   <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-blue-50 transition">
-                    <BookOpen size={16} className="text-blue-600 mx-auto mb-1" />
+                    <img src="/pictures/school.png" alt="Schools" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(25%) sepia(96%) saturate(2035%) hue-rotate(194deg) brightness(92%) contrast(102%)'}} loading="lazy" />
                     <p className="text-xs text-gray-600">Schools</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.schools}</p>
                   </div>
                   <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-amber-50 transition">
-                    <Shield size={16} className="text-amber-600 mx-auto mb-1" />
+                    <img src="/pictures/police-station.png" alt="Police" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(58%) sepia(96%) saturate(531%) hue-rotate(351deg) brightness(98%) contrast(104%)'}} loading="lazy" />
                     <p className="text-xs text-gray-600">Police</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.policeStations}</p>
                   </div>
                   <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-orange-50 transition">
-                    <Flame size={16} className="text-orange-600 mx-auto mb-1" />
+                    <img src="/pictures/fire-department.png" alt="Fire" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(46%) sepia(86%) saturate(1408%) hue-rotate(1deg) brightness(100%) contrast(103%)'}} loading="lazy" />
                     <p className="text-xs text-gray-600">Fire</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.fireStations}</p>
                   </div>
                   <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-green-50 transition">
-                    <Pill size={16} className="text-green-600 mx-auto mb-1" />
+                    <img src="/pictures/pharmacy.png" alt="Pharmacy" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(45%) sepia(12%) saturate(2470%) hue-rotate(90deg) brightness(92%) contrast(92%)'}} loading="lazy" />
                     <p className="text-xs text-gray-600">Pharmacy</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.pharmacies}</p>
                   </div>
                   <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-purple-50 transition">
-                    <Stethoscope size={16} className="text-purple-600 mx-auto mb-1" />
+                    <img src="/pictures/clinic.png" alt="Clinics" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(19%) sepia(84%) saturate(1640%) hue-rotate(253deg) brightness(88%) contrast(98%)'}} loading="lazy" />
                     <p className="text-xs text-gray-600">Clinics</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.clinics}</p>
                   </div>
@@ -621,17 +621,17 @@ export default function ReportBuilder(props: {
                 <div className="text-xs space-y-3 max-h-80 overflow-auto">
                   {(
                     [
-                      ["Hospitals", poiData.items.hospitals, <Heart key="h" size={12} className="text-red-600" />],
-                      ["Schools", poiData.items.schools, <BookOpen key="s" size={12} className="text-blue-600" />],
-                      ["Police", poiData.items.policeStations, <Shield key="p" size={12} className="text-amber-600" />],
-                      ["Fire", poiData.items.fireStations, <Flame key="f" size={12} className="text-orange-600" />],
-                      ["Pharmacy", poiData.items.pharmacies, <Pill key="ph" size={12} className="text-green-600" />],
-                      ["Clinics", poiData.items.clinics, <Stethoscope key="c" size={12} className="text-purple-600" />],
+                      ["Hospitals", poiData.items.hospitals, "/pictures/hospital.png", "icon-red"],
+                      ["Schools", poiData.items.schools, "/pictures/school.png", "icon-blue"],
+                      ["Police", poiData.items.policeStations, "/pictures/police-station.png", "icon-amber"],
+                      ["Fire", poiData.items.fireStations, "/pictures/fire-department.png", "icon-orange"],
+                      ["Pharmacy", poiData.items.pharmacies, "/pictures/pharmacy.png", "icon-green"],
+                      ["Clinics", poiData.items.clinics, "/pictures/clinic.png", "icon-purple"],
                     ] as const
-                  ).map(([label, list, icon], idx) => (
+                  ).map(([label, list, iconUrl, colorClass], idx) => (
                     <div key={`poi-${idx}`}>
                       <p className="font-semibold text-gray-900 flex items-center gap-2">
-                        {icon}
+                        <img src={iconUrl} alt={String(label)} width={16} height={16} style={{filter: (colorClass==="icon-red"? 'invert(18%) sepia(87%) saturate(5458%) hue-rotate(351deg) brightness(96%) contrast(102%)' : colorClass==="icon-blue"? 'invert(25%) sepia(96%) saturate(2035%) hue-rotate(194deg) brightness(92%) contrast(102%)' : colorClass==="icon-amber"? 'invert(58%) sepia(96%) saturate(531%) hue-rotate(351deg) brightness(98%) contrast(104%)' : colorClass==="icon-orange"? 'invert(46%) sepia(86%) saturate(1408%) hue-rotate(1deg) brightness(100%) contrast(103%)' : colorClass==="icon-green"? 'invert(45%) sepia(12%) saturate(2470%) hue-rotate(90deg) brightness(92%) contrast(92%)' : 'invert(19%) sepia(84%) saturate(1640%) hue-rotate(253deg) brightness(88%) contrast(98%)')}} loading="lazy" />
                         {label} <span className="text-gray-500">({list.length})</span>
                       </p>
 
