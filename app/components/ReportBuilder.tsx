@@ -94,20 +94,22 @@ export default function ReportBuilder(props: {
   const [activeCat, setActiveCat] = useState<
     "hospitals" | "schools" | "policeStations" | "fireStations" | "pharmacies" | "clinics" | null
   >(null);
-  const [enriched, setEnriched] = useState<Record<string, PoiItem[]>>({});
+  const [enriched, setEnriched] = useState<Record<string, Record<string, Partial<PoiItem>>>>({});
   const [enriching, setEnriching] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(4);
 
   // Reset active category and any enriched cache when the source data/location changes
   useEffect(() => {
     setActiveCat(null);
     setEnriched({});
     setEnriching(false);
+    setPage(1);
   }, [poiData, selectedLocation?.lat, selectedLocation?.lon]);
 
   useEffect(() => {
     const run = async () => {
       if (!activeCat || !poiData || !selectedLocation) return;
-      if (enriched[activeCat]?.length) return; // already have
       const byKey: Record<string, PoiItem[]> = {
         hospitals: poiData.items.hospitals,
         schools: poiData.items.schools,
@@ -126,6 +128,11 @@ export default function ReportBuilder(props: {
       };
       const list = (byKey as any)[activeCat] as PoiItem[];
       if (!list?.length) return;
+      const start = (page - 1) * pageSize;
+      const slice = list.slice(start, start + pageSize);
+      const have = enriched[activeCat] || {};
+      const toFetch = slice.filter((x) => !have[(x.name || "").toLowerCase()]);
+      if (toFetch.length === 0) return;
       setEnriching(true);
       try {
         const res = await fetch("/api/places-enrich", {
@@ -135,17 +142,18 @@ export default function ReportBuilder(props: {
             lat: selectedLocation.lat,
             lon: selectedLocation.lon,
             type: amenityMap[activeCat],
-            items: list.slice(0, 40).map((x) => ({ name: x.name, lat: x.lat, lon: x.lon, type: x.type })),
+            items: toFetch.map((x) => ({ name: x.name, lat: x.lat, lon: x.lon, type: x.type })),
           }),
         });
         const data = await res.json().catch(() => null);
         if (data?.ok) {
-          // merge back into list by name fallback
-          const merged = list.map((x) => {
-            const m = (data.items as any[])?.find((y) => (y?.name || "").toLowerCase() === (x.name || "").toLowerCase());
-            return m ? { ...x, phone: m.phone ?? x.phone, website: m.website ?? x.website, photoUrl: m.photoUrl ?? x.photoUrl } : x;
-          });
-          setEnriched((prev) => ({ ...prev, [activeCat]: merged }));
+          const map: Record<string, Partial<PoiItem>> = { ...(enriched[activeCat] || {}) };
+          for (const m of data.items as any[]) {
+            const k = String(m?.name || "").toLowerCase();
+            if (!k) continue;
+            map[k] = { phone: m.phone ?? null, website: m.website ?? null, photoUrl: m.photoUrl ?? null };
+          }
+          setEnriched((prev) => ({ ...prev, [activeCat]: map }));
         }
       } finally {
         setEnriching(false);
@@ -153,7 +161,7 @@ export default function ReportBuilder(props: {
     };
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCat, poiData, selectedLocation]);
+  }, [activeCat, poiData, selectedLocation, page, pageSize]);
 
   function closePreview() {
     setPdfPreviewOpen(false);
@@ -713,7 +721,15 @@ export default function ReportBuilder(props: {
                         clinics: { label: 'Clinics', list: poiData.items.clinics, icon: '/pictures/clinic.png', color: 'purple' },
                       };
                       const data = byKey[activeCat];
-                      const showList = enriched[activeCat] ?? data.list;
+                      const total = data.list.length;
+                      const pageCount = Math.max(1, Math.ceil(total / pageSize));
+                      const safePage = Math.min(Math.max(1, page), pageCount);
+                      const start = (safePage - 1) * pageSize;
+                      const baseSlice = data.list.slice(start, start + pageSize);
+                      const showList = baseSlice.map((x) => {
+                        const info = (enriched[activeCat] || {})[(x.name || '').toLowerCase()];
+                        return info ? { ...x, ...info } : x;
+                      });
                       return (
                         <div>
                           <p className="font-semibold text-gray-900 flex items-center gap-2 mb-2">
@@ -724,7 +740,7 @@ export default function ReportBuilder(props: {
                           {showList.length ? (
                             <ul className="grid grid-cols-1 gap-2">
                               {showList.map((x: PoiItem, i: number) => (
-                                <li key={`${activeCat}-${i}`} className="flex items-center gap-3 border border-gray-200 rounded-md p-2">
+                                <li key={`${activeCat}-${start + i}`} className="flex items-center gap-3 border border-gray-200 rounded-md p-2">
                                   <div className="w-14 h-12 flex-shrink-0 bg-gray-100 rounded overflow-hidden">
                                     {x.photoUrl ? (
                                       <img src={x.photoUrl} alt={x.name} className="w-full h-full object-cover" loading="lazy" />
@@ -747,6 +763,11 @@ export default function ReportBuilder(props: {
                           ) : (
                             <p className="text-[11px] text-gray-500 mt-1">None found</p>
                           )}
+                          <div className="flex items-center justify-between mt-2">
+                            <button className="text-xs px-2 py-1 border rounded disabled:opacity-50" onClick={() => setPage(Math.max(1, page - 1))} disabled={safePage <= 1}>Prev</button>
+                            <span className="text-[11px] text-gray-600">Page {safePage} / {pageCount}</span>
+                            <button className="text-xs px-2 py-1 border rounded disabled:opacity-50" onClick={() => setPage(Math.min(pageCount, safePage + 1))} disabled={safePage >= pageCount}>Next</button>
+                          </div>
                         </div>
                       );
                     })()
