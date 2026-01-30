@@ -592,34 +592,15 @@ export default function Home() {
     <main className="min-h-screen bg-slate-50 text-gray-900">
       <header className="border-b bg-white shadow-sm sticky top-0 z-40">
         <div className="mx-auto max-w-7xl px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Image
-                src="/pictures/FilipinoHomes.png"
-                alt="Filipino Homes"
-                width={180}
-                height={45}
-                className="h-11 w-auto"
-                priority
-              />
-              <div>
-                <h1 className="text-xl font-bold tracking-tight text-gray-900">Zonal Finder</h1>
-                <p className="text-xs text-gray-600">Advanced property assessment & valuation</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-8">
-              <div className="text-right">
-                <div className="text-xs font-medium text-gray-500">Total Records</div>
-                <div className="text-2xl font-bold text-gray-900">{totalRows.toLocaleString()}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs font-medium text-gray-500">Page</div>
-                <div className="text-2xl font-bold text-gray-900">
-                  {page}
-                  {pageCount ? `/${pageCount}` : ""}
-                </div>
-              </div>
-            </div>
+          <div className="flex flex-col items-center text-center gap-1">
+            <Image
+              src="/pictures/FilipinoHomes.png"
+              alt="Filipino Homes"
+              width={280}
+              height={70}
+              className="h-16 md:h-20 w-auto"
+              priority
+            />
           </div>
         </div>
       </header>
