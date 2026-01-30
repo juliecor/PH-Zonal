@@ -15,7 +15,16 @@ export type RegionMatch = { province: string; city: string; domain: string };
 export type LatLng = { lat: number; lon: number };
 export type Boundary = Array<[number, number]>;
 
-export type PoiItem = { name: string; lat?: number; lon?: number; type?: string };
+export type PoiItem = {
+  name: string;
+  lat?: number;
+  lon?: number;
+  type?: string; // amenity type
+  idKey?: string; // OSM type:id
+  phone?: string | null;
+  website?: string | null;
+  photoUrl?: string | null;
+};
 export type PoiData = {
   counts: {
     hospitals: number;

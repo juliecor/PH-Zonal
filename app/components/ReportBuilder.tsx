@@ -91,6 +91,69 @@ export default function ReportBuilder(props: {
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const pdfFilenameRef = useRef<string>("zonal-report.pdf");
+  const [activeCat, setActiveCat] = useState<
+    "hospitals" | "schools" | "policeStations" | "fireStations" | "pharmacies" | "clinics" | null
+  >(null);
+  const [enriched, setEnriched] = useState<Record<string, PoiItem[]>>({});
+  const [enriching, setEnriching] = useState(false);
+
+  // Reset active category and any enriched cache when the source data/location changes
+  useEffect(() => {
+    setActiveCat(null);
+    setEnriched({});
+    setEnriching(false);
+  }, [poiData, selectedLocation?.lat, selectedLocation?.lon]);
+
+  useEffect(() => {
+    const run = async () => {
+      if (!activeCat || !poiData || !selectedLocation) return;
+      if (enriched[activeCat]?.length) return; // already have
+      const byKey: Record<string, PoiItem[]> = {
+        hospitals: poiData.items.hospitals,
+        schools: poiData.items.schools,
+        policeStations: poiData.items.policeStations,
+        fireStations: poiData.items.fireStations,
+        pharmacies: poiData.items.pharmacies,
+        clinics: poiData.items.clinics,
+      };
+      const amenityMap: Record<string, string> = {
+        hospitals: "hospital",
+        schools: "school",
+        policeStations: "police",
+        fireStations: "fire_station",
+        pharmacies: "pharmacy",
+        clinics: "clinic",
+      };
+      const list = (byKey as any)[activeCat] as PoiItem[];
+      if (!list?.length) return;
+      setEnriching(true);
+      try {
+        const res = await fetch("/api/places-enrich", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lat: selectedLocation.lat,
+            lon: selectedLocation.lon,
+            type: amenityMap[activeCat],
+            items: list.slice(0, 40).map((x) => ({ name: x.name, lat: x.lat, lon: x.lon, type: x.type })),
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data?.ok) {
+          // merge back into list by name fallback
+          const merged = list.map((x) => {
+            const m = (data.items as any[])?.find((y) => (y?.name || "").toLowerCase() === (x.name || "").toLowerCase());
+            return m ? { ...x, phone: m.phone ?? x.phone, website: m.website ?? x.website, photoUrl: m.photoUrl ?? x.photoUrl } : x;
+          });
+          setEnriched((prev) => ({ ...prev, [activeCat]: merged }));
+        }
+      } finally {
+        setEnriching(false);
+      }
+    };
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCat, poiData, selectedLocation]);
 
   function closePreview() {
     setPdfPreviewOpen(false);
@@ -592,12 +655,8 @@ export default function ReportBuilder(props: {
                   value={String(poiRadiusKm)}
                   onChange={(e) => onChangePoiRadius?.(Number(e.target.value))}
                 >
-                  <option value="0.5">0.5</option>
-                  <option value="1">1</option>
                   <option value="1.5">1.5</option>
-                  <option value="2">2</option>
-                  <option value="2.5">2.5</option>
-                  <option value="3.5">3.5</option>
+                  <option value="3">3</option>
                 </select>
                 <span className="text-[11px] text-gray-600">km</span>
               </div>
@@ -608,66 +667,90 @@ export default function ReportBuilder(props: {
             ) : poiData ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-red-50 transition">
+                  <button onClick={() => setActiveCat("hospitals")} className={`rounded-lg border p-3 text-center transition ${activeCat==='hospitals' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-red-50'}`}>
                     <img src="/pictures/hospital.png" alt="Hospitals" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(18%) sepia(87%) saturate(5458%) hue-rotate(351deg) brightness(96%) contrast(102%)'}} loading="lazy" />
                     <p className="text-xs text-gray-600">Hospitals</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.hospitals}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-blue-50 transition">
+                  </button>
+                  <button onClick={() => setActiveCat("schools")} className={`rounded-lg border p-3 text-center transition ${activeCat==='schools' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-blue-50'}`}>
                     <img src="/pictures/school.png" alt="Schools" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(25%) sepia(96%) saturate(2035%) hue-rotate(194deg) brightness(92%) contrast(102%)'}} loading="lazy" />
                     <p className="text-xs text-gray-600">Schools</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.schools}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-amber-50 transition">
+                  </button>
+                  <button onClick={() => setActiveCat("policeStations")} className={`rounded-lg border p-3 text-center transition ${activeCat==='policeStations' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-amber-50'}`}>
                     <img src="/pictures/police-station.png" alt="Police" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(58%) sepia(96%) saturate(531%) hue-rotate(351deg) brightness(98%) contrast(104%)'}} loading="lazy" />
                     <p className="text-xs text-gray-600">Police</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.policeStations}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-orange-50 transition">
+                  </button>
+                  <button onClick={() => setActiveCat("fireStations")} className={`rounded-lg border p-3 text-center transition ${activeCat==='fireStations' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-orange-50'}`}>
                     <img src="/pictures/fire-department.png" alt="Fire" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(46%) sepia(86%) saturate(1408%) hue-rotate(1deg) brightness(100%) contrast(103%)'}} loading="lazy" />
                     <p className="text-xs text-gray-600">Fire</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.fireStations}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-green-50 transition">
+                  </button>
+                  <button onClick={() => setActiveCat("pharmacies")} className={`rounded-lg border p-3 text-center transition ${activeCat==='pharmacies' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-green-50'}`}>
                     <img src="/pictures/pharmacy.png" alt="Pharmacy" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(45%) sepia(12%) saturate(2470%) hue-rotate(90deg) brightness(92%) contrast(92%)'}} loading="lazy" />
                     <p className="text-xs text-gray-600">Pharmacy</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.pharmacies}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-center hover:bg-purple-50 transition">
+                  </button>
+                  <button onClick={() => setActiveCat("clinics")} className={`rounded-lg border p-3 text-center transition ${activeCat==='clinics' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-purple-50'}`}>
                     <img src="/pictures/clinic.png" alt="Clinics" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(19%) sepia(84%) saturate(1640%) hue-rotate(253deg) brightness(88%) contrast(98%)'}} loading="lazy" />
                     <p className="text-xs text-gray-600">Clinics</p>
                     <p className="text-lg font-bold text-gray-900">{poiData.counts.clinics}</p>
-                  </div>
+                  </button>
                 </div>
 
                 <div className="text-xs space-y-3 max-h-80 overflow-auto">
-                  {(
-                    [
-                      ["Hospitals", poiData.items.hospitals, "/pictures/hospital.png", "icon-red"],
-                      ["Schools", poiData.items.schools, "/pictures/school.png", "icon-blue"],
-                      ["Police", poiData.items.policeStations, "/pictures/police-station.png", "icon-amber"],
-                      ["Fire", poiData.items.fireStations, "/pictures/fire-department.png", "icon-orange"],
-                      ["Pharmacy", poiData.items.pharmacies, "/pictures/pharmacy.png", "icon-green"],
-                      ["Clinics", poiData.items.clinics, "/pictures/clinic.png", "icon-purple"],
-                    ] as const
-                  ).map(([label, list, iconUrl, colorClass], idx) => (
-                    <div key={`poi-${idx}`}>
-                      <p className="font-semibold text-gray-900 flex items-center gap-2">
-                        <img src={iconUrl} alt={String(label)} width={16} height={16} style={{filter: (colorClass==="icon-red"? 'invert(18%) sepia(87%) saturate(5458%) hue-rotate(351deg) brightness(96%) contrast(102%)' : colorClass==="icon-blue"? 'invert(25%) sepia(96%) saturate(2035%) hue-rotate(194deg) brightness(92%) contrast(102%)' : colorClass==="icon-amber"? 'invert(58%) sepia(96%) saturate(531%) hue-rotate(351deg) brightness(98%) contrast(104%)' : colorClass==="icon-orange"? 'invert(46%) sepia(86%) saturate(1408%) hue-rotate(1deg) brightness(100%) contrast(103%)' : colorClass==="icon-green"? 'invert(45%) sepia(12%) saturate(2470%) hue-rotate(90deg) brightness(92%) contrast(92%)' : 'invert(19%) sepia(84%) saturate(1640%) hue-rotate(253deg) brightness(88%) contrast(98%)')}} loading="lazy" />
-                        {label} <span className="text-gray-500">({list.length})</span>
-                      </p>
-
-                      {list.length ? (
-                        <ul className="list-disc pl-4 text-gray-600 text-[11px] mt-1 space-y-0.5">
-                          {list.map((x: PoiItem, i: number) => (
-                            <li key={`${idx}-${i}`}>{x.name || "(unnamed)"}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-[11px] text-gray-500 mt-1">None found</p>
-                      )}
-                    </div>
-                  ))}
+                  {!activeCat ? (
+                    <p className="text-[11px] text-gray-500 mt-1">Click a category above to view detailed results.</p>
+                  ) : (
+                    (() => {
+                      const byKey: Record<string, {label: string; list: PoiItem[]; icon: string; color: string}> = {
+                        hospitals: { label: 'Hospitals', list: poiData.items.hospitals, icon: '/pictures/hospital.png', color: 'red' },
+                        schools: { label: 'Schools', list: poiData.items.schools, icon: '/pictures/school.png', color: 'blue' },
+                        policeStations: { label: 'Police', list: poiData.items.policeStations, icon: '/pictures/police-station.png', color: 'amber' },
+                        fireStations: { label: 'Fire', list: poiData.items.fireStations, icon: '/pictures/fire-department.png', color: 'orange' },
+                        pharmacies: { label: 'Pharmacy', list: poiData.items.pharmacies, icon: '/pictures/pharmacy.png', color: 'green' },
+                        clinics: { label: 'Clinics', list: poiData.items.clinics, icon: '/pictures/clinic.png', color: 'purple' },
+                      };
+                      const data = byKey[activeCat];
+                      const showList = enriched[activeCat] ?? data.list;
+                      return (
+                        <div>
+                          <p className="font-semibold text-gray-900 flex items-center gap-2 mb-2">
+                            <img src={data.icon} width={16} height={16} />
+                            {data.label} <span className="text-gray-500">({data.list.length})</span>
+                          </p>
+                          {enriching && <p className="text-[11px] text-gray-500 mb-1">Fetching photos and contacts…</p>}
+                          {showList.length ? (
+                            <ul className="grid grid-cols-1 gap-2">
+                              {showList.map((x: PoiItem, i: number) => (
+                                <li key={`${activeCat}-${i}`} className="flex items-center gap-3 border border-gray-200 rounded-md p-2">
+                                  <div className="w-14 h-12 flex-shrink-0 bg-gray-100 rounded overflow-hidden">
+                                    {x.photoUrl ? (
+                                      <img src={x.photoUrl} alt={x.name} className="w-full h-full object-cover" loading="lazy" />
+                                    ) : (
+                                      <img src={data.icon} alt="icon" className="w-full h-full object-contain p-2 opacity-70" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-[12px] font-semibold text-gray-900 truncate">{x.name || '(unnamed)'}</p>
+                                    <div className="text-[11px] text-gray-600 flex gap-3">
+                                      {x.phone ? <span>☎ {x.phone}</span> : null}
+                                      {x.website ? (
+                                        <a href={x.website} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Website</a>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-[11px] text-gray-500 mt-1">None found</p>
+                          )}
+                        </div>
+                      );
+                    })()
+                  )}
                 </div>
               </div>
             ) : (

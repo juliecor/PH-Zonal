@@ -68,8 +68,8 @@ export default function Home() {
   const [poiLoading, setPoiLoading] = useState(false);
   const [poiData, setPoiData] = useState<PoiData | null>(null);
   const [detailsErr, setDetailsErr] = useState("");
-  // POI radius (km) - default to 0.5km for tighter initial scope
-  const [poiRadiusKm, setPoiRadiusKm] = useState(0.5);
+  // POI radius (km) - default 1.5km; dropdown offers 1.5 or 3km
+  const [poiRadiusKm, setPoiRadiusKm] = useState(1.5);
 
   // Right side fields
   const [idealBusinessText, setIdealBusinessText] = useState("");

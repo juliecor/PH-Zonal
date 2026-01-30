@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-type PoiItem = { idKey: string; name: string; lat?: number; lon?: number; type?: string };
+type PoiItem = { idKey: string; name: string; lat?: number; lon?: number; type?: string; phone?: string | null; website?: string | null; photoUrl?: string | null };
 
 function pickName(tags: any) {
   return String(tags?.name ?? tags?.["name:en"] ?? "").trim();
@@ -85,7 +85,20 @@ out center;`;
         const cLat = el?.center?.lat ?? el?.lat;
         const cLon = el?.center?.lon ?? el?.lon;
         const idKey = `${String(el?.type ?? 'n')}:${String(el?.id ?? '')}`;
-        const item: PoiItem = { idKey, name, lat: cLat, lon: cLon, type: amenity };
+        // pick contact fields
+        const phone = (tags["contact:phone"] ?? tags["phone"]) as string | undefined;
+        const website = (tags["contact:website"] ?? tags["website"]) as string | undefined;
+        // picture if available
+        let photoUrl: string | null = null;
+        const image = tags["image"] as string | undefined;
+        const commons = tags["wikimedia_commons"] as string | undefined;
+        if (image && /^https?:\/\//i.test(image)) {
+          photoUrl = image;
+        } else if (commons) {
+          const fileName = String(commons).replace(/^File:/i, "");
+          photoUrl = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=320`;
+        }
+        const item: PoiItem = { idKey, name, lat: cLat, lon: cLon, type: amenity, phone: phone ?? null, website: website ?? null, photoUrl };
         addWithNameNear(target, item);
       }
     }
