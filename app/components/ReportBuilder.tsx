@@ -770,7 +770,12 @@ export default function ReportBuilder(props: {
                                   <div className="min-w-0">
                                     <p className="text-[12px] font-semibold text-gray-900 truncate">{x.name || '(unnamed)'}</p>
                                     <div className="text-[11px] text-gray-600 flex flex-wrap gap-3">
-                                      {d != null ? <span>📍 {formatDistance(d)}</span> : null}
+                                      {d != null ? (
+                                        <span className="inline-flex items-center gap-1">
+                                          <img src="/pictures/filipinohomespointer.png" alt="pin" width={12} height={12} className="opacity-90" />
+                                          {formatDistance(d)}
+                                        </span>
+                                      ) : null}
                                       {x.phone ? <span>☎ {x.phone}</span> : null}
                                       {x.website ? (
                                         <a href={x.website} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Website</a>
