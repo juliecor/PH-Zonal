@@ -99,6 +99,23 @@ export default function ReportBuilder(props: {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(4);
 
+  // distance helpers
+  function distMeters(aLat?: number, aLon?: number, bLat?: number, bLon?: number) {
+    if (aLat == null || aLon == null || bLat == null || bLon == null) return null;
+    const R = 6371000;
+    const dLat = ((bLat - aLat) * Math.PI) / 180;
+    const dLon = ((bLon - aLon) * Math.PI) / 180;
+    const s1 = Math.sin(dLat / 2);
+    const s2 = Math.sin(dLon / 2);
+    const c = s1 * s1 + Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * s2 * s2;
+    return 2 * R * Math.atan2(Math.sqrt(c), Math.sqrt(1 - c));
+  }
+  function formatDistance(meters: number | null) {
+    if (meters == null || !isFinite(meters)) return "";
+    if (meters < 1000) return `${Math.round(meters)} m`;
+    return `${(meters / 1000).toFixed(1)} km`;
+  }
+
   // Reset active category and any enriched cache when the source data/location changes
   useEffect(() => {
     setActiveCat(null);
@@ -707,7 +724,7 @@ export default function ReportBuilder(props: {
                   </button>
                 </div>
 
-                <div className="text-xs space-y-3 max-h-80 overflow-auto">
+                <div className="text-xs space-y-3">
                   {!activeCat ? (
                     <p className="text-[11px] text-gray-500 mt-1">Click a category above to view detailed results.</p>
                   ) : (
@@ -739,7 +756,9 @@ export default function ReportBuilder(props: {
                           {enriching && <p className="text-[11px] text-gray-500 mb-1">Fetching photos and contacts…</p>}
                           {showList.length ? (
                             <ul className="grid grid-cols-1 gap-2">
-                              {showList.map((x: PoiItem, i: number) => (
+                              {showList.map((x: PoiItem, i: number) => {
+                                const d = distMeters(selectedLocation?.lat, selectedLocation?.lon, x.lat, x.lon);
+                                return (
                                 <li key={`${activeCat}-${start + i}`} className="flex items-center gap-3 border border-gray-200 rounded-md p-2">
                                   <div className="w-14 h-12 flex-shrink-0 bg-gray-100 rounded overflow-hidden">
                                     {x.photoUrl ? (
@@ -750,7 +769,8 @@ export default function ReportBuilder(props: {
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-[12px] font-semibold text-gray-900 truncate">{x.name || '(unnamed)'}</p>
-                                    <div className="text-[11px] text-gray-600 flex gap-3">
+                                    <div className="text-[11px] text-gray-600 flex flex-wrap gap-3">
+                                      {d != null ? <span>📍 {formatDistance(d)}</span> : null}
                                       {x.phone ? <span>☎ {x.phone}</span> : null}
                                       {x.website ? (
                                         <a href={x.website} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Website</a>
@@ -758,7 +778,7 @@ export default function ReportBuilder(props: {
                                     </div>
                                   </div>
                                 </li>
-                              ))}
+                              );})}
                             </ul>
                           ) : (
                             <p className="text-[11px] text-gray-500 mt-1">None found</p>
