@@ -279,6 +279,7 @@ export default function ZonalMap({
     });
 
     layer.addTo(mapRef.current);
+    try { if ((layer as any).bringToFront) (layer as any).bringToFront(); } catch {}
     streetLayerRef.current = layer;
 
     // optional: zoom to street

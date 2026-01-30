@@ -682,6 +682,9 @@ function aliasBarangayName(brgy: string, city?: string, province?: string) {
     ) {
       return "South Road Properties";
     }
+    // Sambag roman/arabic numerals
+    if (/SAMBAG\s*II\b/.test(b) || /SAMBAG\s*2\b/.test(b)) return "Sambag II";
+    if (/SAMBAG\s*I\b/.test(b) || /SAMBAG\s*1\b/.test(b)) return "Sambag I";
   }
   return brgy;
 }

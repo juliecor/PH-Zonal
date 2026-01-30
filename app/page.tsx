@@ -71,6 +71,11 @@ export default function Home() {
   // POI radius (km) - default 1.5km; dropdown offers 1.5 or 3km
   const [poiRadiusKm, setPoiRadiusKm] = useState(1.5);
 
+  // Street highlight (GeoJSON + toggle)
+  const [streetGeo, setStreetGeo] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [streetGeoLoading, setStreetGeoLoading] = useState(false);
+  const [showStreetHighlight, setShowStreetHighlight] = useState(false);
+
   // Right side fields
   const [idealBusinessText, setIdealBusinessText] = useState("");
 
@@ -220,6 +225,32 @@ export default function Home() {
     const data = await res.json();
     if (!res.ok || !data?.ok) throw new Error(data?.error ?? "POI failed");
     return data as { ok: true; counts: PoiData["counts"]; items: PoiData["items"] };
+  }
+
+  // fetch street GeoJSON from our API using selected row context and current pin anchor
+  async function fetchStreetGeometryFromSelectedRow(r: Row) {
+    const streetName = String(r["Street/Subdivision-"] ?? "").trim();
+    const cityName = String(r["City-"] ?? "").trim();
+    const provName = String(r["Province-"] ?? "").trim();
+    const brgyName = String(r["Barangay-"] ?? "").trim();
+
+    const lat = selectedLocation?.lat ?? null;
+    const lon = selectedLocation?.lon ?? null;
+    if (!streetName || lat == null || lon == null) return null;
+
+    setStreetGeoLoading(true);
+    try {
+      const res = await fetch("/api/street-geometry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ streetName, city: cityName, province: provName, barangay: brgyName, lat, lon }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) return null;
+      return data.geojson as GeoJSON.FeatureCollection;
+    } finally {
+      setStreetGeoLoading(false);
+    }
   }
 
   async function onChangePoiRadius(newKm: number) {
@@ -582,6 +613,10 @@ export default function Home() {
     setAreaDescription("");
     setAreaDescErr("");
 
+    // reset street highlight when picking on map
+    setShowStreetHighlight(false);
+    setStreetGeo(null);
+
     setPoiLoading(true);
     try {
       const poi = await fetchPoi(lat, lon);
@@ -930,6 +965,35 @@ export default function Home() {
                       </div>
                     </div>
 
+                    {selectedRow && (
+                      <button
+                        onClick={async () => {
+                          if (showStreetHighlight) {
+                            setShowStreetHighlight(false);
+                            setStreetGeo(null);
+                            return;
+                          }
+                          if (!selectedRow) return;
+                          setDetailsErr("");
+                          const geo = await fetchStreetGeometryFromSelectedRow(selectedRow);
+                          if (geo && Array.isArray((geo as any).features) && (geo as any).features.length > 0) {
+                            setStreetGeo(geo);
+                            setShowStreetHighlight(true);
+                          } else {
+                            setStreetGeo(null);
+                            setShowStreetHighlight(false);
+                            setDetailsErr("Street line not found near this pin.");
+                          }
+                        }}
+                        disabled={streetGeoLoading}
+                        className={`mt-2 w-full px-3 py-2 rounded-md text-xs font-medium text-white transition ${
+                          showStreetHighlight ? "bg-blue-700 hover:bg-blue-800" : "bg-blue-600 hover:bg-blue-700"
+                        }`}
+                      >
+                        {streetGeoLoading ? "Finding street…" : showStreetHighlight ? "Hide Street Highlight" : "Highlight Street on Map"}
+                      </button>
+                    )}
+
                     {comps?.ok && comps.stats ? (
                       <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs">
                         <p className="font-semibold text-gray-900">Comps (same barangay)</p>
@@ -1035,6 +1099,9 @@ export default function Home() {
                   highlightRadiusMeters={80}
                   containerId="map-container"
                   mapType={mapType as "street" | "terrain" | "satellite"}
+                  showStreetHighlight={showStreetHighlight}
+                  streetGeojson={streetGeo}
+                  streetGeojsonEnabled={showStreetHighlight}
                 />
               </div>
 

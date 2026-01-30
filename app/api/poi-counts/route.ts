@@ -4,6 +4,11 @@ export const runtime = "nodejs";
 
 type PoiItem = { idKey: string; name: string; lat?: number; lon?: number; type?: string; phone?: string | null; website?: string | null; photoUrl?: string | null };
 
+// In-memory cache (per server instance)
+const POI_CACHE: Map<string, { ts: number; payload: any }> = (globalThis as any).__POI_CACHE__ ?? new Map();
+(globalThis as any).__POI_CACHE__ = POI_CACHE;
+const POI_TTL_MS = 1000 * 60 * 10; // 10 minutes
+
 function pickName(tags: any) {
   return String(tags?.name ?? tags?.["name:en"] ?? "").trim();
 }
@@ -21,6 +26,13 @@ export async function POST(req: Request) {
     const lon = Number(body?.lon);
     const radius = Math.max(100, Math.min(5000, Math.round(Number(body?.radius ?? 1500))));
     const limit = Math.max(0, Math.min(300, Number(body?.limit ?? 60)));
+
+    // quick cache check (round lat/lon to ~11m for better hit rate)
+    const key = `${lat.toFixed(4)}|${lon.toFixed(4)}|${radius}|${limit}`;
+    const hit = POI_CACHE.get(key);
+    if (hit && Date.now() - hit.ts < POI_TTL_MS) {
+      return NextResponse.json(hit.payload);
+    }
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
       return NextResponse.json({ ok: false, error: "lat/lon required" }, { status: 400 });
@@ -103,12 +115,15 @@ out center;`;
       }
     }
 
-    await collect("hospital", hospitals);
-    await collect("school", schools);
-    await collect("police", policeStations);
-    await collect("fire_station", fireStations);
-    await collect("pharmacy", pharmacies);
-    await collect("clinic", clinics);
+    // run in parallel to reduce total latency
+    await Promise.all([
+      collect("hospital", hospitals),
+      collect("school", schools),
+      collect("police", policeStations),
+      collect("fire_station", fireStations),
+      collect("pharmacy", pharmacies),
+      collect("clinic", clinics),
+    ]);
 
     const out = (m: Map<string, PoiItem>) => {
       const arr = Array.from(m.values());
@@ -116,7 +131,7 @@ out center;`;
       return limit ? arr.slice(0, limit) : arr;
     };
 
-    return NextResponse.json({
+    const payload = {
       ok: true,
       counts: {
         hospitals: hospitals.size,
@@ -134,7 +149,10 @@ out center;`;
         pharmacies: out(pharmacies),
         clinics: out(clinics),
       },
-    });
+    };
+
+    POI_CACHE.set(key, { ts: Date.now(), payload });
+    return NextResponse.json(payload);
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "POI failed" }, { status: 500 });
   }
