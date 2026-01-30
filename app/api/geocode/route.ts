@@ -385,11 +385,17 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const query = normalizePH(body?.query ?? "");
-    const hintBarangay = normalizePH(body?.hintBarangay ?? "");
-    const hintCityAdjRaw = normalizeCityHintForOsm(body?.hintCity ?? "", body?.hintProvince ?? "");
+    const rawProvince = String(body?.hintProvince ?? "");
+    const hintCityAdjRaw = normalizeCityHintForOsm(body?.hintCity ?? "", rawProvince);
+    const hintBarangayAdjRaw = aliasBarangayName(body?.hintBarangay ?? "", hintCityAdjRaw, rawProvince);
+    const queryAdjRaw = aliasFreeTextQuery(body?.query ?? "", hintCityAdjRaw, rawProvince);
+    const streetAdjRaw = aliasFreeTextQuery(body?.street ?? "", hintCityAdjRaw, rawProvince);
+    const vicinityAdjRaw = aliasFreeTextQuery(body?.vicinity ?? "", hintCityAdjRaw, rawProvince);
+
+    const query = normalizePH(queryAdjRaw);
+    const hintBarangay = normalizePH(hintBarangayAdjRaw);
     const hintCity = normalizePH(hintCityAdjRaw);
-    const hintProvince = normalizePH(body?.hintProvince ?? "");
+    const hintProvince = normalizePH(rawProvince);
 
     const anchorLat = body?.anchorLat != null ? Number(body.anchorLat) : null;
     const anchorLon = body?.anchorLon != null ? Number(body.anchorLon) : null;
@@ -398,8 +404,8 @@ export async function POST(req: Request) {
         ? { lat: anchorLat, lon: anchorLon }
         : null;
 
-    const street = normalizePH(body?.street ?? "");
-    const vicinity = normalizePH(body?.vicinity ?? "");
+    const street = normalizePH(streetAdjRaw);
+    const vicinity = normalizePH(vicinityAdjRaw);
 
     if (!query) return NextResponse.json({ ok: false, error: "query required" }, { status: 400 });
 
@@ -418,7 +424,7 @@ export async function POST(req: Request) {
     if (GOOGLE_API_KEY) {
       console.log(`[GOOGLE] Trying Google Maps for: ${query}`);
       
-      const googleAddress = [street || query, vicinity, hintBarangay, hintCityAdjRaw, hintProvince, "Philippines"]
+      const googleAddress = [streetAdjRaw || queryAdjRaw, vicinityAdjRaw, hintBarangayAdjRaw, hintCityAdjRaw, rawProvince, "Philippines"]
         .filter(Boolean)
         .join(", ");
 
@@ -452,7 +458,7 @@ export async function POST(req: Request) {
             const polyPack = await getBarangayPoly({
               barangay: hintBarangay,
               city: hintCityAdjRaw,
-              province: hintProvince,
+              province: rawProvince,
               anchor: anchor,
             });
             if (polyPack?.boundary?.length) {
@@ -520,7 +526,7 @@ out center;`;
       const polyPack = await getBarangayPoly({
         barangay: hintBarangay,
         city: hintCityAdjRaw,
-        province: hintProvince,
+        province: rawProvince,
         anchor,
       });
 
@@ -643,4 +649,43 @@ function normalizeCityHintForOsm(city: string, province?: string) {
     if (c.includes("CEBU SOUTH") || c.includes("CEBU NORTH")) return "Cebu City";
   }
   return city;
+}
+
+// Aliases/synonyms for barangays/places commonly mislabeled in source
+function aliasBarangayName(brgy: string, city?: string, province?: string) {
+  const b = String(brgy || "").toUpperCase().trim();
+  const c = String(city || "").toUpperCase().trim();
+  const p = String(province || "").toUpperCase().trim();
+
+  // Cebu City specific
+  if (p.includes("CEBU") && c.includes("CEBU")) {
+    if (b === "COGON CENTRAL" || b.includes("COGON CENTRAL")) return "Cogon Ramos"; // official barangay name
+  }
+  return brgy;
+}
+
+// Expand place name synonyms in free-text queries (street/vicinity/query)
+function aliasFreeTextQuery(text: string, city?: string, province?: string) {
+  let s = String(text || "");
+  const cc = String(city || "").toUpperCase();
+  const pp = String(province || "").toUpperCase();
+  if (pp.includes("CEBU") && cc.includes("CEBU")) {
+    // SRP synonyms → South Road Properties
+    const patterns = [
+      /\bSOUTH\s+RECLAMATION\s+PROJECT\b/gi,
+      /\bCEBU\s+SOUTH\s+PROPERTIES\b/gi,
+      /\bSOUTH\s+ROAD\s+PROPERTIES?\b/gi,
+      /\bSRP\b/gi,
+    ];
+    for (const re of patterns) s = s.replace(re, "South Road Properties");
+
+    // Citta di Mare area synonyms (common variants in data)
+    s = s.replace(/\bCITY\s+DI\s+MARE\b/gi, "Citta di Mare");
+    s = s.replace(/\bCITTA\s+DI\s+MARE(?:\s+CONDO)?\b/gi, "Citta di Mare");
+
+    // San Remo Oasis variants
+    s = s.replace(/\bCONDO\s*-\s*SAN\s+REMO\s+OASIS\b/gi, "San Remo Oasis");
+    s = s.replace(/\bSAN\s+REMIO\s+OASIS\b/gi, "San Remo Oasis");
+  }
+  return s;
 }
