@@ -852,10 +852,19 @@ export default function Home() {
                   <p className="text-xs text-gray-500 mt-2">Select a property or click the map</p>
                 ) : (
                   <div className="mt-3 space-y-2">
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4">
-                      <p className="text-xs font-medium text-gray-600">Zonal Value</p>
-                      <p className="text-2xl font-bold text-gray-900">₱{String(selectedRow["ZonalValuepersqm.-"] ?? "")}</p>
-                      <p className="text-xs text-gray-600 mt-1">per square meter</p>
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-gray-600">Zonal Value</p>
+                        <p className="text-2xl font-bold text-gray-900">₱{String(selectedRow["ZonalValuepersqm.-"] ?? "")}</p>
+                        <p className="text-xs text-gray-600 mt-1">per square meter</p>
+                      </div>
+                      <img
+                        src="/pictures/land-value.png"
+                        alt="Land Value"
+                        className="ml-4 w-12 h-12 md:w-14 md:h-14 flex-shrink-0"
+                        style={{ filter: 'invert(45%) sepia(12%) saturate(2470%) hue-rotate(90deg) brightness(92%) contrast(92%)' }}
+                        loading="lazy"
+                      />
                     </div>
 
                     <div className="space-y-2 text-sm">
