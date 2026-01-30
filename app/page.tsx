@@ -68,6 +68,8 @@ export default function Home() {
   const [poiLoading, setPoiLoading] = useState(false);
   const [poiData, setPoiData] = useState<PoiData | null>(null);
   const [detailsErr, setDetailsErr] = useState("");
+  // POI radius (km) - default to 0.5km for tighter initial scope
+  const [poiRadiusKm, setPoiRadiusKm] = useState(0.5);
 
   // Right side fields
   const [idealBusinessText, setIdealBusinessText] = useState("");
@@ -213,11 +215,45 @@ export default function Home() {
     const res = await fetch("/api/poi-counts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lat, lon, radius: 1500 }),
+      body: JSON.stringify({ lat, lon, radius: Math.round(poiRadiusKm * 1000), limit: 120 }),
     });
     const data = await res.json();
     if (!res.ok || !data?.ok) throw new Error(data?.error ?? "POI failed");
     return data as { ok: true; counts: PoiData["counts"]; items: PoiData["items"] };
+  }
+
+  async function onChangePoiRadius(newKm: number) {
+    setPoiRadiusKm(newKm);
+    if (!selectedLocation) return;
+    const myId = ++reqIdRef.current;
+    setPoiLoading(true);
+    try {
+      const poi = await fetchPoi(selectedLocation.lat, selectedLocation.lon);
+      if (myId !== reqIdRef.current) return;
+      setPoiData({ counts: poi.counts, items: poi.items });
+
+      const ideas = suggestBusinesses({
+        zonalValueText: String(selectedRow?.["ZonalValuepersqm.-"] ?? ""),
+        classification: String(selectedRow?.["Classification-"] ?? ""),
+        poi,
+      });
+      setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
+
+      // Optionally refresh description to reflect new POI counts
+      describeArea({
+        lat: selectedLocation.lat,
+        lon: selectedLocation.lon,
+        label: geoLabel,
+        row: selectedRow,
+        poi: { counts: poi.counts, items: poi.items } as any,
+      });
+    } catch (e: any) {
+      if (myId !== reqIdRef.current) return;
+      setDetailsErr(e?.message ?? "Failed to load POI");
+    } finally {
+      if (myId !== reqIdRef.current) return;
+      setPoiLoading(false);
+    }
   }
 
   // NOTE: /api/comps not implemented; disable comps fetch to avoid 404 noise
@@ -1026,6 +1062,8 @@ export default function Home() {
               geoLabel={geoLabel}
               poiLoading={poiLoading}
               poiData={poiData}
+                poiRadiusKm={poiRadiusKm}
+                onChangePoiRadius={onChangePoiRadius}
               idealBusinessText={idealBusinessText}
               setIdealBusinessText={setIdealBusinessText}
               areaDescription={areaDescription}

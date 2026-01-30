@@ -62,6 +62,8 @@ export default function ReportBuilder(props: {
   geoLabel: string;
   poiLoading: boolean;
   poiData: PoiData | null;
+  poiRadiusKm?: number;
+  onChangePoiRadius?: (km: number) => void;
 
   idealBusinessText: string;
   setIdealBusinessText: (v: string) => void;
@@ -80,6 +82,8 @@ export default function ReportBuilder(props: {
     setIdealBusinessText,
     areaDescription,
     mapContainerId = "map-container",
+    poiRadiusKm = 1.5,
+    onChangePoiRadius,
   } = props;
 
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -274,7 +278,7 @@ export default function ReportBuilder(props: {
 
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(12);
-    pdf.text("Nearby Facilities / POIs (within 1.5km)", pageW / 2, 115, { align: "center" });
+    pdf.text(`Nearby Facilities / POIs (within ${poiRadiusKm}km)`, pageW / 2, 115, { align: "center" });
 
     const gridTop = 145;
     const gap = 18;
@@ -398,7 +402,7 @@ export default function ReportBuilder(props: {
 
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(14);
-    pdf.text("Full Nearby Facilities List (within 1.5km)", pageW / 2, 110, { align: "center" });
+    pdf.text(`Full Nearby Facilities List (within ${poiRadiusKm}km)`, pageW / 2, 110, { align: "center" });
 
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(10);
@@ -579,7 +583,25 @@ export default function ReportBuilder(props: {
           )}
 
           <div className="border-t border-gray-200 pt-4 mt-4">
-            <h4 className="text-sm font-semibold text-gray-900 mb-3">Nearby Facilities (1.5km)</h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold text-gray-900">Nearby Facilities ({poiRadiusKm}km)</h4>
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] text-gray-600">Radius</label>
+                <select
+                  className="rounded-md border border-gray-300 text-xs px-2 py-1 bg-white"
+                  value={String(poiRadiusKm)}
+                  onChange={(e) => onChangePoiRadius?.(Number(e.target.value))}
+                >
+                  <option value="0.5">0.5</option>
+                  <option value="1">1</option>
+                  <option value="1.5">1.5</option>
+                  <option value="2">2</option>
+                  <option value="2.5">2.5</option>
+                  <option value="3.5">3.5</option>
+                </select>
+                <span className="text-[11px] text-gray-600">km</span>
+              </div>
+            </div>
 
             {poiLoading ? (
               <p className="text-sm text-gray-500">Loading facilities…</p>
