@@ -168,6 +168,10 @@ export default function ZonalMap({
         mapRef.current.removeLayer(circleRef.current);
         circleRef.current = null;
       }
+      // Still fly to the selected location even if marker is hidden
+      if (selected) {
+        try { mapRef.current.flyTo([selected.lat, selected.lon], 15, { duration: 1 }); } catch {}
+      }
       return;
     }
 

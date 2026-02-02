@@ -488,6 +488,9 @@ export default function Home() {
     setComps(null);
     setAreaDescription("");
     setAreaDescErr("");
+    // Always reset street highlight when switching rows so the map recenters cleanly
+    setShowStreetHighlight(false);
+    setStreetGeo(null);
 
     setGeoLoading(true);
     try {
@@ -809,6 +812,9 @@ export default function Home() {
                 onChange={(e) => {
                   const nextCity = e.target.value;
                   setCity(nextCity);
+                  // Reset street highlight when changing city filter
+                  setShowStreetHighlight(false);
+                  setStreetGeo(null);
                   setBarangay("");
                   setPage(1);
                   setFacetBarangays([]);
@@ -841,6 +847,9 @@ export default function Home() {
                 onChange={(e) => {
                   const nextBrgy = e.target.value;
                   setBarangay(nextBrgy);
+                  // Reset street highlight when changing barangay filter
+                  setShowStreetHighlight(false);
+                  setStreetGeo(null);
                   setPage(1);
 
                   if (city && nextBrgy) {
