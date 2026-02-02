@@ -111,6 +111,13 @@ export default function ZonalMap({
       attributionControl: true,
     });
 
+    // Ensure a dedicated pane for street highlight that always renders above tiles and polygons
+    try {
+      map.createPane("streetHighlight");
+      const ph = map.getPane("streetHighlight");
+      if (ph) ph.style.zIndex = "650"; // above overlayPane(400) and markerPane(600)
+    } catch {}
+
     map.on("click", (e: any) => {
       if (onPickOnMap) onPickOnMap(e.latlng.lat, e.latlng.lng);
     });
@@ -147,9 +154,24 @@ export default function ZonalMap({
     tileLayerRef.current = layer;
   }, [mapType]);
 
-  // Marker + circle
+  // Marker + circle (hidden when street highlight is enabled)
   useEffect(() => {
-    if (!mapRef.current || !selected) {
+    if (!mapRef.current) return;
+
+    // If street highlight is on, remove marker/circle and skip drawing them
+    if (streetGeojsonEnabled) {
+      if (markerRef.current) {
+        mapRef.current.removeLayer(markerRef.current);
+        markerRef.current = null;
+      }
+      if (circleRef.current) {
+        mapRef.current.removeLayer(circleRef.current);
+        circleRef.current = null;
+      }
+      return;
+    }
+
+    if (!selected) {
       if (markerRef.current) {
         mapRef.current?.removeLayer(markerRef.current);
         markerRef.current = null;
@@ -203,7 +225,7 @@ export default function ZonalMap({
     mapRef.current.flyTo([selected.lat, selected.lon], 15, { duration: 1 });
 
     setTimeout(() => emitIdle(), 500);
-  }, [selected, popupLabel, highlightRadiusMeters]);
+  }, [selected, popupLabel, highlightRadiusMeters, streetGeojsonEnabled]);
 
   // Boundary polygon + outline
   useEffect(() => {
@@ -270,21 +292,33 @@ export default function ZonalMap({
 
     if (!streetGeojsonEnabled || !streetGeojson) return;
 
-    const layer = leaflet.geoJSON(streetGeojson as any, {
+    // Build a casing (white) + blue overlay for maximum contrast
+    const casing = leaflet.geoJSON(streetGeojson as any, {
       style: {
-        color: "#2563eb",
-        weight: 7,
+        color: "#ffffff",
+        weight: 14,
         opacity: 0.95,
       },
+      pane: "streetHighlight",
     });
 
-    layer.addTo(mapRef.current);
-    try { if ((layer as any).bringToFront) (layer as any).bringToFront(); } catch {}
-    streetLayerRef.current = layer;
+    const line = leaflet.geoJSON(streetGeojson as any, {
+      style: {
+        color: "#0ea5e9", // sky-500
+        weight: 8,
+        opacity: 1,
+      },
+      pane: "streetHighlight",
+    });
+
+    const group = leaflet.layerGroup([casing, line]);
+    group.addTo(mapRef.current);
+    try { if ((line as any).bringToFront) (line as any).bringToFront(); } catch {}
+    streetLayerRef.current = group;
 
     // optional: zoom to street
     try {
-      const b = layer.getBounds();
+      const b = (group as any).getBounds ? (group as any).getBounds() : (line as any).getBounds();
       if (b?.isValid()) mapRef.current.fitBounds(b, { padding: [20, 20] });
     } catch {}
 

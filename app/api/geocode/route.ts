@@ -22,20 +22,55 @@ if (!GOOGLE_API_KEY) {
 // ============================================================================
 
 function extractKeywords(text: string): string[] {
+  // Uppercase and remove punctuation for consistent tokenization
   let normalized = text.trim().toUpperCase();
-  normalized = normalized.replace(/[^\w\s]/g, ' ');
+  normalized = normalized.replace(/[^\w\s]/g, ' '); // drop dots, commas, etc.
   normalized = normalized.replace(/\s+/g, ' ');
-  
-  const words = normalized.split(' ').filter(w => w.length > 0);
-  
+
+  const rawWords = normalized.split(' ').filter(w => w.length > 0);
+
   const stopWords = new Set([
     'ST', 'AVE', 'RD', 'BLVD', 'LN', 'DR', 'EXT', 'OLD', 'NEW',
     'NORTH', 'SOUTH', 'EAST', 'WEST', 'EXTENSION', 'STREET', 'AVENUE', 'ROAD',
-    'EXTENSION', 'INTERIOR', 'EXTERIOR', 'PHASE', 'THE', 'OF', 'AND', 'OR', 'TO', 'FROM',
-    'SUBD', 'SUBDIVISION', 'COMPLEX', 'SPORTS', 'CENTER', 'MALL', 'BUILDING'
+    'INTERIOR', 'EXTERIOR', 'PHASE', 'THE', 'OF', 'AND', 'OR', 'TO', 'FROM',
+    'SUBD', 'SUBDIVISION', 'COMPLEX', 'SPORTS', 'CENTER', 'MALL', 'BUILDING',
+    'BRGY', 'BARANGAY'
   ]);
-  
-  return words.filter(w => !stopWords.has(w) && w.length > 2);
+
+  // Keep tokens longer than 2 that are not stopwords
+  const words = rawWords.filter(w => !stopWords.has(w) && w.length > 2);
+
+  // Heuristic: also add concatenated forms to catch cases like
+  // "UY TENG SU" ↔ "UYTENGSU" or initials like "M H" ↔ "MH"
+  if (rawWords.length > 1) {
+    const allJoined = rawWords.join('');
+    if (allJoined.length > 3) words.push(allJoined);
+
+    const joinedNoSingles = rawWords.filter(w => w.length > 1).join('');
+    if (joinedNoSingles.length > 3 && joinedNoSingles !== allJoined) words.push(joinedNoSingles);
+
+    // Also add 2-gram and 3-gram joins for increased recall on multi-part names
+    for (let n = 2; n <= 3; n++) {
+      for (let i = 0; i + n <= rawWords.length; i++) {
+        const slice = rawWords.slice(i, i + n);
+        if (slice.every(w => !stopWords.has(w))) {
+          const j = slice.join('');
+          if (j.length > 3) words.push(j);
+        }
+      }
+    }
+  }
+
+  // De-duplicate while preserving insertion order
+  const seen = new Set<string>();
+  const uniq: string[] = [];
+  for (const w of words) {
+    if (!seen.has(w)) {
+      seen.add(w);
+      uniq.push(w);
+    }
+  }
+  return uniq;
 }
 
 function levenshteinDistance(str1: string, str2: string): number {
@@ -98,6 +133,14 @@ function keywordMatch(userKeywords: string[], mapStreet: string): number {
   return totalSimilarity / userKeywords.length;
 }
 
+function canonicalStreet(s: string) {
+  return String(s || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, " ") // remove dots and punctuation
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function findBestStreetMatch(
   userStreet: string,
   availableStreets: string[],
@@ -105,7 +148,7 @@ function findBestStreetMatch(
 ): { street: string; similarity: number; method: string } | null {
   
   const userKeywords = extractKeywords(userStreet);
-  const userNormalized = userStreet.trim().toUpperCase();
+  const userNormalized = canonicalStreet(userStreet);
   
   if (userKeywords.length === 0) return null;
   
@@ -113,7 +156,7 @@ function findBestStreetMatch(
   let bestScore = 0;
   
   for (const mapStreet of availableStreets) {
-    const mapNormalized = mapStreet.trim().toUpperCase();
+    const mapNormalized = canonicalStreet(mapStreet);
     
     if (userNormalized === mapNormalized) {
       return { street: mapStreet, similarity: 1.0, method: "exact" };
@@ -130,7 +173,7 @@ function findBestStreetMatch(
       };
     }
     
-    if (bestScore < 0.80) {
+    if (bestScore < 0.98) {
       const fuzzyScore = calculateSimilarity(userNormalized, mapNormalized);
       
       if (fuzzyScore > bestScore && fuzzyScore >= threshold) {
@@ -489,7 +532,7 @@ out center;`;
                       .map((el: any) => el?.tags?.name)
                       .filter((name: any) => name);
 
-                    const match = findBestStreetMatch(nameToTry, allStreets, 0.6);
+                    const match = findBestStreetMatch(nameToTry, allStreets, 0.5);
                     if (match) {
                       const matchedEl = streetData.elements.find((el: any) => el?.tags?.name === match.street);
                       const c2 = matchedEl ? pickCenter(matchedEl) : null;
@@ -554,7 +597,7 @@ out center;`;
           console.log(`[POLYGON] Found ${allStreets.length} streets in ${hintBarangay}`);
 
           const nameToTry = street || vicinity || query;
-          const match = findBestStreetMatch(nameToTry, allStreets, 0.6);
+          const match = findBestStreetMatch(nameToTry, allStreets, 0.5);
 
           if (match && match.similarity >= 0.45) {
             console.log(`[POLYGON] ✓ Match: "${match.street}" (${(match.similarity * 100).toFixed(0)}%)`);

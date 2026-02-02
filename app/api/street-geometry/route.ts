@@ -75,6 +75,25 @@ function approxMinDistMeters(lat: number, lon: number, geom: Array<{ lat: number
   return best;
 }
 
+function nearestVertex(lat: number, lon: number, geom: Array<{ lat: number; lon: number }>) {
+  let best: { lat: number; lon: number } | null = null;
+  let bestD = Infinity;
+  const R = 6371000;
+  for (const p of geom) {
+    const dLat = ((p.lat - lat) * Math.PI) / 180;
+    const dLon = ((p.lon - lon) * Math.PI) / 180;
+    const s1 = Math.sin(dLat / 2);
+    const s2 = Math.sin(dLon / 2);
+    const C = s1 * s1 + Math.cos((lat * Math.PI) / 180) * Math.cos((p.lat * Math.PI) / 180) * s2 * s2;
+    const d = 2 * R * Math.atan2(Math.sqrt(C), Math.sqrt(1 - C));
+    if (d < bestD) {
+      bestD = d;
+      best = { lat: p.lat, lon: p.lon };
+    }
+  }
+  return best;
+}
+
 function wayToFeature(way: Way, chosenName?: string) {
   return {
     type: "Feature",
@@ -215,10 +234,23 @@ out tags geom;`;
     const threshold = 0.4; // allow small typos/variants (e.g., AZNAR vs AZNER)
     const features = best && best.score >= threshold ? [wayToFeature(best.way, best.name)] : [];
 
+    let snap: { lat: number; lon: number } | null = null;
+    if (features.length && lat != null && lon != null) {
+      snap = nearestVertex(lat, lon, (best as any).way.geometry);
+      if (!snap) {
+        // fallback: average of vertices
+        const g = (best as any).way.geometry as Array<{ lat: number; lon: number }>;
+        if (g && g.length) {
+          const s = g.reduce((acc, p) => ({ lat: acc.lat + p.lat, lon: acc.lon + p.lon }), { lat: 0, lon: 0 });
+          snap = { lat: s.lat / g.length, lon: s.lon / g.length };
+        }
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       geojson: { type: "FeatureCollection", features },
-      meta: { matched: features.length > 0, bestScore: best?.score ?? null, name: best?.name ?? null },
+      meta: { matched: features.length > 0, bestScore: best?.score ?? null, name: best?.name ?? null, center: snap },
     });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "Unknown error" }, { status: 500 });

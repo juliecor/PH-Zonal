@@ -247,9 +247,32 @@ export default function Home() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) return null;
-      return data.geojson as GeoJSON.FeatureCollection;
+      return data as { ok: true; geojson: GeoJSON.FeatureCollection; meta?: { matched: boolean; bestScore?: number | null; name?: string | null; center?: { lat: number; lon: number } | null } };
     } finally {
       setStreetGeoLoading(false);
+    }
+  }
+
+  // Fetch street geometry given an explicit lat/lon (used to auto-snap the pin after geocoding)
+  async function fetchStreetGeometryAt(r: Row, lat: number, lon: number) {
+    const streetName = String(r["Street/Subdivision-"] ?? "").trim();
+    const cityName = String(r["City-"] ?? "").trim();
+    const provName = String(r["Province-"] ?? "").trim();
+    const brgyName = String(r["Barangay-"] ?? "").trim();
+
+    if (!streetName) return null;
+
+    try {
+      const res = await fetch("/api/street-geometry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ streetName, city: cityName, province: provName, barangay: brgyName, lat, lon }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) return null;
+      return data as { ok: true; geojson: GeoJSON.FeatureCollection; meta?: { matched: boolean; bestScore?: number | null; name?: string | null; center?: { lat: number; lon: number } | null } };
+    } catch {
+      return null;
     }
   }
 
@@ -557,6 +580,21 @@ export default function Home() {
       setSelectedLocation({ lat: finalCenter.lat, lon: finalCenter.lon });
       setGeoLabel(best?.label ?? anchor.label);
       setBoundary(finalCenter.boundary ?? anchor.boundary ?? null);
+
+      // Auto-snap the pointer to the matched street center if available
+      try {
+        const snapResp = await fetchStreetGeometryAt(r, finalCenter.lat, finalCenter.lon);
+        const snap = (snapResp as any)?.meta?.center as { lat: number; lon: number } | undefined;
+        if (snap && Number.isFinite(snap.lat) && Number.isFinite(snap.lon)) {
+          // keep inside barangay boundary
+          const bnd = (finalCenter.boundary ?? anchor.boundary) as Boundary | null;
+          if (!bnd || bnd.length === 0 || isPointInPolygon(snap.lat, snap.lon, bnd)) {
+            setSelectedLocation({ lat: snap.lat, lon: snap.lon });
+            const nm = (snapResp as any)?.meta?.name || String(r["Street/Subdivision-"] || "");
+            setGeoLabel(`${nm} (snapped to street)`);
+          }
+        }
+      } catch {}
 
       // comps disabled
 
@@ -975,9 +1013,9 @@ export default function Home() {
                           }
                           if (!selectedRow) return;
                           setDetailsErr("");
-                          const geo = await fetchStreetGeometryFromSelectedRow(selectedRow);
-                          if (geo && Array.isArray((geo as any).features) && (geo as any).features.length > 0) {
-                            setStreetGeo(geo);
+                          const data = await fetchStreetGeometryFromSelectedRow(selectedRow);
+                          if (data && data.geojson && Array.isArray((data.geojson as any).features) && (data.geojson as any).features.length > 0) {
+                            setStreetGeo(data.geojson);
                             setShowStreetHighlight(true);
                           } else {
                             setStreetGeo(null);
