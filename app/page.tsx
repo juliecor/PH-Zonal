@@ -680,6 +680,32 @@ export default function Home() {
         row: null,
         poi: { counts: poi.counts, items: poi.items } as any,
       });
+
+      // Try to resolve the nearest street and auto-pick a matching zonal row so Selected Property shows a value
+      try {
+        const res = await fetch("/api/street-nearby", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat, lon }),
+        });
+        const near = await res.json().catch(() => null);
+        if (myId !== reqIdRef.current) return;
+        if (res.ok && near?.ok && near?.name) {
+          const params = new URLSearchParams({ domain });
+          if (city) params.set("city", city);
+          if (barangay) params.set("barangay", barangay);
+          params.set("q", String(near.name));
+          params.set("page", "1");
+          const zr = await fetch(`/api/zonal?${params.toString()}`);
+          const zdata = await zr.json().catch(() => null);
+          if (myId !== reqIdRef.current) return;
+          const found = Array.isArray(zdata?.rows) && zdata.rows.length ? zdata.rows[0] : null;
+          if (found) {
+            setSelectedRow(found);
+            setGeoLabel(`${near.name}`);
+          }
+        }
+      } catch {}
     } catch (e: any) {
       if (myId !== reqIdRef.current) return;
       setDetailsErr(e?.message ?? "Failed to load POI");

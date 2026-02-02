@@ -8,6 +8,11 @@ type Way = {
   geometry: Array<{ lat: number; lon: number }>;
 };
 
+// In-memory cache to avoid repeated Overpass calls for the same request
+const SG_CACHE: Map<string, { ts: number; data: any }> = (globalThis as any).__SG_CACHE__ ?? new Map();
+(globalThis as any).__SG_CACHE__ = SG_CACHE;
+const SG_TTL = 1000 * 60 * 60 * 12; // 12 hours
+
 function toNum(v: any): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -139,6 +144,10 @@ export async function POST(req: Request) {
     if (!streetNameRaw) return NextResponse.json({ ok: false, error: "Missing streetName" }, { status: 400 });
     if (lat == null || lon == null) return NextResponse.json({ ok: false, error: "Missing lat/lon" }, { status: 400 });
 
+    const cacheKey = `${normStreet(streetNameRaw)}|${cityRaw.toUpperCase()}|${barangayRaw.toUpperCase()}|${lat.toFixed(4)},${lon.toFixed(4)}`;
+    const hit = SG_CACHE.get(cacheKey);
+    if (hit && Date.now() - hit.ts < SG_TTL) return NextResponse.json(hit.data);
+
     // Special aliasing: In Cebu City Sambag II, "AZNAR ROAD" ~= "AZNAR STREET"
     let streetNorm = normStreet(streetNameRaw);
     const cityN = String(cityRaw).toUpperCase();
@@ -146,7 +155,8 @@ export async function POST(req: Request) {
     if (streetNorm.includes("AZNAR") && cityN.includes("CEBU") && (/(SAMBAG\s*II|SAMBAG\s*2)\b/).test(brgyN)) {
       streetNorm = "AZNAR STREET";
     }
-    let radius = 1500; // wider search window in meters (for centroid/pin offset)
+    // Use a tighter default radius for performance; widen only if needed once
+    let radius = 900;
 
     const tokens = streetNorm
       .split(" ")
@@ -247,11 +257,13 @@ out tags geom;`;
       }
     }
 
-    return NextResponse.json({
+    const payload = {
       ok: true,
       geojson: { type: "FeatureCollection", features },
       meta: { matched: features.length > 0, bestScore: best?.score ?? null, name: best?.name ?? null, center: snap },
-    });
+    };
+    SG_CACHE.set(cacheKey, { ts: Date.now(), data: payload });
+    return NextResponse.json(payload);
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "Unknown error" }, { status: 500 });
   }

@@ -51,21 +51,26 @@ export async function POST(req: Request) {
       return 2 * R * Math.atan2(Math.sqrt(c), Math.sqrt(1 - c));
     };
 
-    async function fetchAmenity(amenity: string) {
+    async function fetchAllAmenitiesOnce() {
+      // Combine amenities in a single Overpass request to reduce latency
       const q = `
-[out:json][timeout:25];
+[out:json][timeout:22];
 (
-  nwr(around:${radius},${lat},${lon})["amenity"="${amenity}"];
+  nwr(around:${radius},${lat},${lon})["amenity"~"^(hospital|clinic|pharmacy|police|fire_station|school|university)$"];
 );
 out center;`;
-      const res = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: q,
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.elements) return [] as any[];
-      return data.elements as any[];
+      try {
+        const res = await fetch("https://overpass-api.de/api/interpreter", {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=UTF-8" },
+          body: q,
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.elements) return [] as any[];
+        return data.elements as any[];
+      } catch {
+        return [] as any[];
+      }
     }
 
     // collect per type (split queries to avoid server caps)
@@ -90,9 +95,7 @@ out center;`;
       pushItem(m, it);
     }
 
-    async function collect(amenity: string, target: Map<string, PoiItem>) {
-      const elements = await fetchAmenity(amenity);
-      for (const el of elements) {
+    function pushElementToTarget(el: any, target: Map<string, PoiItem>, amenity: string) {
         const tags = el?.tags ?? {};
         const name = pickName(tags) || amenity.replace(/_/g, " ").replace(/\b\w/g, (m: string) => m.toUpperCase());
         const cLat = el?.center?.lat ?? el?.lat;
@@ -113,7 +116,6 @@ out center;`;
         }
         const item: PoiItem = { idKey, name, lat: cLat, lon: cLon, type: amenity, phone: phone ?? null, website: website ?? null, photoUrl };
         addWithNameNear(target, item);
-      }
     }
 
     // Google Places enrichment for counts (optional)
@@ -164,13 +166,20 @@ out center;`;
     }
 
     // run in parallel to reduce total latency
+    // Fetch OSM amenities in one server roundtrip
+    const osmElements = await fetchAllAmenitiesOnce();
+    for (const el of osmElements) {
+      const a = String(el?.tags?.amenity || "");
+      if (a === "hospital") pushElementToTarget(el, hospitals, "hospital");
+      else if (a === "clinic") pushElementToTarget(el, clinics, "clinic");
+      else if (a === "pharmacy") pushElementToTarget(el, pharmacies, "pharmacy");
+      else if (a === "police") pushElementToTarget(el, policeStations, "police");
+      else if (a === "fire_station") pushElementToTarget(el, fireStations, "fire_station");
+      else if (a === "school" || a === "university") pushElementToTarget(el, schools, "school");
+    }
+
+    // In parallel enrich using Google Places (optional and fast)
     await Promise.all([
-      collect("hospital", hospitals),
-      collect("school", schools),
-      collect("police", policeStations),
-      collect("fire_station", fireStations),
-      collect("pharmacy", pharmacies),
-      collect("clinic", clinics),
       collectPlaces("hospitals", hospitals),
       collectPlaces("schools", schools),
       collectPlaces("policeStations", policeStations),
