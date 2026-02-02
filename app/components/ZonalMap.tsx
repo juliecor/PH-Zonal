@@ -75,6 +75,7 @@ export default function ZonalMap({
   const circleRef = useRef<any>(null);
   const polylineRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
+  const canvasRendererRef = useRef<any>(null);
 
   const hazardRefs = useRef<{ [k: string]: any | null }>({
     flood: null,
@@ -115,7 +116,11 @@ export default function ZonalMap({
     try {
       map.createPane("streetHighlight");
       const ph = map.getPane("streetHighlight");
-      if (ph) ph.style.zIndex = "650"; // above overlayPane(400) and markerPane(600)
+      if (ph) {
+        ph.style.zIndex = "650"; // above overlayPane(400) and markerPane(600)
+        ph.classList.add("leaflet-zoom-animated"); // keep in sync with map zoom transforms
+        ph.style.pointerEvents = "none"; // don't eat clicks
+      }
     } catch {}
 
     map.on("click", (e: any) => {
@@ -297,6 +302,15 @@ export default function ZonalMap({
     if (!streetGeojsonEnabled || !streetGeojson) return;
 
     // Build a casing (white) + blue overlay for maximum contrast
+    // Use a dedicated Canvas renderer to avoid SVG transform scaling issues in screenshots
+    if (!canvasRendererRef.current) {
+      try {
+        canvasRendererRef.current = (leaflet as any).canvas({ pane: "streetHighlight", padding: 0.5 });
+      } catch {}
+    }
+
+    const renderer = canvasRendererRef.current || undefined;
+
     const casing = leaflet.geoJSON(streetGeojson as any, {
       style: {
         color: "#ffffff",
@@ -304,6 +318,7 @@ export default function ZonalMap({
         opacity: 0.95,
       },
       pane: "streetHighlight",
+      renderer,
     });
 
     const line = leaflet.geoJSON(streetGeojson as any, {
@@ -313,6 +328,7 @@ export default function ZonalMap({
         opacity: 1,
       },
       pane: "streetHighlight",
+      renderer,
     });
 
     const group = leaflet.layerGroup([casing, line]);
