@@ -13,6 +13,40 @@ const ZONAL_CACHE: Map<string, { ts: number; rows: AnyRow[] }> =
 
 const TTL_MS = 1000 * 60 * 30; // 30 minutes
 
+// --- Google canonicalization (cache) ---
+const G_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || "";
+const CANON_CACHE: Map<string, { ts: number; name: string }> = (globalThis as any).__ZONAL_CANON_CACHE__ ?? new Map();
+(globalThis as any).__ZONAL_CANON_CACHE__ = CANON_CACHE;
+const CANON_TTL = 1000 * 60 * 60 * 12; // 12h
+
+async function canonicalizeStreetWithGoogle(q: string, barangay: string, city: string) {
+  try {
+    if (!G_KEY) return null;
+    const key = `${q}|${barangay}|${city}`.toLowerCase();
+    const hit = CANON_CACHE.get(key);
+    if (hit && Date.now() - hit.ts < CANON_TTL) return hit.name;
+
+    const address = [q, barangay, city, "Philippines"].filter(Boolean).join(", ");
+    let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&region=ph&result_type=route&key=${G_KEY}`;
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 1200);
+    const res = await fetch(url, { signal: ac.signal });
+    clearTimeout(t);
+    const j = await res.json().catch(() => null);
+    const r = Array.isArray(j?.results) && j.results.length ? j.results[0] : null;
+    if (!r) return null;
+    const comp = Array.isArray(r.address_components)
+      ? r.address_components.find((c: any) => (c?.types || []).includes("route"))
+      : null;
+    const longName = (comp?.long_name || r?.formatted_address || "").trim();
+    if (!longName) return null;
+    CANON_CACHE.set(key, { ts: Date.now(), name: longName });
+    return longName;
+  } catch {
+    return null;
+  }
+}
+
 // tune this (1000 is a great default)
 const PAGE_SIZE = 1000;
 const HARD_CAP_PAGES = 120; // safety cap (~120k rows)
@@ -146,7 +180,13 @@ export async function GET(req: Request) {
 
     // local text search with fuzzy matching (fast, no upstream call)
     if (q) {
-      const qn = norm(q);
+      // Try Google canonicalization quickly for better matching
+      let qCanon = q;
+      if ((barangay || city) && G_KEY) {
+        const g = await canonicalizeStreetWithGoogle(q, barangay, city).catch(() => null);
+        if (g) qCanon = g;
+      }
+      const qn = norm(qCanon);
       filtered = filtered.filter((row) => {
         const street = String(getVal(row, "Street/Subdivision-") ?? "");
         const vicinity = String(getVal(row, "Vicinity-") ?? "");

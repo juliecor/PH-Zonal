@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "FH Zonal Finder",
   description: "BIR zonal lookup + map + nearby facilities",
+  icons: {
+    icon: "/pictures/filipinohomespointer.png",
+    shortcut: "/pictures/filipinohomespointer.png",
+    apple: "/pictures/filipinohomespointer.png",
+  },
 };
 
 export default function RootLayout({

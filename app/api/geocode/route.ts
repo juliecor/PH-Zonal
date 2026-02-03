@@ -134,9 +134,18 @@ function keywordMatch(userKeywords: string[], mapStreet: string): number {
 }
 
 function canonicalStreet(s: string) {
-  return String(s || "")
+  const t = String(s || "")
     .toUpperCase()
-    .replace(/[^A-Z0-9\s]/g, " ") // remove dots and punctuation
+    .replace(/[^A-Z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return t;
+}
+
+function canonicalStreetBase(s: string) {
+  // remove common type words so "RD" vs "ST" won't block matches
+  return canonicalStreet(s)
+    .replace(/\b(ROAD|RD|STREET|ST|AVENUE|AVE|BOULEVARD|BLVD|DRIVE|DR|LANE|LN)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -149,6 +158,7 @@ function findBestStreetMatch(
   
   const userKeywords = extractKeywords(userStreet);
   const userNormalized = canonicalStreet(userStreet);
+  const userBase = canonicalStreetBase(userStreet);
   
   if (userKeywords.length === 0) return null;
   
@@ -157,6 +167,7 @@ function findBestStreetMatch(
   
   for (const mapStreet of availableStreets) {
     const mapNormalized = canonicalStreet(mapStreet);
+    const mapBase = canonicalStreetBase(mapStreet);
     
     if (userNormalized === mapNormalized) {
       return { street: mapStreet, similarity: 1.0, method: "exact" };
@@ -174,7 +185,9 @@ function findBestStreetMatch(
     }
     
     if (bestScore < 0.98) {
-      const fuzzyScore = calculateSimilarity(userNormalized, mapNormalized);
+      const fuzzy1 = calculateSimilarity(userNormalized, mapNormalized);
+      const fuzzy2 = calculateSimilarity(userBase, mapBase);
+      const fuzzyScore = Math.max(fuzzy1, fuzzy2);
       
       if (fuzzyScore > bestScore && fuzzyScore >= threshold) {
         bestScore = fuzzyScore;
@@ -485,6 +498,14 @@ export async function POST(req: Request) {
         if (data.results?.length > 0) {
           const result = data.results[0];
           const { lat, lng } = result.geometry.location;
+          // Try to extract Google's canonical route name for later refinement
+          let gRouteName: string | null = null;
+          try {
+            const comp = Array.isArray(result.address_components)
+              ? result.address_components.find((c: any) => (c?.types || []).includes("route"))
+              : null;
+            gRouteName = (comp?.long_name || "").trim() || null;
+          } catch {}
 
           console.log(`[GOOGLE] ✓ Found: ${result.formatted_address}`);
 
@@ -496,7 +517,7 @@ export async function POST(req: Request) {
             boundary: null as Array<[number, number]> | null,
           };
 
-          // If barangay hint provided, attach its polygon and keep location inside
+          // If barangay hint provided, attach its polygon; do NOT force centroid if outside
           if (hintBarangay) {
             const polyPack = await getBarangayPoly({
               barangay: hintBarangay,
@@ -508,17 +529,13 @@ export async function POST(req: Request) {
               payload.boundary = polyPack.boundary;
               const inside = pointInBoundary(payload.lat, payload.lon, polyPack.boundary);
               if (!inside) {
-                const c = polyCentroid(polyPack.boundary);
-                if (c) {
-                  payload.lat = c.lat;
-                  payload.lon = c.lon;
-                  payload.label = `${payload.label} (adjusted to ${hintBarangay} centroid)`;
-                }
+                // keep precise Google location; only annotate
+                payload.label = `${payload.label} (outside selected barangay)`;
               }
 
               // Refine: try to match exact street within barangay polygon using OSM
-              const nameToTry = streetAdjRaw || vicinityAdjRaw || queryAdjRaw;
-              if (nameToTry) {
+              const nameToTry = gRouteName || streetAdjRaw || vicinityAdjRaw || queryAdjRaw;
+              if (inside && nameToTry) {
                 const qAllStreets = `
 [out:json][timeout:16];
 (
@@ -536,10 +553,18 @@ out center;`;
                     if (match) {
                       const matchedEl = streetData.elements.find((el: any) => el?.tags?.name === match.street);
                       const c2 = matchedEl ? pickCenter(matchedEl) : null;
+                      // Only override Google when the matched center is close (<= 350m) and similarity high
                       if (c2) {
+                        const dLat = (c2.lat - payload.lat) * Math.PI / 180;
+                        const dLon = (c2.lon - payload.lon) * Math.PI / 180;
+                        const s1 = Math.sin(dLat/2), s2 = Math.sin(dLon/2);
+                        const C = s1*s1 + Math.cos(payload.lat*Math.PI/180)*Math.cos(c2.lat*Math.PI/180)*s2*s2;
+                        const dist = 2 * 6371000 * Math.atan2(Math.sqrt(C), Math.sqrt(1-C));
+                        if (match.similarity >= 0.9 || dist <= 350) {
                         payload.lat = c2.lat;
                         payload.lon = c2.lon;
-                        payload.label = `${match.street} (${hintBarangay}) [OSM]`;
+                          payload.label = `${match.street} (${hintBarangay})`;
+                        }
                       }
                     }
                   }

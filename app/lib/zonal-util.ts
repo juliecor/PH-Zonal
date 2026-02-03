@@ -56,26 +56,66 @@ export function levenshteinDistance(a: string, b: string): number {
 }
 
 // Find best matches for incomplete street names
+// Canonicalize street strings for loose matching
+function canonicalStreetLoose(s: string) {
+  let t = normalizePH(s || "").toLowerCase();
+  // remove dots and punctuation to catch initials like "v. urgello" => "v urgello"
+  t = t.replace(/[\.,]/g, " ");
+  // expand common road-type abbreviations
+  t = t.replace(/\bave\b/g, "avenue")
+       .replace(/\bblvd\b/g, "boulevard")
+       .replace(/\brd\b/g, "road")
+       .replace(/\bst\b/g, "street")
+       .replace(/\bdr\b/g, "drive")
+       .replace(/\bln\b/g, "lane");
+  // collapse multiple spaces
+  t = t.replace(/\s+/g, " ").trim();
+  return t;
+}
+
+function bigrams(s: string) {
+  const arr: string[] = [];
+  for (let i = 0; i < s.length - 1; i++) arr.push(s.slice(i, i + 2));
+  return arr;
+}
+
+function diceCoeff(a: string, b: string) {
+  const A = bigrams(a);
+  const B = bigrams(b);
+  if (!A.length || !B.length) return 0;
+  const setB = new Map<string, number>();
+  for (const x of B) setB.set(x, (setB.get(x) || 0) + 1);
+  let inter = 0;
+  for (const x of A) {
+    const c = setB.get(x) || 0;
+    if (c > 0) { inter++; setB.set(x, c - 1); }
+  }
+  return (2 * inter) / (A.length + B.length);
+}
+
 export function fuzzyMatchStreets(query: string, streets: string[], maxDistance: number = 3): string[] {
   if (!query.trim()) return streets;
 
-  const normalized = normalizePH(query).toUpperCase();
-  const scored = streets
-    .map((street) => ({
-      street,
-      distance: levenshteinDistance(normalized, normalizePH(street).toUpperCase()),
-      exact: normalizePH(street).toUpperCase().includes(normalized),
-    }))
-    .filter((item) => item.exact || item.distance <= maxDistance)
-    .sort((a, b) => {
-      // Prioritize exact substring matches
-      if (a.exact && !b.exact) return -1;
-      if (!a.exact && b.exact) return 1;
-      // Then by distance
-      return a.distance - b.distance;
-    });
+  // canonical forms (handle abbreviations and initials)
+  const q = canonicalStreetLoose(query);
 
-  return scored.map((item) => item.street);
+  const results = streets
+    .map((street) => {
+      const cs = canonicalStreetLoose(street);
+      const exactSub = cs.includes(q) || q.includes(cs);
+      // levenshtein on canonical
+      const d = levenshteinDistance(q.toUpperCase(), cs.toUpperCase());
+      // bigram similarity for noisy inputs (initials, swapped types)
+      const dice = diceCoeff(q, cs);
+
+      // combined score: higher is better
+      const score = (exactSub ? 1 : 0) + Math.max(0, 1 - d / Math.max(q.length, cs.length)) * 0.7 + dice * 0.8;
+      return { street, cs, exactSub, d, dice, score };
+    })
+    .filter((x) => x.exactSub || x.d <= maxDistance || x.dice >= 0.45)
+    .sort((a, b) => b.score - a.score);
+
+  return results.map((r) => r.street);
 }
 
 

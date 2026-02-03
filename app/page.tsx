@@ -9,7 +9,16 @@ import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "./lib
 import { isBadStreet, normalizePH, suggestBusinesses } from "./lib/zonal-util";
 import ReportBuilder from "./components/ReportBuilder";
 
-const ZonalMap = dynamic(() => import("./components/ZonalMap"), { ssr: false });
+const MapComponent = dynamic(async () => {
+  if (typeof window !== "undefined" && (process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as any)) {
+    try {
+      return (await import("./components/GMap")).default;
+    } catch {
+      return (await import("./components/ZonalMap")).default;
+    }
+  }
+  return (await import("./components/ZonalMap")).default;
+}, { ssr: false });
 
 type CompsResp =
   | {
@@ -70,6 +79,8 @@ export default function Home() {
   const [detailsErr, setDetailsErr] = useState("");
   // POI radius (km) - default 1.5km; dropdown offers 1.5 or 3km
   const [poiRadiusKm, setPoiRadiusKm] = useState(1.5);
+  // villages/subdivisions labels
+  const [areaLabels, setAreaLabels] = useState<Array<{lat:number; lon:number; name:string}>>([]);
 
   // Street highlight (GeoJSON + toggle)
   const [streetGeo, setStreetGeo] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -225,6 +236,15 @@ export default function Home() {
     const data = await res.json();
     if (!res.ok || !data?.ok) throw new Error(data?.error ?? "POI failed");
     return data as { ok: true; counts: PoiData["counts"]; items: PoiData["items"] };
+  }
+
+  async function fetchAreaLabels(lat: number, lon: number) {
+    try {
+      const res = await fetch("/api/neighborhoods", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lat, lon, radius: 2000 }) });
+      const j = await res.json().catch(()=>null);
+      if (res.ok && j?.ok && Array.isArray(j.items)) return j.items as Array<{lat:number;lon:number;name:string}>;
+    } catch {}
+    return [] as Array<{lat:number;lon:number;name:string}>;
   }
 
   // fetch street GeoJSON from our API using selected row context and current pin anchor
@@ -584,6 +604,9 @@ export default function Home() {
       setGeoLabel(best?.label ?? anchor.label);
       setBoundary(finalCenter.boundary ?? anchor.boundary ?? null);
 
+      // Fetch nearby subdivisions/villages labels
+      try { setAreaLabels(await fetchAreaLabels(finalCenter.lat, finalCenter.lon)); } catch {}
+
       // Auto-snap the pointer to the matched street center if available
       try {
         const snapResp = await fetchStreetGeometryAt(r, finalCenter.lat, finalCenter.lon);
@@ -663,6 +686,7 @@ export default function Home() {
       const poi = await fetchPoi(lat, lon);
       if (myId !== reqIdRef.current) return;
       setPoiData({ counts: poi.counts, items: poi.items });
+      try { setAreaLabels(await fetchAreaLabels(lat, lon)); } catch {}
 
       const ideas = suggestBusinesses({
         zonalValueText: "",
@@ -1164,7 +1188,7 @@ export default function Home() {
               </div>
 
               <div className="flex-1">
-                <ZonalMap
+                <MapComponent
                   selected={selectedLocation}
                   onPickOnMap={selectLocationFromMap}
                   popupLabel={geoLabel}
@@ -1175,6 +1199,7 @@ export default function Home() {
                   showStreetHighlight={showStreetHighlight}
                   streetGeojson={streetGeo}
                   streetGeojsonEnabled={showStreetHighlight}
+                  areaLabels={areaLabels}
                 />
               </div>
 

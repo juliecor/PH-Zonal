@@ -13,6 +13,111 @@ const SG_CACHE: Map<string, { ts: number; data: any }> = (globalThis as any).__S
 (globalThis as any).__SG_CACHE__ = SG_CACHE;
 const SG_TTL = 1000 * 60 * 60 * 12; // 12 hours
 
+const GOOGLE_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || "";
+
+function degOffsetMeters(lat: number, dxMeters: number, dyMeters: number) {
+  const dLat = dyMeters / 111000;
+  const dLon = dxMeters / (111000 * Math.cos((lat * Math.PI) / 180));
+  return { dLat, dLon };
+}
+
+async function googleReverseRouteName(lat: number, lon: number) {
+  if (!GOOGLE_KEY) return null;
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&result_type=route&key=${GOOGLE_KEY}`;
+    const r = await fetch(url);
+    const j = await r.json().catch(() => null);
+    const route = j?.results?.[0];
+    const comp = Array.isArray(route?.address_components)
+      ? route.address_components.find((c: any) => (c?.types || []).includes("route"))
+      : null;
+    const gName = (comp?.long_name || route?.formatted_address || "").trim();
+    return gName || null;
+  } catch { return null; }
+}
+
+async function googleNearestRoadLine(lat: number, lon: number) {
+  if (!GOOGLE_KEY) return null;
+  try {
+    // sample points around the click within ~60m radius to cover the street segment
+    const pts: string[] = [];
+    const radius = 60;
+    const steps = 12;
+    for (let i = 0; i < steps; i++) {
+      const ang = (2 * Math.PI * i) / steps;
+      const dx = Math.cos(ang) * radius;
+      const dy = Math.sin(ang) * radius;
+      const off = degOffsetMeters(lat, dx, dy);
+      pts.push(`${lat + off.dLat},${lon + off.dLon}`);
+    }
+    const url = `https://roads.googleapis.com/v1/nearestRoads?points=${encodeURIComponent(pts.join("|"))}&key=${GOOGLE_KEY}`;
+    const r = await fetch(url);
+    const j = await r.json().catch(() => null);
+    const arr = Array.isArray(j?.snappedPoints) ? j.snappedPoints : [];
+    if (!arr.length) return null;
+    // group by placeId and take the largest cluster
+    const clusters: Record<string, Array<{ lat: number; lon: number; idx: number }>> = {};
+    arr.forEach((sp: any) => {
+      const pid = sp.placeId || ""; const loc = sp.location || {};
+      if (!pid || typeof loc.latitude !== "number" || typeof loc.longitude !== "number") return;
+      (clusters[pid] = clusters[pid] || []).push({ lat: loc.latitude, lon: loc.longitude, idx: Number(sp.originalIndex ?? 0) });
+    });
+    let bestKey: string | null = null; let bestLen = 0;
+    for (const k of Object.keys(clusters)) {
+      const n = clusters[k].length;
+      if (n > bestLen) { bestLen = n; bestKey = k; }
+    }
+    if (!bestKey) return null;
+    const ptsBest = clusters[bestKey].sort((a,b)=>a.idx-b.idx);
+    const coordinates = ptsBest.map((p)=>[p.lon, p.lat]);
+    if (coordinates.length < 2) return null;
+    const feature = {
+      type: "Feature",
+      properties: { id: bestKey, name: null },
+      geometry: { type: "LineString", coordinates },
+    } as any;
+    const name = await googleReverseRouteName(lat, lon);
+    if (name) feature.properties.name = name;
+    return feature;
+  } catch { return null; }
+}
+
+async function googleSnapToRoadsLine(lat: number, lon: number) {
+  if (!GOOGLE_KEY) return null;
+  try {
+    // Build a short cross path (~120m) through the point to get a good segment
+    const points: Array<{lat:number; lon:number}> = [];
+    const half = 60; // meters
+    const steps = 6;
+    // horizontal
+    for (let i = -steps; i <= steps; i++) {
+      const dx = (i * half) / steps; const off = degOffsetMeters(lat, dx, 0);
+      points.push({ lat: lat + off.dLat, lon: lon + off.dLon });
+    }
+    // vertical
+    for (let i = -steps; i <= steps; i++) {
+      const dy = (i * half) / steps; const off = degOffsetMeters(lat, 0, dy);
+      points.push({ lat: lat + off.dLat, lon: lon + off.dLon });
+    }
+    const path = points.map(p => `${p.lat},${p.lon}`).join("|");
+    const url = `https://roads.googleapis.com/v1/snapToRoads?path=${encodeURIComponent(path)}&interpolate=true&key=${GOOGLE_KEY}`;
+    const r = await fetch(url);
+    const j = await r.json().catch(()=>null);
+    const arr = Array.isArray(j?.snappedPoints) ? j.snappedPoints : [];
+    if (!arr.length) return null;
+    const coordinates = arr.map((sp:any)=>[sp.location?.longitude, sp.location?.latitude]).filter((xy:any)=>typeof xy?.[0]==='number' && typeof xy?.[1]==='number');
+    if (coordinates.length < 2) return null;
+    const feature = {
+      type: "Feature",
+      properties: { id: "snapToRoads", name: null },
+      geometry: { type: "LineString", coordinates },
+    } as any;
+    const name = await googleReverseRouteName(lat, lon);
+    if (name) feature.properties.name = name;
+    return feature;
+  } catch { return null; }
+}
+
 function toNum(v: any): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -155,8 +260,8 @@ export async function POST(req: Request) {
     if (streetNorm.includes("AZNAR") && cityN.includes("CEBU") && (/(SAMBAG\s*II|SAMBAG\s*2)\b/).test(brgyN)) {
       streetNorm = "AZNAR STREET";
     }
-    // Use a tighter default radius for performance; widen only if needed once
-    let radius = 900;
+    // Use a tighter default radius for OSM fallback performance
+    let radius = 600;
 
     const tokens = streetNorm
       .split(" ")
@@ -214,6 +319,22 @@ out tags geom;`;
       return NextResponse.json({ ok: true, geojson: { type: "FeatureCollection", features: [] }, meta: { matched: false } });
       }
       ways.push(...wlist);
+    }
+
+    // Try Google Roads first for a quick, map-consistent line
+    if (GOOGLE_KEY) {
+      let gFeature = await googleSnapToRoadsLine(lat!, lon!);
+      if (!gFeature) gFeature = await googleNearestRoadLine(lat!, lon!);
+      if (gFeature) {
+        const snap = nearestVertex(lat!, lon!, (gFeature.geometry.coordinates as any[]).map(([x,y]:[number,number])=>({lat:y, lon:x})));
+        const payload = {
+          ok: true,
+          geojson: { type: "FeatureCollection", features: [gFeature] },
+          meta: { matched: true, bestScore: 1, name: String(gFeature.properties?.name || streetNameRaw || ""), center: snap },
+        };
+        SG_CACHE.set(cacheKey, { ts: Date.now(), data: payload });
+        return NextResponse.json(payload);
+      }
     }
 
     const target = normStreet(streetNorm);

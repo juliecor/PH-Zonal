@@ -75,6 +75,7 @@ export default function ZonalMap({
   const circleRef = useRef<any>(null);
   const polylineRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
+  const googleReadyRef = useRef<boolean>(false);
   const canvasRendererRef = useRef<any>(null);
 
   const hazardRefs = useRef<{ [k: string]: any | null }>({
@@ -144,19 +145,69 @@ export default function ZonalMap({
     const leafletModule = require("leaflet");
     const leaflet = leafletModule.default || leafletModule;
 
-    const cfg = TILESERVERS[mapType];
+    const GOOGLE_KEY = (process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string | undefined) || undefined;
 
-    if (tileLayerRef.current) {
-      mapRef.current.removeLayer(tileLayerRef.current);
+    async function ensureGoogle() {
+      if (!GOOGLE_KEY) return false;
+      if (googleReadyRef.current && (window as any).google && (leaflet as any).gridLayer?.googleMutant) return true;
+      // load Google Maps JS
+      if (!(window as any).google) {
+        await new Promise<void>((resolve, reject) => {
+          const id = "gmaps-js";
+          if (document.getElementById(id)) return resolve();
+          const s = document.createElement("script");
+          s.id = id;
+          s.async = true;
+          s.defer = true;
+          s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_KEY)}`;
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error("google maps load failed"));
+          document.head.appendChild(s);
+        }).catch(() => {});
+      }
+      // load GoogleMutant plugin
+      if (!(leaflet as any).gridLayer?.googleMutant) {
+        await new Promise<void>((resolve, reject) => {
+          const id = "leaflet-googlemutant";
+          if (document.getElementById(id)) return resolve();
+          const s = document.createElement("script");
+          s.id = id;
+          s.async = true;
+          s.src = "https://unpkg.com/leaflet.gridlayer.googlemutant@0.13.7/Leaflet.GoogleMutant.js";
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error("google mutant load failed"));
+          document.head.appendChild(s);
+        }).catch(() => {});
+      }
+      const ok = Boolean((window as any).google && (leaflet as any).gridLayer?.googleMutant);
+      googleReadyRef.current = ok;
+      return ok;
     }
 
-    const layer = leaflet.tileLayer(cfg.url, {
-      attribution: cfg.attribution,
-      maxZoom: cfg.maxZoom,
-    });
+    async function setBaseLayer() {
+      // remove previous layer
+      if (tileLayerRef.current) {
+        try { mapRef.current.removeLayer(tileLayerRef.current); } catch {}
+        tileLayerRef.current = null;
+      }
 
-    layer.addTo(mapRef.current);
-    tileLayerRef.current = layer;
+      const useGoogle = await ensureGoogle();
+      if (useGoogle) {
+        const gmType = mapType === "satellite" ? "satellite" : mapType === "terrain" ? "terrain" : "roadmap";
+        const layer = (leaflet as any).gridLayer.googleMutant({ type: gmType, maxZoom: 22 });
+        layer.addTo(mapRef.current);
+        tileLayerRef.current = layer;
+        return;
+      }
+
+      // Fallback to OSM
+      const cfg = TILESERVERS[mapType];
+      const layer = leaflet.tileLayer(cfg.url, { attribution: cfg.attribution, maxZoom: cfg.maxZoom });
+      layer.addTo(mapRef.current);
+      tileLayerRef.current = layer;
+    }
+
+    setBaseLayer();
   }, [mapType]);
 
   // Marker + circle (hidden when street highlight is enabled)
@@ -236,54 +287,17 @@ export default function ZonalMap({
     setTimeout(() => emitIdle(), 500);
   }, [selected, popupLabel, highlightRadiusMeters, streetGeojsonEnabled]);
 
-  // Boundary polygon + outline
+  // Boundary polygon removed (keep overlays cleared)
   useEffect(() => {
-    if (!mapRef.current || !boundary || boundary.length === 0) {
-      if (polylineRef.current) {
-        mapRef.current?.removeLayer(polylineRef.current);
-        polylineRef.current = null;
-      }
-      if (polygonRef.current) {
-        mapRef.current?.removeLayer(polygonRef.current);
-        polygonRef.current = null;
-      }
-      return;
+    if (!mapRef.current) return;
+    if (polylineRef.current) {
+      mapRef.current?.removeLayer(polylineRef.current);
+      polylineRef.current = null;
     }
-
-    const leafletModule = require("leaflet");
-    const leaflet = leafletModule.default || leafletModule;
-
-    if (polylineRef.current) mapRef.current.removeLayer(polylineRef.current);
-    if (polygonRef.current) mapRef.current.removeLayer(polygonRef.current);
-
-    const polygonColor = showStreetHighlight ? "#1d4ed8" : "#0891b2";
-    const polygonFillColor = showStreetHighlight ? "#2563eb" : "#06b6d4";
-    const polygonOpacity = showStreetHighlight ? 1 : 0.85;
-    const polygonFillOpacity = showStreetHighlight ? 0.35 : 0.15;
-    const polygonWeight = showStreetHighlight ? 3 : 2.5;
-
-    const polygon = leaflet
-      .polygon(boundary as any, {
-        color: polygonColor,
-        weight: polygonWeight,
-        opacity: polygonOpacity,
-        fill: true,
-        fillColor: polygonFillColor,
-        fillOpacity: polygonFillOpacity,
-      })
-      .addTo(mapRef.current);
-
-    polygonRef.current = polygon;
-
-    const outline = leaflet
-      .polyline(boundary as any, {
-        color: polygonColor,
-        weight: polygonWeight,
-        opacity: polygonOpacity,
-      })
-      .addTo(mapRef.current);
-
-    polylineRef.current = outline;
+    if (polygonRef.current) {
+      mapRef.current?.removeLayer(polygonRef.current);
+      polygonRef.current = null;
+    }
   }, [boundary, showStreetHighlight]);
 
   // ✅ STREET HIGHLIGHT (draw as thick blue line)
