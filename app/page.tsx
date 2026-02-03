@@ -3,7 +3,19 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Map as MapIcon, Satellite as SatelliteIcon, Mountain as TerrainIcon } from "lucide-react";
+import {
+  Map as MapIcon,
+  Satellite as SatelliteIcon,
+  Mountain as TerrainIcon,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Search,
+  SlidersHorizontal,
+  List,
+  PanelRightOpen,
+  PanelRightClose,
+} from "lucide-react";
 
 import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "./lib/types";
 import { isBadStreet, normalizePH, suggestBusinesses } from "./lib/zonal-util";
@@ -33,8 +45,8 @@ export default function Home() {
   const [regionSearch, setRegionSearch] = useState("");
   const [matches, setMatches] = useState<RegionMatch[]>([]);
   const [domain, setDomain] = useState("cebu.zonalvalue.com");
-  const [selectedProvince, setSelectedProvince] = useState("Cebu"); // Track selected province name
-  const [selectedProvinceCity, setSelectedProvinceCity] = useState(""); // Track the actual city in the province
+  const [selectedProvince, setSelectedProvince] = useState("Cebu");
+  const [selectedProvinceCity, setSelectedProvinceCity] = useState("");
 
   // facets
   const [facetCities, setFacetCities] = useState<string[]>([]);
@@ -77,10 +89,8 @@ export default function Home() {
   const [poiLoading, setPoiLoading] = useState(false);
   const [poiData, setPoiData] = useState<PoiData | null>(null);
   const [detailsErr, setDetailsErr] = useState("");
-  // POI radius (km) - default 1.5km; dropdown offers 1.5 or 3km
   const [poiRadiusKm, setPoiRadiusKm] = useState(1.5);
-  // villages/subdivisions labels
-  const [areaLabels, setAreaLabels] = useState<Array<{lat:number; lon:number; name:string}>>([]);
+  const [areaLabels, setAreaLabels] = useState<Array<{ lat: number; lon: number; name: string }>>([]);
 
   // Street highlight (GeoJSON + toggle)
   const [streetGeo, setStreetGeo] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -118,6 +128,13 @@ export default function Home() {
     ],
     []
   );
+
+  // ---------------- UI toggles (NEW - UI only) ----------------
+  const [leftOpen, setLeftOpen] = useState(true); // left drawer
+  const [showFilters, setShowFilters] = useState(false); // filter row inside drawer
+  const [bottomOpen, setBottomOpen] = useState(true); // selected property card
+  const [rightOpen, setRightOpen] = useState(false); // report drawer
+  const [showRegionPicker, setShowRegionPicker] = useState(true); // first-screen UX
 
   // Map BIR display city names to real OSM/Google city names
   function normalizeCityHint(city: string, province?: string) {
@@ -240,14 +257,17 @@ export default function Home() {
 
   async function fetchAreaLabels(lat: number, lon: number) {
     try {
-      const res = await fetch("/api/neighborhoods", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lat, lon, radius: 2000 }) });
-      const j = await res.json().catch(()=>null);
-      if (res.ok && j?.ok && Array.isArray(j.items)) return j.items as Array<{lat:number;lon:number;name:string}>;
+      const res = await fetch("/api/neighborhoods", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat, lon, radius: 2000 }),
+      });
+      const j = await res.json().catch(() => null);
+      if (res.ok && j?.ok && Array.isArray(j.items)) return j.items as Array<{ lat: number; lon: number; name: string }>;
     } catch {}
-    return [] as Array<{lat:number;lon:number;name:string}>;
+    return [] as Array<{ lat: number; lon: number; name: string }>;
   }
 
-  // fetch street GeoJSON from our API using selected row context and current pin anchor
   async function fetchStreetGeometryFromSelectedRow(r: Row) {
     const streetName = String(r["Street/Subdivision-"] ?? "").trim();
     const cityName = String(r["City-"] ?? "").trim();
@@ -267,13 +287,16 @@ export default function Home() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) return null;
-      return data as { ok: true; geojson: GeoJSON.FeatureCollection; meta?: { matched: boolean; bestScore?: number | null; name?: string | null; center?: { lat: number; lon: number } | null } };
+      return data as {
+        ok: true;
+        geojson: GeoJSON.FeatureCollection;
+        meta?: { matched: boolean; bestScore?: number | null; name?: string | null; center?: { lat: number; lon: number } | null };
+      };
     } finally {
       setStreetGeoLoading(false);
     }
   }
 
-  // Fetch street geometry given an explicit lat/lon (used to auto-snap the pin after geocoding)
   async function fetchStreetGeometryAt(r: Row, lat: number, lon: number) {
     const streetName = String(r["Street/Subdivision-"] ?? "").trim();
     const cityName = String(r["City-"] ?? "").trim();
@@ -290,7 +313,11 @@ export default function Home() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) return null;
-      return data as { ok: true; geojson: GeoJSON.FeatureCollection; meta?: { matched: boolean; bestScore?: number | null; name?: string | null; center?: { lat: number; lon: number } | null } };
+      return data as {
+        ok: true;
+        geojson: GeoJSON.FeatureCollection;
+        meta?: { matched: boolean; bestScore?: number | null; name?: string | null; center?: { lat: number; lon: number } | null };
+      };
     } catch {
       return null;
     }
@@ -313,7 +340,6 @@ export default function Home() {
       });
       setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
 
-      // Optionally refresh description to reflect new POI counts
       describeArea({
         lat: selectedLocation.lat,
         lon: selectedLocation.lon,
@@ -329,9 +355,6 @@ export default function Home() {
       setPoiLoading(false);
     }
   }
-
-  // NOTE: /api/comps not implemented; disable comps fetch to avoid 404 noise
-  // async function fetchCompsForRow(r: Row) { return null as any }
 
   async function geocodeLocked(args: {
     query: string;
@@ -417,14 +440,13 @@ export default function Home() {
     return center;
   }
 
-  // Point-in-polygon test (ray casting). Boundary entries are [lat, lon].
   function isPointInPolygon(lat: number, lon: number, boundary: Boundary): boolean {
     const x = lon;
     const y = lat;
     let inside = false;
     for (let i = 0, j = boundary.length - 1; i < boundary.length; j = i++) {
-      const xi = boundary[i][1]; // lon
-      const yi = boundary[i][0]; // lat
+      const xi = boundary[i][1];
+      const yi = boundary[i][0];
       const xj = boundary[j][1];
       const yj = boundary[j][0];
       const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
@@ -433,7 +455,6 @@ export default function Home() {
     return inside;
   }
 
-  // Haversine distance (km)
   function getDistanceKm(aLat: number, aLon: number, bLat: number, bLon: number) {
     const R = 6371;
     const dLat = ((bLat - aLat) * Math.PI) / 180;
@@ -460,13 +481,7 @@ export default function Home() {
     }
   }
 
-  async function describeArea(payload: {
-    lat: number;
-    lon: number;
-    label: string;
-    row?: Row | null;
-    poi?: PoiData | null;
-  }) {
+  async function describeArea(payload: { lat: number; lon: number; label: string; row?: Row | null; poi?: PoiData | null }) {
     setAreaDescErr("");
     setAreaDescLoading(true);
     try {
@@ -488,7 +503,6 @@ export default function Home() {
 
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Failed to describe area");
-
       setAreaDescription(String(data.text ?? "").trim());
     } catch (e: any) {
       setAreaDescErr(e?.message ?? "Failed to generate description");
@@ -508,9 +522,11 @@ export default function Home() {
     setComps(null);
     setAreaDescription("");
     setAreaDescErr("");
-    // Always reset street highlight when switching rows so the map recenters cleanly
     setShowStreetHighlight(false);
     setStreetGeo(null);
+
+    // UI feel: open bottom card + keep left list visible
+    setBottomOpen(true);
 
     setGeoLoading(true);
     try {
@@ -538,10 +554,7 @@ export default function Home() {
         if (parts.length >= 2) candidates.push(`${parts.slice(0, 2).join(" ")}, ${brgy}, ${cty}, ${prov}, Philippines`);
       }
 
-      if (vicinity) {
-        candidates.push(`${vicinity}, ${brgy}, ${cty}, ${prov}, Philippines`);
-      }
-
+      if (vicinity) candidates.push(`${vicinity}, ${brgy}, ${cty}, ${prov}, Philippines`);
       candidates.push(`${normalizePH(brgy)}, ${normalizePH(cty)}, ${normalizePH(prov)}, Philippines`);
 
       let best: { lat: number; lon: number; label: string; boundary?: Boundary | null } | null = null;
@@ -558,14 +571,11 @@ export default function Home() {
         });
 
         if (myId !== reqIdRef.current) return;
+
         if (g) {
-          // Strict barangay lock: only accept result if it falls INSIDE the barangay boundary
           if (anchor.boundary && anchor.boundary.length > 0) {
             const ok = isPointInPolygon(g.lat, g.lon, anchor.boundary as any);
-            if (!ok) {
-              // skip this candidate; try next
-              continue;
-            }
+            if (!ok) continue;
           }
           best = g;
           if (g.label.includes("fuzzy match:")) {
@@ -582,17 +592,14 @@ export default function Home() {
 
       if (myId !== reqIdRef.current) return;
 
-      // Choose final center but enforce barangay lock strictly
       let finalCenter = best ?? anchor;
       if (anchor.boundary && anchor.boundary.length > 0) {
         const inside = isPointInPolygon(finalCenter.lat, finalCenter.lon, anchor.boundary as any);
         if (!inside) {
-          // override to barangay center
           finalCenter = anchor;
           setMatchStatus("✓ Barangay-locked (centroid)");
         }
       } else {
-        // No boundary available: keep within 1.5km of anchor
         const d = getDistanceKm(finalCenter.lat, finalCenter.lon, anchor.lat, anchor.lon);
         if (d > 1.5) {
           finalCenter = anchor;
@@ -604,15 +611,12 @@ export default function Home() {
       setGeoLabel(best?.label ?? anchor.label);
       setBoundary(finalCenter.boundary ?? anchor.boundary ?? null);
 
-      // Fetch nearby subdivisions/villages labels
       try { setAreaLabels(await fetchAreaLabels(finalCenter.lat, finalCenter.lon)); } catch {}
 
-      // Auto-snap the pointer to the matched street center if available
       try {
         const snapResp = await fetchStreetGeometryAt(r, finalCenter.lat, finalCenter.lon);
         const snap = (snapResp as any)?.meta?.center as { lat: number; lon: number } | undefined;
         if (snap && Number.isFinite(snap.lat) && Number.isFinite(snap.lon)) {
-          // keep inside barangay boundary
           const bnd = (finalCenter.boundary ?? anchor.boundary) as Boundary | null;
           if (!bnd || bnd.length === 0 || isPointInPolygon(snap.lat, snap.lon, bnd)) {
             setSelectedLocation({ lat: snap.lat, lon: snap.lon });
@@ -621,8 +625,6 @@ export default function Home() {
           }
         }
       } catch {}
-
-      // comps disabled
 
       setPoiLoading(true);
       const poi = await fetchPoi(finalCenter.lat, finalCenter.lon);
@@ -635,10 +637,8 @@ export default function Home() {
         classification: String(r["Classification-"] ?? ""),
         poi,
       });
-
       setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
 
-      // ✅ AI description (after POI so it can use counts)
       describeArea({
         lat: finalCenter.lat,
         lon: finalCenter.lon,
@@ -659,7 +659,6 @@ export default function Home() {
   async function selectLocationFromMap(lat: number, lon: number) {
     const myId = ++reqIdRef.current;
 
-    // Enforce barangay lock on map clicks as well
     if (boundary && boundary.length > 0) {
       const inside = isPointInPolygon(lat, lon, boundary);
       if (!inside) {
@@ -677,9 +676,11 @@ export default function Home() {
     setAreaDescription("");
     setAreaDescErr("");
 
-    // reset street highlight when picking on map
     setShowStreetHighlight(false);
     setStreetGeo(null);
+
+    // UI: open bottom card
+    setBottomOpen(true);
 
     setPoiLoading(true);
     try {
@@ -688,15 +689,9 @@ export default function Home() {
       setPoiData({ counts: poi.counts, items: poi.items });
       try { setAreaLabels(await fetchAreaLabels(lat, lon)); } catch {}
 
-      const ideas = suggestBusinesses({
-        zonalValueText: "",
-        classification: "",
-        poi,
-      });
-
+      const ideas = suggestBusinesses({ zonalValueText: "", classification: "", poi });
       setIdealBusinessText(ideas.map((x) => `• ${x}`).join(""));
 
-      // ✅ AI description for clicked point (no row context)
       describeArea({
         lat,
         lon,
@@ -705,7 +700,6 @@ export default function Home() {
         poi: { counts: poi.counts, items: poi.items } as any,
       });
 
-      // Try to resolve the nearest street and auto-pick a matching zonal row so Selected Property shows a value
       try {
         const res = await fetch("/api/street-nearby", {
           method: "POST",
@@ -750,492 +744,586 @@ export default function Home() {
   const showingFrom = totalRows ? (page - 1) * itemsPerPage + 1 : 0;
   const showingTo = totalRows ? Math.min(page * itemsPerPage, totalRows) : rows.length;
 
+  // ---------------- Small UI helpers ----------------
+  function fmtPeso(v: any) {
+    const s = String(v ?? "").trim();
+    if (!s) return "-";
+    return `₱${s}`;
+  }
+
+  const selectedTitle = selectedRow
+    ? `${String(selectedRow["Barangay-"] ?? "")}, ${String(selectedRow["City-"] ?? "")}, ${String(selectedRow["Province-"] ?? "")}`
+    : geoLabel || "Select a property";
+
   return (
-    <main className="min-h-screen bg-slate-50 text-gray-900">
-      <header className="border-b bg-white shadow-sm sticky top-0 z-40">
-        <div className="mx-auto max-w-7xl px-6 py-4">
-          <div className="flex flex-col items-center text-center gap-1">
-            <Image
-              src="/pictures/FilipinoHomes.png"
-              alt="Filipino Homes"
-              width={280}
-              height={70}
-              className="h-16 md:h-20 w-auto"
-              priority
-            />
+    <main className="h-screen w-screen overflow-hidden bg-slate-100 text-gray-900">
+      {/* Fullscreen Map */}
+      <div className="absolute inset-0">
+        <MapComponent
+          selected={selectedLocation}
+          onPickOnMap={selectLocationFromMap}
+          popupLabel={geoLabel}
+          boundary={boundary}
+          highlightRadiusMeters={80}
+          containerId="map-container"
+          mapType={mapType as "street" | "terrain" | "satellite"}
+          showStreetHighlight={showStreetHighlight}
+          streetGeojson={streetGeo}
+          streetGeojsonEnabled={showStreetHighlight}
+          areaLabels={areaLabels}
+        />
+      </div>
+
+      {/* Top Bar Logo (minimal, Google-like) */}
+      <div className="absolute top-4 left-4 z-30">
+        <div className="rounded-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-lg px-3 py-2 flex items-center gap-3">
+          <Image
+            src="/pictures/FilipinoHomes.png"
+            alt="Filipino Homes"
+            width={180}
+            height={40}
+            className="h-10 w-auto"
+            priority
+          />
+          <div className="hidden md:block text-xs text-gray-500 border-l pl-3">
+            <div className="font-semibold text-gray-700 leading-tight">Zonal Value</div>
+            <div className="leading-tight">{domain}</div>
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className="w-full px-3 sm:px-4 py-4 space-y-4">
-        {/* Region Selector */}
-        <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow">         <h2 className="text-base font-semibold text-gray-900 mb-4">Select Province/City Database</h2>
+      {/* Map Type Buttons (top-right floating, compact) */}
+      <div className="absolute top-4 right-4 z-30">
+        <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-200 p-1.5 flex gap-1">
+          <button
+            onClick={() => setMapType("street")}
+            className={`p-2 rounded-xl transition ${mapType === "street" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"}`}
+            title="Street Map"
+          >
+            <MapIcon size={18} />
+          </button>
+          <button
+            onClick={() => setMapType("terrain")}
+            className={`p-2 rounded-xl transition ${mapType === "terrain" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"}`}
+            title="Terrain Map"
+          >
+            <TerrainIcon size={18} />
+          </button>
+          <button
+            onClick={() => setMapType("satellite")}
+            className={`p-2 rounded-xl transition ${mapType === "satellite" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"}`}
+            title="Satellite Map"
+          >
+            <SatelliteIcon size={18} />
+          </button>
+        </div>
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4">
-            <div className="md:col-span-9">
-              <label className="block text-xs font-medium text-gray-700 mb-2">Search</label>
-              <input
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={regionSearch}
-                onChange={(e) => setRegionSearch(e.target.value)}
-                placeholder="Type: cebu, bohol, davao..."
-              />
-            </div>
-            <div className="md:col-span-3 flex gap-2 items-end">
-              <button
-                onClick={findRegions}
-                className="w-full rounded-lg bg-blue-600 text-white px-4 py-2.5 text-sm font-medium hover:bg-blue-700 transition"
-              >
-                Find Regions
-              </button>
-            </div>
-          </div>
-
-          {matches.length > 0 && (
-            <div className="max-h-56 overflow-auto rounded-lg border border-gray-200">
-              {matches.map((m, idx) => (
-                <button
-                  key={idx}
-                  className="w-full text-left px-4 py-3 text-sm hover:bg-blue-50 border-b last:border-b-0 transition"
-                  onClick={async () => {
-                    setDomain(m.domain);
-                    setSelectedProvince(m.province); // Set the selected province
-                    setSelectedProvinceCity(m.city); // Store the province's main city
-                    setCity("");
-                    setBarangay("");
-                    setClassification("");
-                    setQ("");
-                    setPage(1);
-
-                    setRows([]);
-                    setErr("");
-                    setSelectedRow(null);
-                    setPoiData(null);
-                    setDetailsErr("");
-                    setFacetCities([]);
-                    setFacetBarangays([]);
-                    setBoundary(null);
-                    setComps(null);
-                    setAreaDescription("");
-                    setAreaDescErr("");
-
-                    await loadCities(m.domain);
-                    searchZonal({ page: 1 });
-
-                    flyToFilters(m.city, "", m.province);
-                  }}
-                >
-                  <div className="font-semibold text-gray-900">
-                    {m.province} — {m.city}
+      {/* LEFT DRAWER (Google Maps style) */}
+      <div className="absolute top-0 left-0 z-40 h-full flex">
+        {/* Drawer */}
+        <div
+          className={[
+            "h-full bg-white/95 backdrop-blur border-r border-gray-200 shadow-2xl transition-all duration-300",
+            leftOpen ? "w-[360px] sm:w-[400px]" : "w-0",
+          ].join(" ")}
+        >
+          {leftOpen && (
+            <div className="h-full flex flex-col">
+              {/* Search header */}
+              <div className="p-4 pb-3 border-b border-gray-200">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                      <input
+                        value={regionSearch}
+                        onChange={(e) => setRegionSearch(e.target.value)}
+                        placeholder="Enter province (e.g., Cebu, Bohol, Davao)"
+                        className="w-full rounded-2xl border border-gray-300 bg-white px-10 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      {regionSearch && (
+                        <button
+                          onClick={() => setRegionSearch("")}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                          title="Clear"
+                        >
+                          <X size={18} />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5">{m.domain}</div>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+                  <button
+                    onClick={() => {
+                      setShowRegionPicker(true);
+                      findRegions();
+                    }}
+                    className="rounded-2xl bg-blue-600 text-white px-4 py-3 text-sm font-semibold hover:bg-blue-700 transition shadow"
+                  >
+                    Find
+                  </button>
+                </div>
 
-        {/* Currently Selected Region Display */}
-        {selectedProvince && (
-          <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 shadow">
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Currently Selected Province</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{selectedProvince}</p>
-                <p className="text-sm text-gray-700 mt-2">Database: <span className="font-semibold text-blue-600">{domain}</span></p>
-              </div>
-            </div>
-          </div>
-        )}
+                {/* Small toolbar row */}
+                <div className="mt-3 flex items-center justify-between">
+                  <button
+                    onClick={() => setShowFilters((v) => !v)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    <SlidersHorizontal size={16} />
+                    Filters
+                  </button>
 
-        {/* Filters */}
-        <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 shadow">
-          <h2 className="text-lg font-bold text-gray-900 mb-6">Search & Filter Properties</h2>
+                  <button
+                    onClick={() => setRightOpen((v) => !v)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    title="Open report panel"
+                  >
+                    {rightOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+                    Report
+                  </button>
+                </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4">
-            {/* City Selection */}
-            <div className="sm:col-span-1 lg:col-span-3">
-              <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">City in {selectedProvince}</label>
-              <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                value={city}
-                onChange={(e) => {
-                  const nextCity = e.target.value;
-                  setCity(nextCity);
-                  // Reset street highlight when changing city filter
-                  setShowStreetHighlight(false);
-                  setStreetGeo(null);
-                  setBarangay("");
-                  setPage(1);
-                  setFacetBarangays([]);
-                  loadBarangays(domain, nextCity);
+                {/* Region picker (first UX) */}
+                {showRegionPicker && matches.length > 0 && (
+                  <div className="mt-3 max-h-56 overflow-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+                    {matches.map((m, idx) => (
+                      <button
+                        key={idx}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-blue-50 border-b last:border-b-0 transition"
+                        onClick={async () => {
+                          setDomain(m.domain);
+                          setSelectedProvince(m.province);
+                          setSelectedProvinceCity(m.city);
 
-                  if (nextCity) {
-                    const provinceFromDomain = domain.split(".")[0];
-                    const provinceName = provinceFromDomain.charAt(0).toUpperCase() + provinceFromDomain.slice(1);
-                    flyToFilters(nextCity, "", provinceName);
-                  }
-                }}
-                disabled={facetsLoading || facetCities.length === 0}
-              >
-                <option value="">All Cities</option>
-                {facetCities.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-              {facetsLoading && <p className="text-xs text-blue-600 mt-1">Loading cities...</p>}
-            </div>
+                          setCity("");
+                          setBarangay("");
+                          setClassification("");
+                          setQ("");
+                          setPage(1);
 
-            {/* Barangay Selection */}
-            <div className="sm:col-span-1 lg:col-span-3">
-              <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Barangay {city && `in ${city}`}</label>
-              <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                value={barangay}
-                onChange={(e) => {
-                  const nextBrgy = e.target.value;
-                  setBarangay(nextBrgy);
-                  // Reset street highlight when changing barangay filter
-                  setShowStreetHighlight(false);
-                  setStreetGeo(null);
-                  setPage(1);
+                          setRows([]);
+                          setErr("");
+                          setSelectedRow(null);
+                          setPoiData(null);
+                          setDetailsErr("");
+                          setFacetCities([]);
+                          setFacetBarangays([]);
+                          setBoundary(null);
+                          setComps(null);
+                          setAreaDescription("");
+                          setAreaDescErr("");
 
-                  if (city && nextBrgy) {
-                    const provinceFromDomain = domain.split(".")[0];
-                    const provinceName = provinceFromDomain.charAt(0).toUpperCase() + provinceFromDomain.slice(1);
-                    flyToFilters(city, nextBrgy, provinceName);
-                  }
-                }}
-                disabled={!city || barangaysLoading}
-              >
-                <option value="">All Barangays</option>
-                {facetBarangays.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-              {barangaysLoading && <p className="text-xs text-blue-600 mt-1">Loading barangays…</p>}
-            </div>
+                          await loadCities(m.domain);
+                          searchZonal({ page: 1 });
 
-            {/* Classification */}
-            <div className="sm:col-span-1 lg:col-span-3">
-              <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Classification</label>
-              <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={classification}
-                onChange={(e) => {
-                  setClassification(e.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">All Classifications</option>
-                <option value="COMMERCIAL REGULAR">COMMERCIAL REGULAR</option>
-                <option value="COMMERCIAL CONDOMINIUM">COMMERCIAL CONDOMINIUM</option>
-                <option value="COMMERCIAL">COMMERCIAL</option>
-                <option value="RESIDENTIAL">RESIDENTIAL</option>
-                <option value="RESIDENTIAL CONDOMINIUM">RESIDENTIAL CONDOMINIUM</option>
-                <option value="INDUSTRIAL">INDUSTRIAL</option>
-                <option value="AGRICULTURAL">AGRICULTURAL</option>
-                <option value="SPECIAL">SPECIAL</option>
-                <option value="MIXED-USE">MIXED-USE</option>
-                <option value="ROAD LOT">ROAD LOT</option>
-                <option value="OPEN SPACE">OPEN SPACE</option>
-              </select>
-            </div>
+                          flyToFilters(m.city, "", m.province);
 
-            {/* Search/Street */}
-            <div className="sm:col-span-1 lg:col-span-3">
-              <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Search Street/Vicinity</label>
-              <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Type street name..."
-                value={q}
-                onChange={(e) => {
-                  setQ(e.target.value);
-                  setPage(1);
-                }}
-              />
-            </div>
-          </div>
+                          // UI: collapse region picker after selection (like Google)
+                          setShowRegionPicker(false);
+                          setShowFilters(true);
+                        }}
+                      >
+                        <div className="font-semibold text-gray-900">
+                          {m.province} — {m.city}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">{m.domain}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
 
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-5">
-            <button
-              onClick={() => searchZonal({ page: 1 })}
-              disabled={loading}
-              className="px-6 py-2.5 rounded-lg bg-blue-600 text-white font-medium text-sm hover:bg-blue-700 transition disabled:opacity-50 order-1 sm:order-none"
-            >
-              {loading ? "Searching..." : "Search"}
-            </button>
-            <button
-              onClick={() => {
-                setCity("");
-                setBarangay("");
-                setClassification("");
-                setQ("");
-                setPage(1);
-                setRows([]);
-              }}
-              className="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium text-sm hover:bg-gray-50 transition order-2 sm:order-none"
-            >
-              Clear
-            </button>
-          </div>
+                {/* Filters (compact chips) */}
+                {showFilters && (
+                  <div className="mt-3 space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={city}
+                        onChange={(e) => {
+                          const nextCity = e.target.value;
+                          setCity(nextCity);
+                          setShowStreetHighlight(false);
+                          setStreetGeo(null);
+                          setBarangay("");
+                          setPage(1);
+                          setFacetBarangays([]);
+                          loadBarangays(domain, nextCity);
 
-          {err && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>
-          )}
+                          if (nextCity) {
+                            const provinceFromDomain = domain.split(".")[0];
+                            const provinceName = provinceFromDomain.charAt(0).toUpperCase() + provinceFromDomain.slice(1);
+                            flyToFilters(nextCity, "", provinceName);
+                          }
+                        }}
+                        disabled={facetsLoading || facetCities.length === 0}
+                      >
+                        <option value="">All Cities</option>
+                        {facetCities.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
 
-          <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-            <div className="text-xs text-gray-600">
-              {totalRows ? (
-                <>
-                  Showing <span className="font-semibold">{showingFrom.toLocaleString()}</span> to{" "}
-                  <span className="font-semibold">{showingTo.toLocaleString()}</span> of{" "}
-                  <span className="font-semibold">{totalRows.toLocaleString()}</span> results
-                </>
-              ) : (
-                "No results"
-              )}
-            </div>
+                      <select
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={barangay}
+                        onChange={(e) => {
+                          const nextBrgy = e.target.value;
+                          setBarangay(nextBrgy);
+                          setShowStreetHighlight(false);
+                          setStreetGeo(null);
+                          setPage(1);
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => searchZonal({ page: Math.max(1, page - 1) })}
-                disabled={loading || !hasPrev}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => searchZonal({ page: page + 1 })}
-                disabled={loading || !hasNext}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </section>
+                          if (city && nextBrgy) {
+                            const provinceFromDomain = domain.split(".")[0];
+                            const provinceName = provinceFromDomain.charAt(0).toUpperCase() + provinceFromDomain.slice(1);
+                            flyToFilters(city, nextBrgy, provinceName);
+                          }
+                        }}
+                        disabled={!city || barangaysLoading}
+                      >
+                        <option value="">All Barangays</option>
+                        {facetBarangays.map((b) => (
+                          <option key={b} value={b}>
+                            {b}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-        {/* Main Content */}
-        <section className="rounded-lg border border-gray-200 bg-white overflow-hidden shadow">
-          <div className="flex h-[80vh]">
-            {/* LEFT PANEL */}
-            <aside className="w-72 lg:w-80 border-r border-gray-200 bg-white flex flex-col overflow-hidden">              <div className="p-4 border-b border-gray-200 flex-shrink-0">
-                <h3 className="text-sm font-semibold text-gray-900">Selected Property</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={classification}
+                        onChange={(e) => {
+                          setClassification(e.target.value);
+                          setPage(1);
+                        }}
+                      >
+                        <option value="">Classification (Optional)</option>
+                        <option value="COMMERCIAL REGULAR">COMMERCIAL REGULAR</option>
+                        <option value="COMMERCIAL CONDOMINIUM">COMMERCIAL CONDOMINIUM</option>
+                        <option value="COMMERCIAL">COMMERCIAL</option>
+                        <option value="RESIDENTIAL">RESIDENTIAL</option>
+                        <option value="RESIDENTIAL CONDOMINIUM">RESIDENTIAL CONDOMINIUM</option>
+                        <option value="INDUSTRIAL">INDUSTRIAL</option>
+                        <option value="AGRICULTURAL">AGRICULTURAL</option>
+                        <option value="SPECIAL">SPECIAL</option>
+                        <option value="MIXED-USE">MIXED-USE</option>
+                        <option value="ROAD LOT">ROAD LOT</option>
+                        <option value="OPEN SPACE">OPEN SPACE</option>
+                      </select>
 
-                {!selectedRow ? (
-                  <p className="text-xs text-gray-500 mt-2">Select a property or click the map</p>
-                ) : (
-                  <div className="mt-3 space-y-2">
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-medium text-gray-600">Zonal Value</p>
-                        <p className="text-2xl font-bold text-gray-900">₱{String(selectedRow["ZonalValuepersqm.-"] ?? "")}</p>
-                        <p className="text-xs text-gray-600 mt-1">per square meter</p>
-                      </div>
-                      <img
-                        src="/pictures/land-value.png"
-                        alt="Land Value"
-                        className="ml-4 w-12 h-12 md:w-14 md:h-14 flex-shrink-0"
-                        style={{ filter: 'invert(45%) sepia(12%) saturate(2470%) hue-rotate(90deg) brightness(92%) contrast(92%)' }}
-                        loading="lazy"
+                      <input
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Street / Vicinity…"
+                        value={q}
+                        onChange={(e) => {
+                          setQ(e.target.value);
+                          setPage(1);
+                        }}
                       />
                     </div>
 
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="font-medium text-gray-700">City:</span> {String(selectedRow["City-"] ?? "")}
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-700">Barangay:</span> {String(selectedRow["Barangay-"] ?? "")}
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-700">Street:</span> {String(selectedRow["Street/Subdivision-"] ?? "")}
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-700">Classification:</span> {String(selectedRow["Classification-"] ?? "")}
-                      </div>
-                    </div>
-
-                    {selectedRow && (
+                    <div className="flex gap-2">
                       <button
-                        onClick={async () => {
-                          if (showStreetHighlight) {
-                            setShowStreetHighlight(false);
-                            setStreetGeo(null);
-                            return;
-                          }
-                          if (!selectedRow) return;
-                          setDetailsErr("");
-                          const data = await fetchStreetGeometryFromSelectedRow(selectedRow);
-                          if (data && data.geojson && Array.isArray((data.geojson as any).features) && (data.geojson as any).features.length > 0) {
-                            setStreetGeo(data.geojson);
-                            setShowStreetHighlight(true);
-                          } else {
-                            setStreetGeo(null);
-                            setShowStreetHighlight(false);
-                            setDetailsErr("Street line not found near this pin.");
-                          }
-                        }}
-                        disabled={streetGeoLoading}
-                        className={`mt-2 w-full px-3 py-2 rounded-md text-xs font-medium text-white transition ${
-                          showStreetHighlight ? "bg-blue-700 hover:bg-blue-800" : "bg-blue-600 hover:bg-blue-700"
-                        }`}
+                        onClick={() => searchZonal({ page: 1 })}
+                        disabled={loading}
+                        className="flex-1 rounded-xl bg-blue-600 text-white px-4 py-2.5 text-xs font-bold hover:bg-blue-700 transition disabled:opacity-50"
                       >
-                        {streetGeoLoading ? "Finding street…" : showStreetHighlight ? "Hide Street Highlight" : "Highlight Street on Map"}
+                        {loading ? "Searching…" : "Search"}
                       </button>
-                    )}
+                      <button
+                        onClick={() => {
+                          setCity("");
+                          setBarangay("");
+                          setClassification("");
+                          setQ("");
+                          setPage(1);
+                          setRows([]);
+                        }}
+                        className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                    {comps?.ok && comps.stats ? (
-                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs">
-                        <p className="font-semibold text-gray-900">Comps (same barangay)</p>
-                        <div className="mt-1 space-y-1 text-gray-700">
-                          <div>
-                            Count: <span className="font-semibold">{comps.stats.count}</span>
-                          </div>
-                          <div>
-                            Min: <span className="font-semibold">{comps.stats.min == null ? "-" : comps.stats.min.toLocaleString()}</span>
-                          </div>
-                          <div>
-                            Median: <span className="font-semibold">{comps.stats.median == null ? "-" : comps.stats.median.toLocaleString()}</span>
-                          </div>
-                          <div>
-                            Max: <span className="font-semibold">{comps.stats.max == null ? "-" : comps.stats.max.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {geoLoading && (
-                      <p className="text-xs text-gray-500 flex items-center gap-2">
-                        <span className="animate-spin">⟳</span> Geocoding…
-                      </p>
-                    )}
-                    {geoLabel && <p className="text-xs text-gray-600 bg-gray-50 rounded p-2">{geoLabel}</p>}
-
-                    {matchStatus && (
-                      <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg p-2.5">
-                        {matchStatus}
-                      </div>
-                    )}
-
-                    {detailsErr && (
-                      <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">
-                        {detailsErr}
-                      </div>
-                    )}
+                {err && (
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {err}
                   </div>
                 )}
               </div>
 
-              <div className="flex-1 overflow-auto bg-gray-50">
-                <div className="sticky top-0 p-3 border-b border-gray-200 bg-white">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">PROPERTIES ({rows.length})</p>
+              {/* Results list */}
+              <div className="flex-1 overflow-auto">
+                <div className="px-4 py-3 sticky top-0 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between">
+                  <div className="text-xs font-extrabold tracking-wide text-gray-700 flex items-center gap-2">
+                    <List size={16} />
+                    RESULTS
+                  </div>
+                  <div className="text-[11px] text-gray-600">
+                    {totalRows ? (
+                      <>
+                        {showingFrom.toLocaleString()}–{showingTo.toLocaleString()} of {totalRows.toLocaleString()}
+                      </>
+                    ) : (
+                      "No results"
+                    )}
+                  </div>
                 </div>
 
-                {loading && <p className="text-xs text-gray-500 p-3">Loading...</p>}
+                {loading && <p className="text-xs text-gray-500 px-4 py-3">Loading…</p>}
 
                 <div className="divide-y divide-gray-200">
                   {rows.map((r, i) => (
                     <button
                       key={`${r.rowIndex}-${i}`}
                       onClick={() => selectRow(r)}
-                      className={`w-full text-left p-3 transition border-b border-gray-200 last:border-b-0 ${selectedRow?.rowIndex === r.rowIndex ? "bg-blue-100 border-l-4 border-l-blue-600" : "hover:bg-blue-50"}`}
+                      className={[
+                        "w-full text-left px-4 py-3 transition",
+                        selectedRow?.rowIndex === r.rowIndex
+                          ? "bg-blue-50 border-l-4 border-l-blue-600"
+                          : "hover:bg-gray-50",
+                      ].join(" ")}
                     >
-                      <div className="font-semibold text-xs text-gray-900">{String(r["Street/Subdivision-"] ?? "").slice(0, 28)}</div>
-                      <div className="text-xs text-gray-600 mt-1">
-                        {String(r["Barangay-"] ?? "")}, {String(r["City-"] ?? "")}
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-extrabold text-[13px] text-gray-900">
+                            {String(r["Street/Subdivision-"] ?? "").slice(0, 44) || "Unnamed"}
+                          </div>
+                          <div className="text-xs text-gray-600 mt-1">
+                            {String(r["Barangay-"] ?? "")}, {String(r["City-"] ?? "")}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[12px] font-black text-blue-700">{fmtPeso(r["ZonalValuepersqm.-"])}</div>
+                          <div className="text-[10px] text-gray-500">per sqm</div>
+                        </div>
                       </div>
-                      <div className="font-bold text-blue-600 text-sm mt-1.5">₱{String(r["ZonalValuepersqm.-"] ?? "")}</div>
                     </button>
                   ))}
                 </div>
-              </div>
-            </aside>
 
-            {/* CENTER PANEL */}
-            <div className="flex-1 flex flex-col relative bg-gray-50">
-              <div className="absolute top-4 right-4 z-10 space-y-2">
-                {/* Map type buttons */}
-                <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-1 flex gap-1">
+                {/* Pagination */}
+                <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-2 bg-white/95 backdrop-blur">
                   <button
-                    onClick={() => setMapType("street")}
-                    className={`p-2 rounded transition ${mapType === "street" ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
-                    title="Street Map"
+                    onClick={() => searchZonal({ page: Math.max(1, page - 1) })}
+                    disabled={loading || !hasPrev}
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
                   >
-                    <MapIcon size={18} />
+                    Previous
                   </button>
+                  <div className="text-[11px] text-gray-600">
+                    Page <span className="font-bold">{page}</span>
+                    {pageCount ? <> / {pageCount}</> : null}
+                  </div>
                   <button
-                    onClick={() => setMapType("terrain")}
-                    className={`p-2 rounded transition ${mapType === "terrain" ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
-                    title="Terrain Map"
+                    onClick={() => searchZonal({ page: page + 1 })}
+                    disabled={loading || !hasNext}
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
                   >
-                    <TerrainIcon size={18} />
-                  </button>
-                  <button
-                    onClick={() => setMapType("satellite")}
-                    className={`p-2 rounded transition ${mapType === "satellite" ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
-                    title="Satellite Map"
-                  >
-                    <SatelliteIcon size={18} />
+                    Next
                   </button>
                 </div>
-              </div>
-
-              <div className="flex-1">
-                <MapComponent
-                  selected={selectedLocation}
-                  onPickOnMap={selectLocationFromMap}
-                  popupLabel={geoLabel}
-                  boundary={boundary}
-                  highlightRadiusMeters={80}
-                  containerId="map-container"
-                  mapType={mapType as "street" | "terrain" | "satellite"}
-                  showStreetHighlight={showStreetHighlight}
-                  streetGeojson={streetGeo}
-                  streetGeojsonEnabled={showStreetHighlight}
-                  areaLabels={areaLabels}
-                />
-              </div>
-
-              {/* ✅ Description below map */}
-              <div className="border-t border-gray-200 bg-white p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-gray-700">Area Description </p>
-                  {areaDescLoading && <p className="text-xs text-gray-500">Generating…</p>}
-                </div>
-
-                {areaDescErr ? (
-                  <p className="text-xs text-red-600 mt-2">{areaDescErr}</p>
-                ) : (
-                  <p className="text-sm text-gray-800 mt-2 leading-relaxed">
-                    {areaDescription || "Select a property or click the map to generate a short description."}
-                  </p>
-                )}
               </div>
             </div>
+          )}
+        </div>
 
-            {/* RIGHT PANEL */}
-            <ReportBuilder
-              selectedLocation={selectedLocation}
-              selectedRow={selectedRow}
-              geoLabel={geoLabel}
-              poiLoading={poiLoading}
-              poiData={poiData}
-                poiRadiusKm={poiRadiusKm}
-                onChangePoiRadius={onChangePoiRadius}
-              idealBusinessText={idealBusinessText}
-              setIdealBusinessText={setIdealBusinessText}
-              areaDescription={areaDescription}
-              mapContainerId="map-container"
-            />
+        {/* Drawer Toggle Button */}
+        <button
+          onClick={() => setLeftOpen((v) => !v)}
+          className="h-14 mt-6 rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-xl px-3 flex items-center justify-center hover:bg-white transition z-50"
+          title={leftOpen ? "Collapse panel" : "Expand panel"}
+        >
+          {leftOpen ? <ChevronLeft /> : <ChevronRight />}
+        </button>
+      </div>
+
+      {/* RIGHT REPORT DRAWER (overlay, UI only) */}
+      <div
+        className={[
+          "absolute top-0 right-0 z-40 h-full transition-all duration-300",
+          rightOpen ? "w-[360px] sm:w-[420px]" : "w-0",
+        ].join(" ")}
+      >
+        {rightOpen && (
+          <div className="h-full bg-white/95 backdrop-blur border-l border-gray-200 shadow-2xl">
+            <div className="h-full flex flex-col">
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                <div className="text-sm font-black text-gray-900">Report</div>
+                <button
+                  onClick={() => setRightOpen(false)}
+                  className="rounded-xl p-2 hover:bg-gray-100 text-gray-700"
+                  title="Close"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-auto">
+                <ReportBuilder
+                  selectedLocation={selectedLocation}
+                  selectedRow={selectedRow}
+                  geoLabel={geoLabel}
+                  poiLoading={poiLoading}
+                  poiData={poiData}
+                  poiRadiusKm={poiRadiusKm}
+                  onChangePoiRadius={onChangePoiRadius}
+                  idealBusinessText={idealBusinessText}
+                  setIdealBusinessText={setIdealBusinessText}
+                  areaDescription={areaDescription}
+                  mapContainerId="map-container"
+                />
+              </div>
+            </div>
           </div>
-        </section>
+        )}
+      </div>
+
+      {/* BOTTOM SHEET — Selected Property (Google Maps card style) */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[92vw] sm:w-[720px]">
+        <div
+          className={[
+            "rounded-3xl border border-gray-200 bg-white/95 backdrop-blur shadow-2xl overflow-hidden transition-all duration-300",
+            bottomOpen ? "max-h-[60vh]" : "max-h-[52px]",
+          ].join(" ")}
+        >
+          {/* Header row */}
+          <button
+            onClick={() => setBottomOpen((v) => !v)}
+            className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition"
+          >
+            <div className="min-w-0 text-left">
+              <div className="text-[11px] text-gray-500 font-semibold">Selected Property</div>
+              <div className="text-sm font-black text-gray-900 truncate">{selectedTitle}</div>
+            </div>
+            <div className="text-xs font-bold text-gray-700">
+              {bottomOpen ? "Collapse" : "Expand"}
+            </div>
+          </button>
+
+          {/* Content */}
+          {bottomOpen && (
+            <div className="px-4 pb-4">
+              {!selectedRow ? (
+                <div className="text-sm text-gray-600">
+                  Click a result on the left panel or click a point on the map.
+                </div>
+              ) : (
+                <>
+                  {/* Value card */}
+                  <div className="rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white p-4 flex items-center justify-between shadow">
+                    <div>
+                      <div className="text-[11px] font-semibold opacity-90">Zonal Value</div>
+                      <div className="text-2xl font-black mt-1">{fmtPeso(selectedRow["ZonalValuepersqm.-"])}</div>
+                      <div className="text-[11px] opacity-90">per square meter</div>
+                    </div>
+                    <div className="text-right text-[11px] opacity-90">
+                      <div>{String(selectedRow["City-"] ?? "")}</div>
+                      <div>{String(selectedRow["Barangay-"] ?? "")}</div>
+                      <div className="truncate max-w-[220px]">{String(selectedRow["Street/Subdivision-"] ?? "")}</div>
+                    </div>
+                  </div>
+
+                  {/* Action chips row (your existing flow stays in ReportBuilder — this is only UI) */}
+                  <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+                    <button
+                      onClick={async () => {
+                        // directions = show street highlight (same logic you already use)
+                        if (!selectedRow) return;
+                        setDetailsErr("");
+                        if (showStreetHighlight) {
+                          setShowStreetHighlight(false);
+                          setStreetGeo(null);
+                          return;
+                        }
+                        const data = await fetchStreetGeometryFromSelectedRow(selectedRow);
+                        if (data && data.geojson && Array.isArray((data.geojson as any).features) && (data.geojson as any).features.length > 0) {
+                          setStreetGeo(data.geojson);
+                          setShowStreetHighlight(true);
+                        } else {
+                          setStreetGeo(null);
+                          setShowStreetHighlight(false);
+                          setDetailsErr("Street line not found near this pin.");
+                        }
+                      }}
+                      disabled={streetGeoLoading}
+                      className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
+                    >
+                      {streetGeoLoading ? "Finding…" : showStreetHighlight ? "Hide Directions" : "Directions"}
+                    </button>
+
+                    {/* These buttons just open the right report drawer (your ReportBuilder already shows Hotels/Nearby/Restaurants/Download) */}
+                    <button
+                      onClick={() => setRightOpen(true)}
+                      className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
+                    >
+                      Hotels
+                    </button>
+                    <button
+                      onClick={() => setRightOpen(true)}
+                      className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
+                    >
+                      Nearby
+                    </button>
+                    <button
+                      onClick={() => setRightOpen(true)}
+                      className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
+                    >
+                      Restaurants
+                    </button>
+                    <button
+                      onClick={() => setRightOpen(true)}
+                      className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
+                    >
+                      Download
+                    </button>
+                  </div>
+
+                  {/* Status + errors */}
+                  <div className="mt-3 space-y-2">
+                    {geoLoading && (
+                      <div className="text-xs text-gray-600 flex items-center gap-2">
+                        <span className="animate-spin">⟳</span> Geocoding…
+                      </div>
+                    )}
+                    {matchStatus && (
+                      <div className="text-xs text-green-800 bg-green-50 border border-green-200 rounded-2xl px-3 py-2">
+                        {matchStatus}
+                      </div>
+                    )}
+                    {detailsErr && (
+                      <div className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-2xl px-3 py-2">
+                        {detailsErr}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Quick facts (OpenAI description) */}
+                  <div className="mt-3 rounded-2xl border border-gray-200 bg-white p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-black text-gray-900">Quick facts about the place</div>
+                      {areaDescLoading && <div className="text-[11px] text-gray-500">Generating…</div>}
+                    </div>
+                    {areaDescErr ? (
+                      <div className="text-xs text-red-600 mt-2">{areaDescErr}</div>
+                    ) : (
+                      <div className="text-sm text-gray-800 mt-2 leading-relaxed">
+                        {areaDescription || "Select a property or click the map to generate a short description."}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </main>
   );
