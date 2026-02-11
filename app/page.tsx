@@ -1220,7 +1220,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* RIGHT PANEL this is it  */}
+            {/* RIGHT PANEL */}
             <ReportBuilder
               selectedLocation={selectedLocation}
               selectedRow={selectedRow}
