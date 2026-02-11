@@ -217,16 +217,19 @@ export async function GET(req: Request) {
     const start = (validPage - 1) * itemsPerPage;
     const end = start + itemsPerPage;
 
-    return NextResponse.json({
-      domain,
-      page: validPage,
-      rows: filtered.slice(start, end),
-      itemsPerPage,
-      totalRows,
-      pageCount,
-      hasPrev: validPage > 1,
-      hasNext: validPage < pageCount,
-    });
+    return NextResponse.json(
+      {
+        domain,
+        page: validPage,
+        rows: filtered.slice(start, end),
+        itemsPerPage,
+        totalRows,
+        pageCount,
+        hasPrev: validPage > 1,
+        hasNext: validPage < pageCount,
+      },
+      { headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=3600" } }
+    );
   } catch (e: any) {
     console.error("Zonal API error:", e);
     return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });

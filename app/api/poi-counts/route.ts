@@ -215,8 +215,11 @@ out center;`;
     };
 
     POI_CACHE.set(key, { ts: Date.now(), payload });
-    return NextResponse.json(payload);
+    return NextResponse.json(payload, { headers: { "Cache-Control": "public, max-age=300, stale-while-revalidate=3600" } });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "POI failed" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? "POI failed" },
+      { status: 500, headers: { "Cache-Control": "public, max-age=60" } }
+    );
   }
 }

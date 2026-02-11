@@ -110,7 +110,10 @@ export async function GET(req: Request) {
         if (c) set.add(c);
       }
       const cities = Array.from(set).sort((a, b) => a.localeCompare(b));
-      return NextResponse.json({ domain, cities, cached: fromCache });
+      return NextResponse.json(
+        { domain, cities, cached: fromCache },
+        { headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" } }
+      );
     }
 
     if (mode === "barangays") {
@@ -128,7 +131,10 @@ export async function GET(req: Request) {
       }
 
       const barangays = Array.from(set).sort((a, b) => a.localeCompare(b));
-      return NextResponse.json({ domain, city, barangays, cached: fromCache });
+      return NextResponse.json(
+        { domain, city, barangays, cached: fromCache },
+        { headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" } }
+      );
     }
 
     // OPTIONAL: if you want "classifications" facet later
@@ -146,10 +152,16 @@ export async function GET(req: Request) {
       }
 
       const classifications = Array.from(set).sort((a, b) => a.localeCompare(b));
-      return NextResponse.json({ domain, city, barangay, classifications, cached: fromCache });
+      return NextResponse.json(
+        { domain, city, barangay, classifications, cached: fromCache },
+        { headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" } }
+      );
     }
 
-    return NextResponse.json({ error: "Invalid mode (use cities|barangays)" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid mode (use cities|barangays)" },
+      { status: 400, headers: { "Cache-Control": "public, max-age=60" } }
+    );
   } catch (e: any) {
     console.error("Facets API error:", e);
     return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
