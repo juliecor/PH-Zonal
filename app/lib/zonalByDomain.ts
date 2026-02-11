@@ -1,13 +1,55 @@
-import axios from "axios";
+import axios, { AxiosInstance } from "axios";
+import http from "http";
+import https from "https";
 
 function b64(obj: unknown) {
   return Buffer.from(JSON.stringify(obj), "utf8").toString("base64");
 }
 
+// Keep-alive agents and shared axios client
+const keepAliveHttpAgent = new http.Agent({ keepAlive: true, maxSockets: 50 });
+const keepAliveHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
+
+const httpClient: AxiosInstance = axios.create({
+  httpAgent: keepAliveHttpAgent,
+  httpsAgent: keepAliveHttpsAgent,
+  timeout: 12000,
+  decompress: true,
+  validateStatus: (s) => s >= 200 && s < 400, // allow redirects
+});
+
+async function getWithRetry(url: string, opts: { timeout?: number; headers?: Record<string, string> } = {}, attempts = 3) {
+  let lastErr: any = null;
+  const perTryTimeout = opts.timeout ?? 12000;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await httpClient.get(url, { timeout: perTryTimeout, headers: opts.headers });
+      return res.data;
+    } catch (e: any) {
+      lastErr = e;
+      const status = e?.response?.status ?? 0;
+      const retriable =
+        e?.code === "ECONNRESET" ||
+        e?.code === "ETIMEDOUT" ||
+        e?.name === "AbortError" ||
+        status === 0 ||
+        status === 429 ||
+        (status >= 500 && status < 600);
+      if (i < attempts - 1 && retriable) {
+        const backoff = Math.min(1500 * (i + 1) + Math.random() * 400, 4000);
+        await new Promise((r) => setTimeout(r, backoff));
+        continue;
+      }
+      break;
+    }
+  }
+  throw lastErr;
+}
+
 export async function fetchZonalIndex(domain: string) {
-  const { data } = await axios.get(
+  const data = await getWithRetry(
     `https://api.spreadsimple.com/spread-view/public/omit-routes/${domain}`,
-    { timeout: 30000 }
+    { timeout: 10000 }
   );
   return {
     rowsLimit: data?.customDealLimits?.rowsLimit ?? 5000,
@@ -53,16 +95,14 @@ export type ZonalFlatRow = {
 };
 
 async function fetchS3Json(s3Url: string) {
-  const res = await axios.get(s3Url, {
-    timeout: 30000,
-    responseType: "text", // S3 may return JSON as text
+  const data = await getWithRetry(s3Url, {
+    timeout: 10000,
     headers: { Accept: "application/json" },
   });
-
-  if (typeof res.data === "string") {
-    return JSON.parse(res.data);
+  if (typeof data === "string") {
+    try { return JSON.parse(data); } catch { return null; }
   }
-  return res.data;
+  return data;
 }
 
 export async function fetchZonalValuesByDomain(args: {
@@ -88,9 +128,8 @@ export async function fetchZonalValuesByDomain(args: {
     `?query=${b64(query)}` +
     `&options=${b64(options)}`;
 
-  // 1) first request
-  const first = await axios.get(url, { timeout: 30000 });
-  let raw = first.data;
+  // 1) first request with retry
+  let raw = await getWithRetry(url, { timeout: 12000 });
 
   // ✅ 2) if table missing but s3Url exists, follow it
   if (!raw?.table && raw?.s3Url) {

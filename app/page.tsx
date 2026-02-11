@@ -634,6 +634,40 @@ export default function Home() {
     }
   }
 
+  // Independent POI loader: never depends on geocoding
+  async function loadPoiIndependent(lat: number, lon: number, row: Row | null, labelForDesc: string) {
+    const myId = reqIdRef.current; // do NOT increment; avoid interfering with geocode flow
+    setPoiLoading(true);
+    setDetailsErr("");
+    try {
+      const poi = await fetchPoi(lat, lon);
+      if (myId !== reqIdRef.current) return;
+      setPoiData({ counts: poi.counts, items: poi.items });
+
+      const ideas = suggestBusinesses({
+        zonalValueText: String(row?.["ZonalValuepersqm.-"] ?? ""),
+        classification: String(row?.["Classification-"] ?? ""),
+        poi,
+      });
+      setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
+
+      // Describe area non-blocking with the current POI snapshot
+      describeArea({
+        lat,
+        lon,
+        label: labelForDesc,
+        row,
+        poi: { counts: poi.counts, items: poi.items } as any,
+      });
+    } catch (e: any) {
+      if (myId !== reqIdRef.current) return;
+      setDetailsErr(e?.message ?? "Failed to load POI");
+    } finally {
+      if (myId !== reqIdRef.current) return;
+      setPoiLoading(false);
+    }
+  }
+
   async function selectRow(r: Row) {
     const myId = ++reqIdRef.current;
 
@@ -668,28 +702,8 @@ export default function Home() {
 
       const candidates: string[] = [];
 
-      // Kick off POI counts immediately using the anchor location so it doesn't wait on geocoding
-      setPoiLoading(true);
-      fetchPoi(anchor.lat, anchor.lon)
-        .then((poi) => {
-          if (myId !== reqIdRef.current) return;
-          setPoiData({ counts: poi.counts, items: poi.items });
-          const ideas = suggestBusinesses({
-            zonalValueText: String(r["ZonalValuepersqm.-"] ?? ""),
-            classification: String(r["Classification-"] ?? ""),
-            poi,
-          });
-          setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
-          // Fire area description asynchronously (does not block POI)
-          describeArea({
-            lat: anchor.lat,
-            lon: anchor.lon,
-            label: anchor.label,
-            row: r,
-            poi: { counts: poi.counts, items: poi.items } as any,
-          });
-        })
-        .catch(() => {});
+      // Start POIs immediately at anchor — independent of geocoding
+      loadPoiIndependent(anchor.lat, anchor.lon, r, anchor.label);
 
       if (!isBadStreet(street)) {
         candidates.push(`${street}, ${brgy}, ${cty}, ${prov}, Philippines`);
@@ -757,12 +771,12 @@ export default function Home() {
         .then((vals) => setAreaLabels(vals))
         .catch(() => {});
 
-      // Fetch street-geometry and POIs in parallel
-      setPoiLoading(true);
-      const [snapResp, poi] = await Promise.all([
-        fetchStreetGeometryAt(r, finalCenter.lat, finalCenter.lon).catch(() => null),
-        fetchPoi(finalCenter.lat, finalCenter.lon),
-      ]);
+      // Optionally refresh POIs silently if the final center moved far from anchor (> 0.3km)
+      const movedKm = getDistanceKm(finalCenter.lat, finalCenter.lon, anchor.lat, anchor.lon);
+      if (movedKm > 0.3) {
+        loadPoiIndependent(finalCenter.lat, finalCenter.lon, r, best?.label ?? anchor.label);
+      }
+      const snapResp = await fetchStreetGeometryAt(r, finalCenter.lat, finalCenter.lon).catch(() => null);
       // Apply street snap if available
       try {
         const snap = (snapResp as any)?.meta?.center as { lat: number; lon: number } | undefined;
@@ -776,30 +790,12 @@ export default function Home() {
         }
       } catch {}
       if (myId !== reqIdRef.current) return;
-
-      setPoiData({ counts: poi.counts, items: poi.items });
-
-      const ideas = suggestBusinesses({
-        zonalValueText: String(r["ZonalValuepersqm.-"] ?? ""),
-        classification: String(r["Classification-"] ?? ""),
-        poi,
-      });
-      setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
-
-      describeArea({
-        lat: finalCenter.lat,
-        lon: finalCenter.lon,
-        label: best?.label ?? anchor.label,
-        row: r,
-        poi: { counts: poi.counts, items: poi.items } as any,
-      });
     } catch (e: any) {
       if (myId !== reqIdRef.current) return;
       setDetailsErr(e?.message ?? "Failed to load details");
     } finally {
       if (myId !== reqIdRef.current) return;
       setGeoLoading(false);
-      setPoiLoading(false);
     }
   }
 
@@ -828,27 +824,10 @@ export default function Home() {
 
     setBottomOpen(true);
 
-    setPoiLoading(true);
     try {
-      const [poi] = await Promise.all([
-        fetchPoi(lat, lon),
-        // Run neighborhoods in background
-        fetchAreaLabels(lat, lon).then((vals) => setAreaLabels(vals)).catch(() => {}),
-      ]);
-      if (myId !== reqIdRef.current) return;
-
-      setPoiData({ counts: poi.counts, items: poi.items });
-
-      const ideas = suggestBusinesses({ zonalValueText: "", classification: "", poi });
-      setIdealBusinessText(ideas.map((x) => `• ${x}`).join(""));
-
-      describeArea({
-        lat,
-        lon,
-        label: `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
-        row: null,
-        poi: { counts: poi.counts, items: poi.items } as any,
-      });
+      // Start POIs independently; neighborhoods in background
+      loadPoiIndependent(lat, lon, null, `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+      fetchAreaLabels(lat, lon).then((vals) => setAreaLabels(vals)).catch(() => {});
 
       // auto-pick nearest street row (existing behavior)
       try {
@@ -880,7 +859,7 @@ export default function Home() {
       setDetailsErr(e?.message ?? "Failed to load POI");
     } finally {
       if (myId !== reqIdRef.current) return;
-      setPoiLoading(false);
+      // poiLoading controlled by loadPoiIndependent
     }
   }
 
