@@ -119,6 +119,36 @@ export default function Home() {
     new Map()
   );
 
+  // -------- LocalStorage-backed caches (persist across visits) --------
+  const GEO_LS_KEY = "geoCacheV1";
+  const POI_LS_KEY = "poiCacheV1";
+  const GEO_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
+  const POI_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+
+  function lsLoad<T = any>(key: string, fallback: T): T {
+    if (typeof window === "undefined") return fallback;
+    try {
+      const s = window.localStorage.getItem(key);
+      if (!s) return fallback;
+      return JSON.parse(s) as T;
+    } catch { return fallback; }
+  }
+  function lsSave<T = any>(key: string, value: T) {
+    if (typeof window === "undefined") return;
+    try { window.localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  }
+
+  useEffect(() => {
+    // Restore geocode cache from localStorage on first load
+    const bag = lsLoad<Record<string, { ts: number; lat: number; lon: number; label: string; boundary?: Boundary | null }>>(GEO_LS_KEY, {});
+    const now = Date.now();
+    for (const [k, v] of Object.entries(bag)) {
+      if (now - (v?.ts ?? 0) < GEO_TTL_MS && typeof v.lat === "number" && typeof v.lon === "number") {
+        centerCacheRef.current.set(k, { lat: v.lat, lon: v.lon, label: v.label || "", boundary: v.boundary ?? null });
+      }
+    }
+  }, []);
+
   const columns = useMemo(
     () => [
       "Street/Subdivision-",
@@ -283,6 +313,14 @@ export default function Home() {
   }
 
   async function fetchPoi(lat: number, lon: number) {
+    // Client-side persistent cache (per lat/lon rounded to ~110m and radius)
+    const key = `${lat.toFixed(3)}|${lon.toFixed(3)}|${Math.round(poiRadiusKm * 1000)}`;
+    const poiBag = lsLoad<Record<string, { ts: number; payload: { ok: true; counts: PoiData["counts"]; items: PoiData["items"] } }>>(POI_LS_KEY, {});
+    const hit = poiBag[key];
+    if (hit && Date.now() - (hit.ts ?? 0) < POI_TTL_MS) {
+      return hit.payload;
+    }
+
     const res = await fetch("/api/poi-counts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -290,7 +328,11 @@ export default function Home() {
     });
     const data = await res.json();
     if (!res.ok || !data?.ok) throw new Error(data?.error ?? "POI failed");
-    return data as { ok: true; counts: PoiData["counts"]; items: PoiData["items"] };
+    const payload = data as { ok: true; counts: PoiData["counts"]; items: PoiData["items"] };
+    // Save to localStorage
+    const updated = { ...poiBag, [key]: { ts: Date.now(), payload } };
+    lsSave(POI_LS_KEY, updated);
+    return payload;
   }
 
   async function fetchAreaLabels(lat: number, lon: number) {
@@ -437,6 +479,41 @@ export default function Home() {
     };
 
     centerCacheRef.current.set(key, payload);
+    // Persist to localStorage bag
+    const bag = lsLoad<Record<string, { ts: number; lat: number; lon: number; label: string; boundary?: Boundary | null }>>(GEO_LS_KEY, {});
+    bag[key] = { ts: Date.now(), lat: payload.lat, lon: payload.lon, label: payload.label, boundary: payload.boundary ?? null };
+    lsSave(GEO_LS_KEY, bag);
+    return payload;
+  }
+
+  // Fast geocode: omit barangay/city/province hints to avoid server-side polygon/refinement.
+  async function geocodeFast(args: { query: string; anchor?: LatLng | null }) {
+    const qx = normalizePH(args.query);
+    const key = `fast|${qx}|${args.anchor?.lat ?? ""},${args.anchor?.lon ?? ""}`.toLowerCase();
+    const cached = centerCacheRef.current.get(key);
+    if (cached) return cached;
+
+    const res = await fetch("/api/geocode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: qx,
+        anchorLat: args.anchor?.lat ?? null,
+        anchorLon: args.anchor?.lon ?? null,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) return null;
+    const payload = {
+      lat: Number(data.lat),
+      lon: Number(data.lon),
+      label: String(data.displayName ?? qx),
+      boundary: (data.boundary as Boundary | null) ?? null,
+    };
+    centerCacheRef.current.set(key, payload);
+    const bag = lsLoad<Record<string, { ts: number; lat: number; lon: number; label: string; boundary?: Boundary | null }>>(GEO_LS_KEY, {});
+    bag[key] = { ts: Date.now(), lat: payload.lat, lon: payload.lon, label: payload.label, boundary: payload.boundary ?? null };
+    lsSave(GEO_LS_KEY, bag);
     return payload;
   }
 
@@ -515,6 +592,8 @@ export default function Home() {
       setGeoLabel(center.label);
       setMatchStatus("");
       setComps(null);
+      // Prewarm POI cache around the anchor in the background (does not update UI)
+      fetchPoi(center.lat, center.lon).catch(() => {});
     } finally {
       if (myId !== reqIdRef.current) return;
       setGeoLoading(false);
@@ -589,6 +668,29 @@ export default function Home() {
 
       const candidates: string[] = [];
 
+      // Kick off POI counts immediately using the anchor location so it doesn't wait on geocoding
+      setPoiLoading(true);
+      fetchPoi(anchor.lat, anchor.lon)
+        .then((poi) => {
+          if (myId !== reqIdRef.current) return;
+          setPoiData({ counts: poi.counts, items: poi.items });
+          const ideas = suggestBusinesses({
+            zonalValueText: String(r["ZonalValuepersqm.-"] ?? ""),
+            classification: String(r["Classification-"] ?? ""),
+            poi,
+          });
+          setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
+          // Fire area description asynchronously (does not block POI)
+          describeArea({
+            lat: anchor.lat,
+            lon: anchor.lon,
+            label: anchor.label,
+            row: r,
+            poi: { counts: poi.counts, items: poi.items } as any,
+          });
+        })
+        .catch(() => {});
+
       if (!isBadStreet(street)) {
         candidates.push(`${street}, ${brgy}, ${cty}, ${prov}, Philippines`);
         candidates.push(`${street}, ${cty}, ${prov}, Philippines`);
@@ -603,14 +705,10 @@ export default function Home() {
       let best: { lat: number; lon: number; label: string; boundary?: Boundary | null } | null = null;
 
       for (const query of Array.from(new Set(candidates))) {
-        const g = await geocodeLocked({
+        // Fast path: geocode without barangay/city/province hints to avoid heavy polygon/refinement
+        const g = await geocodeFast({
           query,
-          hintBarangay: brgy,
-          hintCity: cty,
-          hintProvince: prov,
           anchor: { lat: anchor.lat, lon: anchor.lon },
-          street,
-          vicinity,
         });
 
         if (myId !== reqIdRef.current) return;
@@ -654,13 +752,19 @@ export default function Home() {
       setGeoLabel(best?.label ?? anchor.label);
       setBoundary(finalCenter.boundary ?? anchor.boundary ?? null);
 
-      try {
-        setAreaLabels(await fetchAreaLabels(finalCenter.lat, finalCenter.lon));
-      } catch {}
+      // Neighborhoods should not block the main flow
+      fetchAreaLabels(finalCenter.lat, finalCenter.lon)
+        .then((vals) => setAreaLabels(vals))
+        .catch(() => {});
 
-      // Auto-snap
+      // Fetch street-geometry and POIs in parallel
+      setPoiLoading(true);
+      const [snapResp, poi] = await Promise.all([
+        fetchStreetGeometryAt(r, finalCenter.lat, finalCenter.lon).catch(() => null),
+        fetchPoi(finalCenter.lat, finalCenter.lon),
+      ]);
+      // Apply street snap if available
       try {
-        const snapResp = await fetchStreetGeometryAt(r, finalCenter.lat, finalCenter.lon);
         const snap = (snapResp as any)?.meta?.center as { lat: number; lon: number } | undefined;
         if (snap && Number.isFinite(snap.lat) && Number.isFinite(snap.lon)) {
           const bnd = (finalCenter.boundary ?? anchor.boundary) as Boundary | null;
@@ -671,9 +775,6 @@ export default function Home() {
           }
         }
       } catch {}
-
-      setPoiLoading(true);
-      const poi = await fetchPoi(finalCenter.lat, finalCenter.lon);
       if (myId !== reqIdRef.current) return;
 
       setPoiData({ counts: poi.counts, items: poi.items });
@@ -729,13 +830,14 @@ export default function Home() {
 
     setPoiLoading(true);
     try {
-      const poi = await fetchPoi(lat, lon);
+      const [poi] = await Promise.all([
+        fetchPoi(lat, lon),
+        // Run neighborhoods in background
+        fetchAreaLabels(lat, lon).then((vals) => setAreaLabels(vals)).catch(() => {}),
+      ]);
       if (myId !== reqIdRef.current) return;
 
       setPoiData({ counts: poi.counts, items: poi.items });
-      try {
-        setAreaLabels(await fetchAreaLabels(lat, lon));
-      } catch {}
 
       const ideas = suggestBusinesses({ zonalValueText: "", classification: "", poi });
       setIdealBusinessText(ideas.map((x) => `• ${x}`).join(""));
@@ -1297,7 +1399,7 @@ export default function Home() {
                       disabled={streetGeoLoading}
                       className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
                     >
-                      {streetGeoLoading ? "Finding…" : showStreetHighlight ? "Hide Directions" : "Directions"}
+                      {streetGeoLoading ? "Finding…" : showStreetHighlight ? "Hide Street" : "Highlight Street"}
                     </button>
 
                     {/* optional quick access to report */}
