@@ -1158,7 +1158,7 @@ export default function Home() {
                         <option value="RESIDENTIAL">RESIDENTIAL</option>
                         <option value="RESIDENTIAL CONDOMINIUM">RESIDENTIAL CONDOMINIUM</option>
                         <option value="INDUSTRIAL">INDUSTRIAL</option>
-                        <option value="AGRICULTURAL">AGRICULTURAL</option>
+                        <option value="AGRICULTURAL">AGRICULTURAL</option>  
                         <option value="SPECIAL">SPECIAL</option>
                         <option value="MIXED-USE">MIXED-USE</option>
                         <option value="ROAD LOT">ROAD LOT</option>
