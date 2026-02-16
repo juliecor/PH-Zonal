@@ -122,6 +122,7 @@ export default function ReportBuilder(props: {
     setEnriched({});
     setEnriching(false);
     setPage(1);
+    // no-op
   }, [poiData, selectedLocation?.lat, selectedLocation?.lon]);
 
   useEffect(() => {
@@ -639,6 +640,8 @@ export default function ReportBuilder(props: {
     }
   }
 
+  // hazards removed
+
   return (
     <>
       <PdfPreviewModal open={pdfPreviewOpen} url={pdfPreviewUrl} onClose={closePreview} onDownload={downloadPreviewPdf} />
@@ -647,6 +650,8 @@ export default function ReportBuilder(props: {
         <h3 className="text-sm font-semibold text-gray-900 mb-4">Report Builder</h3>
 
         <div className="space-y-4">
+          {/* Hazards removed */}
+
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-2">Ideal Business Uses</label>
             <textarea

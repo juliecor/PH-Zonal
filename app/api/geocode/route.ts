@@ -12,6 +12,7 @@ const POLY_TTL = 1000 * 60 * 60 * 24 * 30;
 // GOOGLE MAPS API KEY
 // ============================================================================
 const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+const ENABLE_STREET_REFINE = (process.env.GEOCODE_STREET_REFINE ?? "1") !== "0";
 
 if (!GOOGLE_API_KEY) {
   console.warn("⚠️ WARNING: GOOGLE_MAPS_API_KEY not set in environment variables!");
@@ -484,8 +485,20 @@ export async function POST(req: Request) {
         .filter(Boolean)
         .join(", ");
 
-      const googleUrl = `https://maps.googleapis.com/maps/api/geocode/json?` +
-        `address=${encodeURIComponent(googleAddress)}&key=${GOOGLE_API_KEY}`;
+      // Bias results to PH + local area (if anchor provided)
+      let googleUrl = `https://maps.googleapis.com/maps/api/geocode/json?` +
+        `address=${encodeURIComponent(googleAddress)}` +
+        `&components=country:PH&region=ph&language=en` +
+        `&key=${GOOGLE_API_KEY}`;
+
+      if (anchor) {
+        // bounds=southwest|northeast → lat,lng|lat,lng
+        const dLat = 6 / 111; // ~6 km box
+        const dLon = 6 / (111 * Math.cos((anchor.lat * Math.PI) / 180));
+        const sw = `${(anchor.lat - dLat)},${(anchor.lon - dLon)}`;
+        const ne = `${(anchor.lat + dLat)},${(anchor.lon + dLon)}`;
+        googleUrl += `&bounds=${encodeURIComponent(sw)}|${encodeURIComponent(ne)}`;
+      }
 
       try {
         const ac = new AbortController();
@@ -533,9 +546,9 @@ export async function POST(req: Request) {
                 payload.label = `${payload.label} (outside selected barangay)`;
               }
 
-              // Refine: try to match exact street within barangay polygon using OSM
+              // Optional refine: try to match exact street within barangay polygon using OSM (can be slow)
               const nameToTry = gRouteName || streetAdjRaw || vicinityAdjRaw || queryAdjRaw;
-              if (inside && nameToTry) {
+              if (ENABLE_STREET_REFINE && inside && nameToTry && String(nameToTry).length >= 3) {
                 const qAllStreets = `
 [out:json][timeout:16];
 (

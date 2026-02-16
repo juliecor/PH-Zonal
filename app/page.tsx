@@ -118,10 +118,12 @@ export default function Home() {
   const centerCacheRef = useRef<Map<string, { lat: number; lon: number; label: string; boundary?: Boundary | null }>>(
     new Map()
   );
+  const pinpointReqIdRef = useRef(0);
 
   // -------- LocalStorage-backed caches (persist across visits) --------
   const GEO_LS_KEY = "geoCacheV1";
   const POI_LS_KEY = "poiCacheV1";
+  const ZONAL_LS_KEY = "zonalCacheV1";
   const GEO_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
   const POI_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 
@@ -221,6 +223,13 @@ export default function Home() {
       if (!res.ok) throw new Error(`Regions failed: ${res.status}`);
       const data = await res.json();
       setMatches(data.matches ?? []);
+      // Prefetch cities for top 3 domains to hide first-load latency
+      try {
+        const tops = Array.isArray(data.matches) ? data.matches.slice(0, 3) : [];
+        for (const m of tops) {
+          if (m?.domain) loadCities(m.domain).catch(() => {});
+        }
+      } catch {}
     } catch (e: any) {
       setErr(e?.message ?? "Unknown error");
       setMatches([]);
@@ -231,10 +240,22 @@ export default function Home() {
     setFacetsLoading(true);
     setErr("");
     try {
+      // local cache
+      const bag = lsLoad<Record<string, { ts: number; cities: string[] }>>("facetCitiesCacheV1", {});
+      const key = String(forDomain || "").toLowerCase();
+      const TTL = 1000 * 60 * 60 * 24 * 3; // 3 days
+      const hit = bag[key];
+      if (hit && Date.now() - (hit.ts ?? 0) < TTL) {
+        setFacetCities(hit.cities ?? []);
+        return;
+      }
+
       const res = await fetch(`/api/facets?mode=cities&domain=${encodeURIComponent(forDomain)}`);
       if (!res.ok) throw new Error(`Cities failed: ${res.status}`);
       const data = await res.json();
-      setFacetCities(data.cities ?? []);
+      const cities = Array.isArray(data?.cities) ? data.cities : [];
+      setFacetCities(cities);
+      try { bag[key] = { ts: Date.now(), cities }; lsSave("facetCitiesCacheV1", bag); } catch {}
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load cities");
       setFacetCities([]);
@@ -251,12 +272,23 @@ export default function Home() {
     setBarangaysLoading(true);
     setErr("");
     try {
+      const bag = lsLoad<Record<string, { ts: number; list: string[] }>>("facetBarangaysCacheV1", {});
+      const key = `${String(forDomain||"").toLowerCase()}|${String(forCity||"").toLowerCase()}`;
+      const TTL = 1000 * 60 * 60 * 24 * 3; // 3 days
+      const hit = bag[key];
+      if (hit && Date.now() - (hit.ts ?? 0) < TTL) {
+        setFacetBarangays(hit.list ?? []);
+        return;
+      }
+
       const res = await fetch(
         `/api/facets?mode=barangays&domain=${encodeURIComponent(forDomain)}&city=${encodeURIComponent(forCity)}`
       );
       if (!res.ok) throw new Error(`Barangays failed: ${res.status}`);
       const data = await res.json();
-      setFacetBarangays(data.barangays ?? []);
+      const list = Array.isArray(data?.barangays) ? data.barangays : [];
+      setFacetBarangays(list);
+      try { bag[key] = { ts: Date.now(), list }; lsSave("facetBarangaysCacheV1", bag); } catch {}
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load barangays");
       setFacetBarangays([]);
@@ -275,6 +307,19 @@ export default function Home() {
     setLoading(true);
     setErr("");
     try {
+      // Guard: avoid heavy unfiltered fetches; require at least one filter/q
+      const noFilters = !city && !barangay && !classification && !q;
+      if (noFilters) {
+        setRows([]);
+        setItemsPerPage(16);
+        setTotalRows(0);
+        setPageCount(null);
+        setHasPrev(false);
+        setHasNext(false);
+        setLoading(false);
+        return;
+      }
+
       const params = new URLSearchParams({
         domain,
         page: String(targetPage),
@@ -283,6 +328,23 @@ export default function Home() {
         classification,
         q,
       });
+
+      // Client-side cache (10 min TTL) to avoid refetching same query
+      const cacheKey = params.toString();
+      const ZONAL_TTL_MS = 1000 * 60 * 10;
+      const bag = lsLoad<Record<string, { ts: number; payload: any }>>(ZONAL_LS_KEY, {});
+      const hit = bag[cacheKey];
+      if (hit && Date.now() - (hit.ts ?? 0) < ZONAL_TTL_MS) {
+        const data = hit.payload;
+        setRows(data.rows ?? []);
+        setItemsPerPage(Number(data.itemsPerPage ?? 16));
+        setTotalRows(Number(data.totalRows ?? 0));
+        setPageCount(data.pageCount ?? null);
+        setHasPrev(Boolean(data.hasPrev));
+        setHasNext(Boolean(data.hasNext));
+        if (targetPage !== page) setPage(targetPage);
+        return;
+      }
 
       const res = await fetch(`/api/zonal?${params.toString()}`, { signal: ac.signal });
       if (!res.ok) {
@@ -297,6 +359,21 @@ export default function Home() {
       setPageCount(data.pageCount ?? null);
       setHasPrev(Boolean(data.hasPrev));
       setHasNext(Boolean(data.hasNext));
+
+      // Save to cache
+      try {
+        bag[cacheKey] = { ts: Date.now(), payload: data };
+        // Keep bag small
+        const keys = Object.keys(bag);
+        if (keys.length > 80) {
+          const sorted = keys
+            .map((k) => ({ k, ts: bag[k]?.ts ?? 0 }))
+            .sort((a, b) => a.ts - b.ts)
+            .slice(0, Math.max(0, keys.length - 80));
+          for (const s of sorted) delete bag[s.k];
+        }
+        lsSave(ZONAL_LS_KEY, bag);
+      } catch {}
 
       if (targetPage !== page) setPage(targetPage);
     } catch (e: any) {
@@ -336,15 +413,7 @@ export default function Home() {
   }
 
   async function fetchAreaLabels(lat: number, lon: number) {
-    try {
-      const res = await fetch("/api/neighborhoods", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lat, lon, radius: 2000 }),
-      });
-      const j = await res.json().catch(() => null);
-      if (res.ok && j?.ok && Array.isArray(j.items)) return j.items as Array<{ lat: number; lon: number; name: string }>;
-    } catch {}
+    // neighborhoods disabled to reduce processing
     return [] as Array<{ lat: number; lon: number; name: string }>;
   }
 
@@ -597,6 +666,12 @@ export default function Home() {
     } finally {
       if (myId !== reqIdRef.current) return;
       setGeoLoading(false);
+      // Auto-refine with Google-first geocoder + snap to street (one-click pinpoint)
+      setTimeout(() => {
+        if (myId === reqIdRef.current) {
+          pinpointFromBirRow();
+        }
+      }, 0);
     }
   }
 
@@ -670,6 +745,7 @@ export default function Home() {
 
   async function selectRow(r: Row) {
     const myId = ++reqIdRef.current;
+    const rowIndexAtStart = (r as any)?.rowIndex ?? null;
 
     setSelectedRow(r);
     setDetailsErr("");
@@ -767,9 +843,8 @@ export default function Home() {
       setBoundary(finalCenter.boundary ?? anchor.boundary ?? null);
 
       // Neighborhoods should not block the main flow
-      fetchAreaLabels(finalCenter.lat, finalCenter.lon)
-        .then((vals) => setAreaLabels(vals))
-        .catch(() => {});
+      // neighborhoods disabled
+      setAreaLabels([]);
 
       // Optionally refresh POIs silently if the final center moved far from anchor (> 0.3km)
       const movedKm = getDistanceKm(finalCenter.lat, finalCenter.lon, anchor.lat, anchor.lon);
@@ -782,7 +857,11 @@ export default function Home() {
         const snap = (snapResp as any)?.meta?.center as { lat: number; lon: number } | undefined;
         if (snap && Number.isFinite(snap.lat) && Number.isFinite(snap.lon)) {
           const bnd = (finalCenter.boundary ?? anchor.boundary) as Boundary | null;
-          if (!bnd || bnd.length === 0 || isPointInPolygon(snap.lat, snap.lon, bnd)) {
+          if (
+            myId === reqIdRef.current &&
+            ((selectedRow as any)?.rowIndex ?? null) === rowIndexAtStart &&
+            (!bnd || bnd.length === 0 || isPointInPolygon(snap.lat, snap.lon, bnd))
+          ) {
             setSelectedLocation({ lat: snap.lat, lon: snap.lon });
             const nm = (snapResp as any)?.meta?.name || String(r["Street/Subdivision-"] || "");
             setGeoLabel(`${nm} (snapped to street)`);
@@ -827,7 +906,8 @@ export default function Home() {
     try {
       // Start POIs independently; neighborhoods in background
       loadPoiIndependent(lat, lon, null, `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
-      fetchAreaLabels(lat, lon).then((vals) => setAreaLabels(vals)).catch(() => {});
+      // neighborhoods disabled
+      setAreaLabels([]);
 
       // auto-pick nearest street row (existing behavior)
       try {
@@ -861,6 +941,66 @@ export default function Home() {
       if (myId !== reqIdRef.current) return;
       // poiLoading controlled by loadPoiIndependent
     }
+  }
+
+  // Pinpoint via server geocoder (Google-first), then snap to street
+  async function pinpointFromBirRow() {
+    if (!selectedRow) return;
+    const thisCallId = ++pinpointReqIdRef.current;
+    const thisRowIndex = (selectedRow as any)?.rowIndex ?? null;
+    const streetName = String(selectedRow["Street/Subdivision-"] ?? "").trim();
+    const barangay = String(selectedRow["Barangay-"] ?? "").trim();
+    const city = String(selectedRow["City-"] ?? "").trim();
+    const province = String(selectedRow["Province-"] ?? "").trim();
+    const vicinity = String(selectedRow["Vicinity-"] ?? "").trim();
+
+    const anchor = selectedLocation ? { lat: selectedLocation.lat, lon: selectedLocation.lon } : null;
+
+    try {
+      const res = await fetch("/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: streetName || [barangay, city, province, "Philippines"].filter(Boolean).join(", "),
+          hintBarangay: barangay,
+          hintCity: city,
+          hintProvince: province,
+          anchorLat: anchor?.lat ?? null,
+          anchorLon: anchor?.lon ?? null,
+          street: streetName,
+          vicinity: vicinity || "",
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) return;
+      if (thisCallId !== pinpointReqIdRef.current) return; // stale
+      if (((selectedRow as any)?.rowIndex ?? null) !== thisRowIndex) return; // row changed
+
+      setSelectedLocation({ lat: Number(data.lat), lon: Number(data.lon) });
+      setGeoLabel(String(data.displayName || streetName || `${barangay}, ${city}`));
+
+      // Snap to street for better on-road accuracy
+      try {
+        const sres = await fetch("/api/street-geometry", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            streetName,
+            city,
+            province,
+            barangay,
+            lat: Number(data.lat),
+            lon: Number(data.lon),
+          }),
+        });
+        const sj = await sres.json().catch(() => null);
+        const snap = sj?.meta?.center;
+        if (thisCallId === pinpointReqIdRef.current && ((selectedRow as any)?.rowIndex ?? null) === thisRowIndex && sres.ok && sj?.ok && snap?.lat && snap?.lon) {
+          setSelectedLocation({ lat: snap.lat, lon: snap.lon });
+          setGeoLabel(`${sj?.meta?.name || streetName} (snapped to street)`);
+        }
+      } catch {}
+    } catch {}
   }
 
   useEffect(() => {
@@ -1388,6 +1528,15 @@ export default function Home() {
                       title="Open report"
                     >
                       Open Report
+                    </button>
+
+                    {/* Pinpoint via Google-first geocoder */}
+                    <button
+                      onClick={pinpointFromBirRow}
+                      className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
+                      title="Pinpoint (Google First)"
+                    >
+                      Pinpoint
                     </button>
                   </div>
 
