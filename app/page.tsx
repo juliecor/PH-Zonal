@@ -15,6 +15,8 @@ import {
   List,
   PanelRightOpen,
   PanelRightClose,
+  Zap,
+  MapPin,
 } from "lucide-react";
 
 import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "./lib/types";
@@ -35,35 +37,25 @@ const MapComponent = dynamic(
   { ssr: false }
 );
 
-type CompsResp =
-  | {
-      ok: true;
-      stats: { min: number | null; median: number | null; max: number | null; count: number };
-      rows: any[];
-    }
-  | null;
+type CompsResp = { ok: true; stats: { min: number | null; median: number | null; max: number | null; count: number }; rows: any[] } | null;
 
 export default function Home() {
-  // region selection
   const [regionSearch, setRegionSearch] = useState("");
   const [matches, setMatches] = useState<RegionMatch[]>([]);
   const [domain, setDomain] = useState("cebu.zonalvalue.com");
   const [selectedProvince, setSelectedProvince] = useState("Cebu");
   const [selectedProvinceCity, setSelectedProvinceCity] = useState("");
 
-  // facets
   const [facetCities, setFacetCities] = useState<string[]>([]);
   const [facetBarangays, setFacetBarangays] = useState<string[]>([]);
   const [facetsLoading, setFacetsLoading] = useState(false);
   const [barangaysLoading, setBarangaysLoading] = useState(false);
 
-  // filters
   const [city, setCity] = useState("");
   const [barangay, setBarangay] = useState("");
   const [classification, setClassification] = useState("");
   const [q, setQ] = useState("");
 
-  // pagination
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(16);
   const [totalRows, setTotalRows] = useState(0);
@@ -71,21 +63,17 @@ export default function Home() {
   const [hasPrev, setHasPrev] = useState(false);
   const [hasNext, setHasNext] = useState(false);
 
-  // results
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  // selection + map
   const [selectedRow, setSelectedRow] = useState<Row | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<LatLng | null>(null);
   const [anchorLocation, setAnchorLocation] = useState<LatLng | null>(null);
   const [boundary, setBoundary] = useState<Boundary | null>(null);
 
-  // map type selection
   const [mapType, setMapType] = useState<MapType>("street");
 
-  // geo label + POI + MATCH STATUS
   const [geoLabel, setGeoLabel] = useState("");
   const [matchStatus, setMatchStatus] = useState<string>("");
   const [geoLoading, setGeoLoading] = useState(false);
@@ -95,37 +83,30 @@ export default function Home() {
   const [poiRadiusKm, setPoiRadiusKm] = useState(1.5);
   const [areaLabels, setAreaLabels] = useState<Array<{ lat: number; lon: number; name: string }>>([]);
 
-  // Street highlight (GeoJSON + toggle)
   const [streetGeo, setStreetGeo] = useState<GeoJSON.FeatureCollection | null>(null);
   const [streetGeoLoading, setStreetGeoLoading] = useState(false);
   const [showStreetHighlight, setShowStreetHighlight] = useState(false);
 
-  // Right side fields
   const [idealBusinessText, setIdealBusinessText] = useState("");
-
-  // Area description (AI)
   const [areaDescription, setAreaDescription] = useState("");
   const [areaDescLoading, setAreaDescLoading] = useState(false);
   const [areaDescErr, setAreaDescErr] = useState("");
 
-  // comps
   const [comps, setComps] = useState<CompsResp>(null);
 
-  // guards / cache
+  // Improved caching
   const reqIdRef = useRef(0);
   const zonalAbortRef = useRef<AbortController | null>(null);
-
-  const centerCacheRef = useRef<Map<string, { lat: number; lon: number; label: string; boundary?: Boundary | null }>>(
-    new Map()
-  );
+  const centerCacheRef = useRef<Map<string, { lat: number; lon: number; label: string; boundary?: Boundary | null }>>(new Map());
   const pinpointReqIdRef = useRef(0);
+  const filterPinpointRef = useRef(0);
 
-  // -------- LocalStorage-backed caches (persist across visits) --------
+  // -------- LocalStorage-backed caches --------
   const GEO_LS_KEY = "geoCacheV1";
   const POI_LS_KEY = "poiCacheV1";
   const ZONAL_LS_KEY = "zonalCacheV1";
-  const GEO_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
-  const POI_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+  const GEO_TTL_MS = 1000 * 60 * 60 * 24 * 14;
+  const POI_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 
   function lsLoad<T = any>(key: string, fallback: T): T {
     if (typeof window === "undefined") return fallback;
@@ -133,15 +114,19 @@ export default function Home() {
       const s = window.localStorage.getItem(key);
       if (!s) return fallback;
       return JSON.parse(s) as T;
-    } catch { return fallback; }
+    } catch {
+      return fallback;
+    }
   }
+
   function lsSave<T = any>(key: string, value: T) {
     if (typeof window === "undefined") return;
-    try { window.localStorage.setItem(key, JSON.stringify(value)); } catch {}
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch {}
   }
 
   useEffect(() => {
-    // Restore geocode cache from localStorage on first load
     const bag = lsLoad<Record<string, { ts: number; lat: number; lon: number; label: string; boundary?: Boundary | null }>>(GEO_LS_KEY, {});
     const now = Date.now();
     for (const [k, v] of Object.entries(bag)) {
@@ -164,14 +149,12 @@ export default function Home() {
     []
   );
 
-  // ---------------- UI toggles (UI only) ----------------
   const [leftOpen, setLeftOpen] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [bottomOpen, setBottomOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(false);
   const [showRegionPicker, setShowRegionPicker] = useState(true);
 
-  // Map BIR display city names to real OSM/Google city names
   function normalizeCityHint(city: string, province?: string) {
     const c = String(city || "").toUpperCase().trim();
     const p = String(province || "").toUpperCase().trim();
@@ -223,7 +206,6 @@ export default function Home() {
       if (!res.ok) throw new Error(`Regions failed: ${res.status}`);
       const data = await res.json();
       setMatches(data.matches ?? []);
-      // Prefetch cities for top 3 domains to hide first-load latency
       try {
         const tops = Array.isArray(data.matches) ? data.matches.slice(0, 3) : [];
         for (const m of tops) {
@@ -240,10 +222,9 @@ export default function Home() {
     setFacetsLoading(true);
     setErr("");
     try {
-      // local cache
       const bag = lsLoad<Record<string, { ts: number; cities: string[] }>>("facetCitiesCacheV1", {});
       const key = String(forDomain || "").toLowerCase();
-      const TTL = 1000 * 60 * 60 * 24 * 3; // 3 days
+      const TTL = 1000 * 60 * 60 * 24 * 3;
       const hit = bag[key];
       if (hit && Date.now() - (hit.ts ?? 0) < TTL) {
         setFacetCities(hit.cities ?? []);
@@ -255,7 +236,10 @@ export default function Home() {
       const data = await res.json();
       const cities = Array.isArray(data?.cities) ? data.cities : [];
       setFacetCities(cities);
-      try { bag[key] = { ts: Date.now(), cities }; lsSave("facetCitiesCacheV1", bag); } catch {}
+      try {
+        bag[key] = { ts: Date.now(), cities };
+        lsSave("facetCitiesCacheV1", bag);
+      } catch {}
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load cities");
       setFacetCities([]);
@@ -273,8 +257,8 @@ export default function Home() {
     setErr("");
     try {
       const bag = lsLoad<Record<string, { ts: number; list: string[] }>>("facetBarangaysCacheV1", {});
-      const key = `${String(forDomain||"").toLowerCase()}|${String(forCity||"").toLowerCase()}`;
-      const TTL = 1000 * 60 * 60 * 24 * 3; // 3 days
+      const key = `${String(forDomain || "").toLowerCase()}|${String(forCity || "").toLowerCase()}`;
+      const TTL = 1000 * 60 * 60 * 24 * 3;
       const hit = bag[key];
       if (hit && Date.now() - (hit.ts ?? 0) < TTL) {
         setFacetBarangays(hit.list ?? []);
@@ -288,7 +272,10 @@ export default function Home() {
       const data = await res.json();
       const list = Array.isArray(data?.barangays) ? data.barangays : [];
       setFacetBarangays(list);
-      try { bag[key] = { ts: Date.now(), list }; lsSave("facetBarangaysCacheV1", bag); } catch {}
+      try {
+        bag[key] = { ts: Date.now(), list };
+        lsSave("facetBarangaysCacheV1", bag);
+      } catch {}
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load barangays");
       setFacetBarangays([]);
@@ -307,19 +294,6 @@ export default function Home() {
     setLoading(true);
     setErr("");
     try {
-      // Guard: avoid heavy unfiltered fetches; require at least one filter/q
-      const noFilters = !city && !barangay && !classification && !q;
-      if (noFilters) {
-        setRows([]);
-        setItemsPerPage(16);
-        setTotalRows(0);
-        setPageCount(null);
-        setHasPrev(false);
-        setHasNext(false);
-        setLoading(false);
-        return;
-      }
-
       const params = new URLSearchParams({
         domain,
         page: String(targetPage),
@@ -329,7 +303,6 @@ export default function Home() {
         q,
       });
 
-      // Client-side cache (10 min TTL) to avoid refetching same query
       const cacheKey = params.toString();
       const ZONAL_TTL_MS = 1000 * 60 * 10;
       const bag = lsLoad<Record<string, { ts: number; payload: any }>>(ZONAL_LS_KEY, {});
@@ -360,10 +333,8 @@ export default function Home() {
       setHasPrev(Boolean(data.hasPrev));
       setHasNext(Boolean(data.hasNext));
 
-      // Save to cache
       try {
         bag[cacheKey] = { ts: Date.now(), payload: data };
-        // Keep bag small
         const keys = Object.keys(bag);
         if (keys.length > 80) {
           const sorted = keys
@@ -390,7 +361,6 @@ export default function Home() {
   }
 
   async function fetchPoi(lat: number, lon: number) {
-    // Client-side persistent cache (per lat/lon rounded to ~110m and radius)
     const key = `${lat.toFixed(3)}|${lon.toFixed(3)}|${Math.round(poiRadiusKm * 1000)}`;
     const poiBag = lsLoad<Record<string, { ts: number; payload: { ok: true; counts: PoiData["counts"]; items: PoiData["items"] } }>>(POI_LS_KEY, {});
     const hit = poiBag[key];
@@ -406,14 +376,12 @@ export default function Home() {
     const data = await res.json();
     if (!res.ok || !data?.ok) throw new Error(data?.error ?? "POI failed");
     const payload = data as { ok: true; counts: PoiData["counts"]; items: PoiData["items"] };
-    // Save to localStorage
     const updated = { ...poiBag, [key]: { ts: Date.now(), payload } };
     lsSave(POI_LS_KEY, updated);
     return payload;
   }
 
   async function fetchAreaLabels(lat: number, lon: number) {
-    // neighborhoods disabled to reduce processing
     return [] as Array<{ lat: number; lon: number; name: string }>;
   }
 
@@ -505,19 +473,70 @@ export default function Home() {
     }
   }
 
-  async function geocodeLocked(args: {
+  // NEW: Pinpoint on filter changes (region/city/barangay)
+  async function pinpointFilterLocation(filterCity?: string, filterBarangay?: string, filterProvince?: string) {
+    const myId = ++filterPinpointRef.current;
+
+    setGeoLoading(true);
+    setSelectedRow(null);
+    setPoiData(null);
+    setDetailsErr("");
+    setAreaDescription("");
+    setAreaDescErr("");
+
+    try {
+      const query = filterBarangay
+        ? `${filterBarangay}, ${filterCity}, ${filterProvince}, Philippines`
+        : filterCity
+        ? `${filterCity}, ${filterProvince}, Philippines`
+        : `${filterProvince}, Philippines`;
+
+      const res = await fetch("/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: query,
+          hintBarangay: filterBarangay || "",
+          hintCity: filterCity || "",
+          hintProvince: filterProvince || "",
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (myId !== filterPinpointRef.current) return;
+      if (!res.ok || !data?.ok) {
+        console.log("Geocode failed for filter:", query);
+        return;
+      }
+
+      setSelectedLocation({ lat: Number(data.lat), lon: Number(data.lon) });
+      setGeoLabel(data.displayName || query);
+      setMatchStatus(`✓ ${filterBarangay ? "Barangay" : filterCity ? "City" : "Province"} center`);
+      setBoundary((data.boundary as Boundary | null) ?? null);
+
+      // Pre-warm POI in background
+      try {
+        await fetchPoi(Number(data.lat), Number(data.lon));
+      } catch {}
+    } catch (e: any) {
+      console.log("Pinpoint filter error:", e?.message);
+    } finally {
+      if (myId === filterPinpointRef.current) {
+        setGeoLoading(false);
+      }
+    }
+  }
+
+  async function geocodeWithZonalData(args: {
     query: string;
-    hintBarangay?: string;
-    hintCity?: string;
-    hintProvince?: string;
-    anchor?: LatLng | null;
     street?: string;
-    vicinity?: string;
+    barangay?: string;
+    city?: string;
+    province?: string;
+    baseLatLon?: { lat: number; lon: number } | null;
   }) {
     const qx = normalizePH(args.query);
-    const key = `${qx}|${normalizePH(args.hintBarangay)}|${normalizePH(args.hintCity)}|${normalizePH(
-      args.hintProvince
-    )}|${args.anchor?.lat ?? ""},${args.anchor?.lon ?? ""}`.toLowerCase();
+    const key = `${qx}|${args.street}|${args.barangay}|${args.city}|${args.province}|${args.baseLatLon?.lat ?? ""},${args.baseLatLon?.lon ?? ""}`.toLowerCase();
 
     const cached = centerCacheRef.current.get(key);
     if (cached) return cached;
@@ -527,13 +546,11 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         query: qx,
-        hintBarangay: args.hintBarangay,
-        hintCity: args.hintCity,
-        hintProvince: args.hintProvince,
-        anchorLat: args.anchor?.lat ?? null,
-        anchorLon: args.anchor?.lon ?? null,
         street: args.street ?? "",
-        vicinity: args.vicinity ?? "",
+        hintBarangay: args.barangay ?? "",
+        hintCity: args.city ?? "",
+        hintProvince: args.province ?? "",
+        baseLatLon: args.baseLatLon ?? null,
       }),
     });
 
@@ -548,136 +565,14 @@ export default function Home() {
     };
 
     centerCacheRef.current.set(key, payload);
-    // Persist to localStorage bag
     const bag = lsLoad<Record<string, { ts: number; lat: number; lon: number; label: string; boundary?: Boundary | null }>>(GEO_LS_KEY, {});
     bag[key] = { ts: Date.now(), lat: payload.lat, lon: payload.lon, label: payload.label, boundary: payload.boundary ?? null };
     lsSave(GEO_LS_KEY, bag);
     return payload;
-  }
-
-  // Fast geocode: omit barangay/city/province hints to avoid server-side polygon/refinement.
-  async function geocodeFast(args: { query: string; anchor?: LatLng | null }) {
-    const qx = normalizePH(args.query);
-    const key = `fast|${qx}|${args.anchor?.lat ?? ""},${args.anchor?.lon ?? ""}`.toLowerCase();
-    const cached = centerCacheRef.current.get(key);
-    if (cached) return cached;
-
-    const res = await fetch("/api/geocode", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: qx,
-        anchorLat: args.anchor?.lat ?? null,
-        anchorLon: args.anchor?.lon ?? null,
-      }),
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.ok) return null;
-    const payload = {
-      lat: Number(data.lat),
-      lon: Number(data.lon),
-      label: String(data.displayName ?? qx),
-      boundary: (data.boundary as Boundary | null) ?? null,
-    };
-    centerCacheRef.current.set(key, payload);
-    const bag = lsLoad<Record<string, { ts: number; lat: number; lon: number; label: string; boundary?: Boundary | null }>>(GEO_LS_KEY, {});
-    bag[key] = { ts: Date.now(), lat: payload.lat, lon: payload.lon, label: payload.label, boundary: payload.boundary ?? null };
-    lsSave(GEO_LS_KEY, bag);
-    return payload;
-  }
-
-  async function resolveAnchor(next: { barangay?: string; city?: string; province?: string }) {
-    const b = normalizePH(next.barangay ?? "");
-    const cityHintFixed = normalizeCityHint(next.city ?? "", next.province ?? "");
-    const c = normalizePH(cityHintFixed);
-    const p = normalizePH(next.province ?? "");
-
-    const q1 = b && c ? `${b}, ${c}, ${p}, Philippines` : "";
-    const q2 = c ? `${c}, ${p}, Philippines` : "";
-    const q3 = p ? `${p}, Philippines` : "Philippines";
-
-    const center =
-      (q1 &&
-        (await geocodeLocked({
-          query: q1,
-          hintBarangay: next.barangay,
-          hintCity: cityHintFixed,
-          hintProvince: next.province,
-          anchor: null,
-        }))) ||
-      (q2 &&
-        (await geocodeLocked({
-          query: q2,
-          hintCity: cityHintFixed,
-          hintProvince: next.province,
-          anchor: null,
-        }))) ||
-      (await geocodeLocked({ query: q3, hintProvince: next.province, anchor: null })) || {
-        lat: 12.8797,
-        lon: 121.774,
-        label: "Philippines",
-        boundary: null as Boundary | null,
-      };
-
-    setAnchorLocation({ lat: center.lat, lon: center.lon });
-    setBoundary(center.boundary ?? null);
-    return center;
-  }
-
-  // Point-in-polygon test (ray casting). Boundary entries are [lat, lon].
-  function isPointInPolygon(lat: number, lon: number, boundaryPoly: Boundary): boolean {
-    const x = lon;
-    const y = lat;
-    let inside = false;
-    for (let i = 0, j = boundaryPoly.length - 1; i < boundaryPoly.length; j = i++) {
-      const xi = boundaryPoly[i][1];
-      const yi = boundaryPoly[i][0];
-      const xj = boundaryPoly[j][1];
-      const yj = boundaryPoly[j][0];
-      const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-
-  // Haversine distance (km)
-  function getDistanceKm(aLat: number, aLon: number, bLat: number, bLon: number) {
-    const R = 6371;
-    const dLat = ((bLat - aLat) * Math.PI) / 180;
-    const dLon = ((bLon - aLon) * Math.PI) / 180;
-    const s1 = Math.sin(dLat / 2);
-    const s2 = Math.sin(dLon / 2);
-    const c = s1 * s1 + Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * s2 * s2;
-    return 2 * R * Math.atan2(Math.sqrt(c), Math.sqrt(1 - c));
-  }
-
-  async function flyToFilters(nextCity: string, nextBarangay: string, nextProvince?: string) {
-    const myId = ++reqIdRef.current;
-    setGeoLoading(true);
-    try {
-      const center = await resolveAnchor({ city: nextCity, barangay: nextBarangay, province: nextProvince });
-      if (myId !== reqIdRef.current) return;
-      setSelectedLocation({ lat: center.lat, lon: center.lon });
-      setGeoLabel(center.label);
-      setMatchStatus("");
-      setComps(null);
-      // Prewarm POI cache around the anchor in the background (does not update UI)
-      fetchPoi(center.lat, center.lon).catch(() => {});
-    } finally {
-      if (myId !== reqIdRef.current) return;
-      setGeoLoading(false);
-      // Auto-refine with Google-first geocoder + snap to street (one-click pinpoint)
-      setTimeout(() => {
-        if (myId === reqIdRef.current) {
-          pinpointFromBirRow();
-        }
-      }, 0);
-    }
   }
 
   async function describeArea(payload: { lat: number; lon: number; label: string; row?: Row | null; poi?: PoiData | null }) {
     setAreaDescLoading(true);
-    // UI goal: avoid showing red error; always provide some description text.
     try {
       const res = await fetch("/api/describe-area", {
         method: "POST",
@@ -701,7 +596,6 @@ export default function Home() {
       setAreaDescErr("");
       setAreaDescription(String(data.text ?? "").trim());
     } catch {
-      // No red error: fallback text
       setAreaDescErr("");
       setAreaDescription(fallbackDescribe({ label: payload.label, row: payload.row ?? null, poi: payload.poi ?? null }));
     } finally {
@@ -709,9 +603,8 @@ export default function Home() {
     }
   }
 
-  // Independent POI loader: never depends on geocoding
   async function loadPoiIndependent(lat: number, lon: number, row: Row | null, labelForDesc: string) {
-    const myId = reqIdRef.current; // do NOT increment; avoid interfering with geocode flow
+    const myId = reqIdRef.current;
     setPoiLoading(true);
     setDetailsErr("");
     try {
@@ -726,7 +619,6 @@ export default function Home() {
       });
       setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
 
-      // Describe area non-blocking with the current POI snapshot
       describeArea({
         lat,
         lon,
@@ -745,7 +637,6 @@ export default function Home() {
 
   async function selectRow(r: Row) {
     const myId = ++reqIdRef.current;
-    const rowIndexAtStart = (r as any)?.rowIndex ?? null;
 
     setSelectedRow(r);
     setDetailsErr("");
@@ -757,18 +648,16 @@ export default function Home() {
     setShowStreetHighlight(false);
     setStreetGeo(null);
 
-    // UI feel
     setBottomOpen(true);
 
     setGeoLoading(true);
     try {
-      const anchor = await resolveAnchor({
-        barangay: r["Barangay-"],
-        city: r["City-"],
-        province: r["Province-"],
-      });
-
-      if (myId !== reqIdRef.current) return;
+      // Extract zonal data coordinates
+      const zonalLat = (r as any)?.["latitude"] ?? (r as any)?.lat ?? null;
+      const zonalLon = (r as any)?.["longitude"] ?? (r as any)?.lon ?? null;
+      const baseLatLon = zonalLat != null && zonalLon != null && Number.isFinite(zonalLat) && Number.isFinite(zonalLon)
+        ? { lat: Number(zonalLat), lon: Number(zonalLon) }
+        : null;
 
       const street = normalizePH(r["Street/Subdivision-"]);
       const vicinity = normalizePH(r["Vicinity-"]);
@@ -776,99 +665,26 @@ export default function Home() {
       const cty = normalizeCityHint(String(r["City-"] ?? ""), String(r["Province-"] ?? ""));
       const prov = r["Province-"];
 
-      const candidates: string[] = [];
-
-      // Start POIs immediately at anchor — independent of geocoding
-      loadPoiIndependent(anchor.lat, anchor.lon, r, anchor.label);
-
-      if (!isBadStreet(street)) {
-        candidates.push(`${street}, ${brgy}, ${cty}, ${prov}, Philippines`);
-        candidates.push(`${street}, ${cty}, ${prov}, Philippines`);
-        const parts = street.split(" ").filter(Boolean);
-        if (parts.length >= 1) candidates.push(`${parts.slice(0, 1).join(" ")}, ${brgy}, ${cty}, ${prov}, Philippines`);
-        if (parts.length >= 2) candidates.push(`${parts.slice(0, 2).join(" ")}, ${brgy}, ${cty}, ${prov}, Philippines`);
-      }
-
-      if (vicinity) candidates.push(`${vicinity}, ${brgy}, ${cty}, ${prov}, Philippines`);
-      candidates.push(`${normalizePH(brgy)}, ${normalizePH(cty)}, ${normalizePH(prov)}, Philippines`);
-
-      let best: { lat: number; lon: number; label: string; boundary?: Boundary | null } | null = null;
-
-      for (const query of Array.from(new Set(candidates))) {
-        // Fast path: geocode without barangay/city/province hints to avoid heavy polygon/refinement
-        const g = await geocodeFast({
-          query,
-          anchor: { lat: anchor.lat, lon: anchor.lon },
-        });
-
-        if (myId !== reqIdRef.current) return;
-
-        if (g) {
-          if (anchor.boundary && anchor.boundary.length > 0) {
-            const ok = isPointInPolygon(g.lat, g.lon, anchor.boundary as any);
-            if (!ok) continue;
-          }
-          best = g;
-          if (g.label.includes("fuzzy match:")) {
-            const match = g.label.match(/fuzzy match: (\d+)%/);
-            if (match) setMatchStatus(`✓ Fuzzy Match: ${match[1]}% confidence`);
-          } else if (g.label.includes("inside")) {
-            setMatchStatus("✓ Exact Match (inside barangay)");
-          } else {
-            setMatchStatus("✓ Matched");
-          }
-          break;
-        }
-      }
+      // Use Google's smart pinpointing with zonal data as anchor
+      const location = await geocodeWithZonalData({
+        query: [street, brgy, cty, prov].filter(Boolean).join(", "),
+        street: street || undefined,
+        barangay: brgy || undefined,
+        city: cty || undefined,
+        province: prov || undefined,
+        baseLatLon,
+      });
 
       if (myId !== reqIdRef.current) return;
 
-      let finalCenter = best ?? anchor;
-      if (anchor.boundary && anchor.boundary.length > 0) {
-        const inside = isPointInPolygon(finalCenter.lat, finalCenter.lon, anchor.boundary as any);
-        if (!inside) {
-          finalCenter = anchor;
-          setMatchStatus("✓ Barangay-locked (centroid)");
-        }
-      } else {
-        const d = getDistanceKm(finalCenter.lat, finalCenter.lon, anchor.lat, anchor.lon);
-        if (d > 1.5) {
-          finalCenter = anchor;
-          setMatchStatus("✓ Locked near barangay");
-        }
-      }
+      const finalLoc = location || baseLatLon || { lat: 10.3085, lon: 123.8906 };
+      setSelectedLocation({ lat: finalLoc.lat, lon: finalLoc.lon });
+      setGeoLabel(location?.label || `${street || brgy}, ${cty}`);
+      setMatchStatus("✓ Pinpointed to street");
 
-      setSelectedLocation({ lat: finalCenter.lat, lon: finalCenter.lon });
-      setGeoLabel(best?.label ?? anchor.label);
-      setBoundary(finalCenter.boundary ?? anchor.boundary ?? null);
-
-      // Neighborhoods should not block the main flow
-      // neighborhoods disabled
+      // Load POIs immediately
+      loadPoiIndependent(finalLoc.lat, finalLoc.lon, r, location?.label || `${street || brgy}, ${cty}`);
       setAreaLabels([]);
-
-      // Optionally refresh POIs silently if the final center moved far from anchor (> 0.3km)
-      const movedKm = getDistanceKm(finalCenter.lat, finalCenter.lon, anchor.lat, anchor.lon);
-      if (movedKm > 0.3) {
-        loadPoiIndependent(finalCenter.lat, finalCenter.lon, r, best?.label ?? anchor.label);
-      }
-      const snapResp = await fetchStreetGeometryAt(r, finalCenter.lat, finalCenter.lon).catch(() => null);
-      // Apply street snap if available
-      try {
-        const snap = (snapResp as any)?.meta?.center as { lat: number; lon: number } | undefined;
-        if (snap && Number.isFinite(snap.lat) && Number.isFinite(snap.lon)) {
-          const bnd = (finalCenter.boundary ?? anchor.boundary) as Boundary | null;
-          if (
-            myId === reqIdRef.current &&
-            ((selectedRow as any)?.rowIndex ?? null) === rowIndexAtStart &&
-            (!bnd || bnd.length === 0 || isPointInPolygon(snap.lat, snap.lon, bnd))
-          ) {
-            setSelectedLocation({ lat: snap.lat, lon: snap.lon });
-            const nm = (snapResp as any)?.meta?.name || String(r["Street/Subdivision-"] || "");
-            setGeoLabel(`${nm} (snapped to street)`);
-          }
-        }
-      } catch {}
-      if (myId !== reqIdRef.current) return;
     } catch (e: any) {
       if (myId !== reqIdRef.current) return;
       setDetailsErr(e?.message ?? "Failed to load details");
@@ -880,14 +696,6 @@ export default function Home() {
 
   async function selectLocationFromMap(lat: number, lon: number) {
     const myId = ++reqIdRef.current;
-
-    if (boundary && boundary.length > 0) {
-      const inside = isPointInPolygon(lat, lon, boundary);
-      if (!inside) {
-        setDetailsErr("Please click inside the selected barangay.");
-        return;
-      }
-    }
 
     setSelectedLocation({ lat, lon });
     setGeoLabel(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
@@ -904,105 +712,17 @@ export default function Home() {
     setBottomOpen(true);
 
     try {
-      // Start POIs independently; neighborhoods in background
       loadPoiIndependent(lat, lon, null, `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
-      // neighborhoods disabled
       setAreaLabels([]);
-
-      // auto-pick nearest street row (existing behavior)
-      try {
-        const res = await fetch("/api/street-nearby", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lat, lon }),
-        });
-        const near = await res.json().catch(() => null);
-        if (myId !== reqIdRef.current) return;
-        if (res.ok && near?.ok && near?.name) {
-          const params = new URLSearchParams({ domain });
-          if (city) params.set("city", city);
-          if (barangay) params.set("barangay", barangay);
-          params.set("q", String(near.name));
-          params.set("page", "1");
-          const zr = await fetch(`/api/zonal?${params.toString()}`);
-          const zdata = await zr.json().catch(() => null);
-          if (myId !== reqIdRef.current) return;
-          const found = Array.isArray(zdata?.rows) && zdata.rows.length ? zdata.rows[0] : null;
-          if (found) {
-            setSelectedRow(found);
-            setGeoLabel(`${near.name}`);
-          }
-        }
-      } catch {}
     } catch (e: any) {
       if (myId !== reqIdRef.current) return;
       setDetailsErr(e?.message ?? "Failed to load POI");
     } finally {
       if (myId !== reqIdRef.current) return;
-      // poiLoading controlled by loadPoiIndependent
     }
   }
 
-  // Pinpoint via server geocoder (Google-first), then snap to street
-  async function pinpointFromBirRow() {
-    if (!selectedRow) return;
-    const thisCallId = ++pinpointReqIdRef.current;
-    const thisRowIndex = (selectedRow as any)?.rowIndex ?? null;
-    const streetName = String(selectedRow["Street/Subdivision-"] ?? "").trim();
-    const barangay = String(selectedRow["Barangay-"] ?? "").trim();
-    const city = String(selectedRow["City-"] ?? "").trim();
-    const province = String(selectedRow["Province-"] ?? "").trim();
-    const vicinity = String(selectedRow["Vicinity-"] ?? "").trim();
-
-    const anchor = selectedLocation ? { lat: selectedLocation.lat, lon: selectedLocation.lon } : null;
-
-    try {
-      const res = await fetch("/api/geocode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: streetName || [barangay, city, province, "Philippines"].filter(Boolean).join(", "),
-          hintBarangay: barangay,
-          hintCity: city,
-          hintProvince: province,
-          anchorLat: anchor?.lat ?? null,
-          anchorLon: anchor?.lon ?? null,
-          street: streetName,
-          vicinity: vicinity || "",
-        }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.ok) return;
-      if (thisCallId !== pinpointReqIdRef.current) return; // stale
-      if (((selectedRow as any)?.rowIndex ?? null) !== thisRowIndex) return; // row changed
-
-      setSelectedLocation({ lat: Number(data.lat), lon: Number(data.lon) });
-      setGeoLabel(String(data.displayName || streetName || `${barangay}, ${city}`));
-
-      // Snap to street for better on-road accuracy
-      try {
-        const sres = await fetch("/api/street-geometry", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            streetName,
-            city,
-            province,
-            barangay,
-            lat: Number(data.lat),
-            lon: Number(data.lon),
-          }),
-        });
-        const sj = await sres.json().catch(() => null);
-        const snap = sj?.meta?.center;
-        if (thisCallId === pinpointReqIdRef.current && ((selectedRow as any)?.rowIndex ?? null) === thisRowIndex && sres.ok && sj?.ok && snap?.lat && snap?.lon) {
-          setSelectedLocation({ lat: snap.lat, lon: snap.lon });
-          setGeoLabel(`${sj?.meta?.name || streetName} (snapped to street)`);
-        }
-      } catch {}
-    } catch {}
-  }
-
+  // Trigger search when domain/filters change
   useEffect(() => {
     const t = setTimeout(() => {
       if (!domain) return;
@@ -1017,6 +737,8 @@ export default function Home() {
   const selectedTitle = selectedRow
     ? `${String(selectedRow["Barangay-"] ?? "")}, ${String(selectedRow["City-"] ?? "")}, ${String(selectedRow["Province-"] ?? "")}`
     : geoLabel || "Select a property";
+
+
 
   return (
     <main className="h-screen w-screen overflow-hidden bg-slate-100 text-gray-900">
@@ -1106,7 +828,7 @@ export default function Home() {
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
                       <input
                         value={regionSearch}
-                        onChange={(e)=>setRegionSearch(e.target.value)}
+                        onChange={(e) => setRegionSearch(e.target.value)}
                         placeholder="Enter province (e.g., Cebu, Bohol, Davao)"
                         className="w-full rounded-2xl border border-transparent bg-[#0F2854] px-10 py-3 text-sm text-white placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-white/50"
                       />
@@ -1186,7 +908,8 @@ export default function Home() {
                           await loadCities(m.domain);
                           searchZonal({ page: 1 });
 
-                          flyToFilters(m.city, "", m.province);
+                          // Pinpoint to region center
+                          await pinpointFilterLocation(m.city, "", m.province);
 
                           setShowRegionPicker(false);
                           setShowFilters(true);
@@ -1205,103 +928,120 @@ export default function Home() {
                 {showFilters && (
                   <div className="mt-3 space-y-3">
                     <div className="grid grid-cols-2 gap-2">
-                      <select
-                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={city}
-                        onChange={(e) => {
-                          const nextCity = e.target.value;
-                          setCity(nextCity);
-                          setShowStreetHighlight(false);
-                          setStreetGeo(null);
-                          setBarangay("");
-                          setPage(1);
-                          setFacetBarangays([]);
-                          loadBarangays(domain, nextCity);
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 block mb-2">City</label>
+                        <select
+                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={city}
+                          onChange={(e) => {
+                            const nextCity = e.target.value;
+                            setCity(nextCity);
+                            setShowStreetHighlight(false);
+                            setStreetGeo(null);
+                            setBarangay("");
+                            setPage(1);
+                            setFacetBarangays([]);
+                            loadBarangays(domain, nextCity);
 
-                          if (nextCity) {
-                            const provinceFromDomain = domain.split(".")[0];
-                            const provinceName = provinceFromDomain.charAt(0).toUpperCase() + provinceFromDomain.slice(1);
-                            flyToFilters(nextCity, "", provinceName);
-                          }
-                        }}
-                        disabled={facetsLoading || facetCities.length === 0}
-                      >
-                        <option value="">All Cities</option>
-                        {facetCities.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
+                            // Pinpoint to city
+                            if (nextCity) {
+                              pinpointFilterLocation(nextCity, "", selectedProvince);
+                            }
+                          }}
+                          disabled={facetsLoading || facetCities.length === 0}
+                        >
+                          <option value="">All Cities</option>
+                          {facetCities.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                      <select
-                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={barangay}
-                        onChange={(e) => {
-                          const nextBrgy = e.target.value;
-                          setBarangay(nextBrgy);
-                          setShowStreetHighlight(false);
-                          setStreetGeo(null);
-                          setPage(1);
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 block mb-2">Barangay</label>
+                        <select
+                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={barangay}
+                          onChange={(e) => {
+                            const nextBrgy = e.target.value;
+                            setBarangay(nextBrgy);
+                            setShowStreetHighlight(false);
+                            setStreetGeo(null);
+                            setPage(1);
 
-                          if (city && nextBrgy) {
-                            const provinceFromDomain = domain.split(".")[0];
-                            const provinceName = provinceFromDomain.charAt(0).toUpperCase() + provinceFromDomain.slice(1);
-                            flyToFilters(city, nextBrgy, provinceName);
-                          }
-                        }}
-                        disabled={!city || barangaysLoading}
-                      >
-                        <option value="">All Barangays</option>
-                        {facetBarangays.map((b) => (
-                          <option key={b} value={b}>
-                            {b}
-                          </option>
-                        ))}
-                      </select>
+                            // Pinpoint to barangay
+                            if (city && nextBrgy) {
+                              pinpointFilterLocation(city, nextBrgy, selectedProvince);
+                            }
+                          }}
+                          disabled={!city || barangaysLoading}
+                        >
+                          <option value="">All Barangays</option>
+                          {facetBarangays.map((b) => (
+                            <option key={b} value={b}>
+                              {b}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
-                      <select
-                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={classification}
-                        onChange={(e) => {
-                          setClassification(e.target.value);
-                          setPage(1);
-                        }}
-                      >
-                        <option value="">Classification (Optional)</option>
-                        <option value="COMMERCIAL REGULAR">COMMERCIAL REGULAR</option>
-                        <option value="COMMERCIAL CONDOMINIUM">COMMERCIAL CONDOMINIUM</option>
-                        <option value="COMMERCIAL">COMMERCIAL</option>
-                        <option value="RESIDENTIAL">RESIDENTIAL</option>
-                        <option value="RESIDENTIAL CONDOMINIUM">RESIDENTIAL CONDOMINIUM</option>
-                        <option value="INDUSTRIAL">INDUSTRIAL</option>
-                        <option value="AGRICULTURAL">AGRICULTURAL</option>  
-                        <option value="SPECIAL">SPECIAL</option>
-                        <option value="MIXED-USE">MIXED-USE</option>
-                        <option value="ROAD LOT">ROAD LOT</option>
-                        <option value="OPEN SPACE">OPEN SPACE</option>
-                      </select>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 block mb-2">Classification</label>
+                        <select
+                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={classification}
+                          onChange={(e) => {
+                            setClassification(e.target.value);
+                            setPage(1);
+                          }}
+                        >
+                          <option value="">Classification (Optional)</option>
+                          <option value="COMMERCIAL REGULAR">COMMERCIAL REGULAR</option>
+                          <option value="COMMERCIAL CONDOMINIUM">COMMERCIAL CONDOMINIUM</option>
+                          <option value="COMMERCIAL">COMMERCIAL</option>
+                          <option value="RESIDENTIAL">RESIDENTIAL</option>
+                          <option value="RESIDENTIAL CONDOMINIUM">RESIDENTIAL CONDOMINIUM</option>
+                          <option value="INDUSTRIAL">INDUSTRIAL</option>
+                          <option value="AGRICULTURAL">AGRICULTURAL</option>
+                          <option value="SPECIAL">SPECIAL</option>
+                          <option value="MIXED-USE">MIXED-USE</option>
+                          <option value="ROAD LOT">ROAD LOT</option>
+                          <option value="OPEN SPACE">OPEN SPACE</option>
+                        </select>
+                      </div>
 
-                      <input
-                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Street / Vicinity…"
-                        value={q}
-                        onChange={(e) => {
-                          setQ(e.target.value);
-                          setPage(1);
-                        }}
-                      />
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 block mb-2">Street / Vicinity</label>
+                        <input
+                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Street / Vicinity…"
+                          value={q}
+                          onChange={(e) => {
+                            setQ(e.target.value);
+                            setPage(1);
+                          }}
+                        />
+                      </div>
                     </div>
 
                     <div className="flex gap-2">
                       <button
                         onClick={() => searchZonal({ page: 1 })}
                         disabled={loading}
-                        className="flex-1 rounded-xl bg-blue-600 text-white px-4 py-2.5 text-xs font-bold hover:bg-blue-700 transition disabled:opacity-50"
+                        className="flex-1 rounded-xl bg-blue-600 text-white px-4 py-2.5 text-xs font-bold hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
                       >
-                        {loading ? "Searching…" : "Search"}
+                        {loading ? (
+                          <>
+                            <Zap size={14} className="animate-spin" />
+                            Searching…
+                          </>
+                        ) : (
+                          "Search"
+                        )}
                       </button>
                       <button
                         onClick={() => {
@@ -1332,7 +1072,7 @@ export default function Home() {
                 <div className="px-4 py-3 sticky top-0 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between">
                   <div className="text-xs font-extrabold tracking-wide text-gray-700 flex items-center gap-2">
                     <List size={16} />
-                    RESULTS
+                    RESULTS {loading && <Zap size={14} className="animate-spin text-orange-500" />}
                   </div>
                   <div className="text-[11px] text-gray-600">
                     {totalRows ? (
@@ -1344,8 +1084,6 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-
-                {loading && <p className="text-xs text-gray-500 px-4 py-3">Loading…</p>}
 
                 <div className="divide-y divide-gray-200">
                   {rows.map((r, i) => (
@@ -1423,7 +1161,6 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* Quick facts moved here + ReportBuilder below */}
               <div className="flex-1 overflow-auto p-4 space-y-3">
                 <div className="rounded-2xl border border-gray-200 bg-white p-3">
                   <div className="flex items-center justify-between">
@@ -1454,7 +1191,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* BOTTOM SHEET — Smaller card + Directions only */}
+      {/* BOTTOM SHEET */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[92vw] sm:w-[560px]">
         <div
           className={[
@@ -1473,7 +1210,12 @@ export default function Home() {
           {bottomOpen && (
             <div className="px-4 pb-3">
               {!selectedRow ? (
-                <div className="text-sm text-gray-600">Click a result on the left panel or click a point on the map.</div>
+                <div className="text-sm text-gray-600">
+                  <div className="flex items-center gap-2">
+                    <MapPin size={16} className="text-blue-600" />
+                    {geoLoading ? "Finding location..." : "Select a region, city, barangay, or click on a street from the list"}
+                  </div>
+                </div>
               ) : (
                 <>
                   <div className="rounded-2xl bg-[#1C4D8D] text-white p-4 flex items-center justify-between shadow">
@@ -1516,12 +1258,11 @@ export default function Home() {
                         }
                       }}
                       disabled={streetGeoLoading}
-                      className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
+                      className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50 disabled:opacity-50"
                     >
                       {streetGeoLoading ? "Finding…" : showStreetHighlight ? "Hide Street" : "Highlight Street"}
                     </button>
 
-                    {/* optional quick access to report */}
                     <button
                       onClick={() => setRightOpen(true)}
                       className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
@@ -1529,25 +1270,19 @@ export default function Home() {
                     >
                       Open Report
                     </button>
-
-                    {/* Pinpoint via Google-first geocoder */}
-                    <button
-                      onClick={pinpointFromBirRow}
-                      className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
-                      title="Pinpoint (Google First)"
-                    >
-                      Pinpoint
-                    </button>
                   </div>
 
                   <div className="mt-3 space-y-2">
                     {geoLoading && (
                       <div className="text-xs text-gray-600 flex items-center gap-2">
-                        <span className="animate-spin">⟳</span> Geocoding…
+                        <span className="animate-spin">⟳</span> Pinpointing…
                       </div>
                     )}
                     {matchStatus && (
-                      <div className="text-xs text-green-800 bg-green-50 border border-green-200 rounded-2xl px-3 py-2">{matchStatus}</div>
+                      <div className="text-xs text-green-800 bg-green-50 border border-green-200 rounded-2xl px-3 py-2 flex items-center gap-2">
+                        <MapPin size={12} />
+                        {matchStatus}
+                      </div>
                     )}
                     {detailsErr && (
                       <div className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-2xl px-3 py-2">{detailsErr}</div>
