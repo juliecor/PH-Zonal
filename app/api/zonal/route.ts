@@ -55,6 +55,7 @@ async function canonicalizeStreetWithGoogle(q: string, barangay: string, city: s
 
 const PAGE_SIZE = 1000; // Fetch 1000 at a time from source (fast)
 const MAX_PAGES = 150; // Safety cap
+const PARALLEL_FETCH = 3; // Fetch 3 pages in parallel (instead of 1 at a time)
 
 function getVal(row: AnyRow, key: string) {
   return (
@@ -99,9 +100,8 @@ function matchesBarangay(value: any, want: any) {
   return norm(value) === norm(want);
 }
 
-// ✅ NEW: Fetch ONLY the page you need (lazy loading)
+// ✅ Fetch ONLY the page you need (lazy loading)
 async function getPageRows(domain: string, pageNum: number) {
-  // Check page cache
   let domainCache = ZONAL_PAGE_CACHE.get(domain);
   if (!domainCache) {
     domainCache = new Map();
@@ -120,14 +120,12 @@ async function getPageRows(domain: string, pageNum: number) {
     domain,
     page: pageNum,
     itemsPerPage: PAGE_SIZE,
-    search: "", // Keep empty for unfiltered results
+    search: "",
   });
 
   const rows = Array.isArray(data?.rows) ? data.rows : [];
   
-  // Cache this page
   domainCache.set(pageNum, { ts: Date.now(), rows });
-
   return rows;
 }
 
@@ -141,7 +139,6 @@ async function getDomainMetadata(domain: string) {
 
   console.log(`[META FETCH] Domain ${domain}`);
   
-  // Fetch first page just to get metadata
   const data = await fetchZonalValuesByDomain({
     domain,
     page: 1,
@@ -196,6 +193,19 @@ function filterRow(row: AnyRow, filters: { city?: string; barangay?: string; cla
   return true;
 }
 
+// ✅ NEW: Parallel page fetching - fetch multiple pages at once instead of sequential!
+async function getMultiplePagesParallel(domain: string, pageNums: number[]) {
+  const promises = pageNums.map((pageNum) => getPageRows(domain, pageNum));
+  const results = await Promise.all(promises);
+  
+  const combined: AnyRow[] = [];
+  for (const rows of results) {
+    combined.push(...rows);
+  }
+  
+  return combined;
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -213,7 +223,7 @@ export async function GET(req: Request) {
 
     const itemsPerPage = 16;
 
-    // ✅ NEW: Get metadata (total count, etc) - very fast!
+    // ✅ Get metadata (total count, etc) - very fast!
     const meta = await getDomainMetadata(domain);
     const estTotalRows = meta.totalRows;
     
@@ -222,7 +232,7 @@ export async function GET(req: Request) {
       const estPageCount = Math.ceil(estTotalRows / itemsPerPage) || 1;
       const validPage = Math.min(page, estPageCount);
 
-      // ✅ NEW: Fetch ONLY the page needed
+      // ✅ Fetch ONLY the page needed
       const pageData = await getPageRows(domain, validPage);
 
       return NextResponse.json(
@@ -241,36 +251,46 @@ export async function GET(req: Request) {
     }
 
     // ============================================================================
-    // FILTERING: Need to search through pages until we have enough results
-    // But we do it PAGE-BY-PAGE, not all at once!
+    // FILTERING: Fetch multiple pages in PARALLEL instead of sequential!
+    // This is the KEY OPTIMIZATION - 3x pages at once instead of 1 at a time
     // ============================================================================
 
     const collected: AnyRow[] = [];
     let currentPage = 1;
     let exhausted = false;
 
-    // Collect filtered results page by page (stop after finding enough)
+    // ✅ NEW: Collect results by fetching PARALLEL_FETCH pages at a time
     while (collected.length < page * itemsPerPage && currentPage <= MAX_PAGES && !exhausted) {
-      const pageRows = await getPageRows(domain, currentPage);
-      
-      if (pageRows.length === 0) {
+      // ✅ PARALLEL: Fetch 3 pages at once instead of 1!
+      const pagesToFetch = [];
+      for (let i = 0; i < PARALLEL_FETCH && currentPage + i <= MAX_PAGES; i++) {
+        pagesToFetch.push(currentPage + i);
+      }
+
+      console.log(`[PARALLEL FETCH] Fetching pages ${pagesToFetch.join(", ")} in parallel`);
+
+      // Fetch all pages in parallel (Promise.all waits for all to complete)
+      const allPageRows = await getMultiplePagesParallel(domain, pagesToFetch);
+
+      if (allPageRows.length === 0) {
         exhausted = true;
         break;
       }
 
-      // Filter this page's rows
-      const filtered = pageRows.filter((row) =>
+      // Filter all fetched rows
+      const filtered = allPageRows.filter((row) =>
         filterRow(row, { city, barangay, classification, q })
       );
 
       collected.push(...filtered);
-      
-      // If we got fewer rows than requested, we've reached the end
-      if (pageRows.length < PAGE_SIZE) {
+
+      // Check if any page had fewer rows (reached the end)
+      const lastPageSize = (allPageRows.length % PAGE_SIZE) || PAGE_SIZE;
+      if (lastPageSize < PAGE_SIZE) {
         exhausted = true;
       }
 
-      currentPage++;
+      currentPage += pagesToFetch.length;
     }
 
     // Now paginate the collected results
