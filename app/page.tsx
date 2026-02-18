@@ -830,7 +830,7 @@ export default function Home() {
                         value={regionSearch}
                         onChange={(e) => setRegionSearch(e.target.value)}
                         placeholder="Enter province (e.g., Cebu, Bohol, Davao)"
-                        className="w-full rounded-2xl border border-transparent bg-[#ffffff] px-10 py-3 text-sm text-black placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-white/50"
+                        className="w-full rounded-2xl border border-transparent bg-[#0F2854] px-10 py-3 text-sm text-white placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-white/50"
                       />
                       {regionSearch && (
                         <button
