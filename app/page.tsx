@@ -651,7 +651,7 @@ export default function Home() {
     // On mobile, collapse panels to focus on the map
     if (typeof window !== "undefined" && window.innerWidth < 640) {
       setLeftOpen(false);
-      setBottomOpen(false);
+      setBottomOpen(true); // keep bottom sheet expanded so value is visible
     } else {
       setBottomOpen(true);
     }
