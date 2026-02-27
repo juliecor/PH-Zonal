@@ -34,25 +34,7 @@ export default function WelcomePage() {
           <Image src="/pictures/FilipinoHomes.png" alt="Filipino Homes" width={220} height={56} priority />
           <span className="text-sm text-gray-600 hidden sm:block">Zonal Value Explorer</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="hidden md:inline-flex items-center gap-1 rounded-full bg-white/70 backdrop-blur px-3 py-1 text-[11px] font-semibold text-blue-700 border border-white/60 shadow-sm">
-            <Sparkles size={12} /> Made for the Philippines
-          </span>
-          <button
-            onClick={enterApp}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 text-white px-4 py-2 text-sm font-semibold hover:bg-blue-700 transition shadow"
-          >
-          {loading ? (
-            <>
-              <Zap size={16} className="animate-spin" /> Loading…
-            </>
-          ) : (
-            <>
-              <MapPin size={16} /> Enter App
-            </>
-          )}
-          </button>
-        </div>
+        <div className="flex items-center gap-2" />
       </header>
 
       {/* Hero */}
