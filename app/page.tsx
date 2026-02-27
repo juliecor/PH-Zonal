@@ -648,7 +648,13 @@ export default function Home() {
     setShowStreetHighlight(false);
     setStreetGeo(null);
 
-    setBottomOpen(true);
+    // On mobile, collapse panels to focus on the map
+    if (typeof window !== "undefined" && window.innerWidth < 640) {
+      setLeftOpen(false);
+      setBottomOpen(false);
+    } else {
+      setBottomOpen(true);
+    }
 
     setGeoLoading(true);
     try {
@@ -815,7 +821,7 @@ export default function Home() {
         <div
           className={[
             "h-full bg-white/95 backdrop-blur border-r border-gray-200 shadow-2xl transition-all duration-300",
-            leftOpen ? "w-[360px] sm:w-[400px]" : "w-0",
+            leftOpen ? "w-full sm:w-[400px]" : "w-0",
           ].join(" ")}
         >
           {leftOpen && (
