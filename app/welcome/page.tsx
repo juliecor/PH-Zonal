@@ -41,7 +41,7 @@ export default function WelcomePage() {
       <section className="relative max-w-7xl mx-auto px-6 pt-10 pb-16 grid lg:grid-cols-2 gap-10 items-center z-10">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold px-3 py-1 border border-blue-100 shadow-sm">
-            <Sparkles size={12} /> New • Google‑smart Pinpointing
+            <Sparkles size={12} /> New • Filipino Homes Smart Pin
           </div>
           <h1 className="mt-4 text-4xl sm:text-5xl xl:text-6xl font-black tracking-tight leading-tight text-slate-900">
             Find Zonal Values
