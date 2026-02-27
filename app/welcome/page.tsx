@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { MapPin, Zap, Compass, ShieldCheck, Sparkles, TrendingUp } from "lucide-react";
+import { MapPin, Zap, Compass, ShieldCheck, Sparkles, TrendingUp, Landmark, Building2, Home } from "lucide-react";
 import { useState } from "react";
 
 export default function WelcomePage() {
@@ -101,9 +101,9 @@ export default function WelcomePage() {
       {/* Stats bar */}
       <section className="relative z-10 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-t border-b border-white/60">
         <div className="max-w-7xl mx-auto px-6 py-6 grid grid-cols-3 gap-4 text-center">
-          <Stat k="Provinces" v="80+" />
-          <Stat k="Cities" v="1,600+" />
-          <Stat k="Barangays" v="42,000+" />
+          <Stat k="Provinces" v="80+" icon={<Landmark size={18} />} />
+          <Stat k="Cities" v="1,600+" icon={<Building2 size={18} />} />
+          <Stat k="Barangays" v="42,000+" icon={<Home size={18} />} />
         </div>
       </section>
 
@@ -137,11 +137,18 @@ function Feature({ icon, title, desc }: { icon: React.ReactNode; title: string; 
   );
 }
 
-function Stat({ k, v }: { k: string; v: string }) {
+function Stat({ k, v, icon }: { k: string; v: string; icon?: React.ReactNode }) {
   return (
-    <div className="rounded-xl bg-gradient-to-br from-slate-50 to-white border border-white/70 p-4 shadow-sm">
-      <div className="text-2xl font-black text-slate-900">{v}</div>
-      <div className="text-[12px] text-gray-600 mt-1">{k}</div>
+    <div className="rounded-xl bg-gradient-to-br from-slate-50 to-white border border-white/70 p-4 shadow-sm flex items-center gap-3">
+      {icon && (
+        <div className="shrink-0 w-9 h-9 rounded-full grid place-items-center bg-gradient-to-br from-blue-100 to-indigo-100 text-blue-700 shadow-sm animate-[pulse_3s_ease-in-out_infinite]">
+          {icon}
+        </div>
+      )}
+      <div className="text-left">
+        <div className="text-2xl font-black text-slate-900 leading-none">{v}</div>
+        <div className="text-[12px] text-gray-600 mt-1">{k}</div>
+      </div>
     </div>
   );
 }
