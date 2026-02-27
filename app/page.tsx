@@ -766,14 +766,14 @@ export default function Home() {
       </div>
 
       {/* Top Bar Logo */}
-      <div className="absolute top-4 left-1/3 z-30">
+      <div className="absolute top-4 left-16 sm:left-1/3 z-30">
         <div className="rounded-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-lg px-3 py-2 flex items-center gap-3">
           <Image
             src="/pictures/FilipinoHomes.png"
             alt="Filipino Homes"
-            width={180}
-            height={40}
-            className="h-10 w-auto"
+            width={160}
+            height={36}
+            className="h-8 sm:h-10 w-auto"
             priority
           />
           <div className="hidden md:block text-xs text-gray-500 border-l pl-3">
