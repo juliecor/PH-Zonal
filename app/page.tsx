@@ -22,6 +22,7 @@ import {
 import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "./lib/types";
 import { isBadStreet, normalizePH, suggestBusinesses } from "./lib/zonal-util";
 import ReportBuilder from "./components/ReportBuilder";
+import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
 
 const MapComponent = dynamic(
   async () => {
@@ -748,6 +749,8 @@ export default function Home() {
 
   return (
     <main className="h-screen w-screen overflow-hidden bg-slate-100 text-gray-900">
+      <ZonalSearchIndicator visible={loading} />
+
       {/* Fullscreen Map */}
       <div className="absolute inset-0">
         <MapComponent
