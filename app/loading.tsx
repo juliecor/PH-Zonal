@@ -9,7 +9,7 @@ export default function Loading() {
           height={74}
           className="animate-bounce"
         />
-        <p className="text-sm text-gray-700">Loading…</p>
+        <p className="text-sm text-gray-700 font-bold font-size-50">Loading…</p>
       </div>
     </div>
   );
