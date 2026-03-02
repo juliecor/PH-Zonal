@@ -47,17 +47,16 @@ export default function WelcomePage() {
             Find Zonal Values
             <span className="block text-transparent bg-clip-text bg-gradient-to-r from-sky-700 via-blue-600 to-indigo-700">Fast & Precisely</span>
           </h1>
-          <p className="mt-5 text-gray-700 text-base sm:text-lg leading-relaxed max-w-xl">
-            Pinpoint streets and barangays with Google‑smart geocoding and instant street snapping. Explore nearby facilities
-            and build a beautiful report — all in a few clicks.
+          <p className="mt-4 text-gray-800 text-base sm:text-lg leading-relaxed max-w-xl">
+            Developed for real estate professionals, the Zonal Finder of Filipino Homes provides accurate zonal values per square meter across streets and barangays. Users can evaluate property areas, analyze nearby establishments, and produce detailed reports for reliable property pricing.
           </p>
 
           {/* Feature bullets */}
-          <div className="mt-6 grid sm:grid-cols-2 gap-3 max-w-2xl">
-            <Feature icon={<Compass size={16} />} title="Smart Pinning" desc="Street‑level accuracy with Google + snap" />
-            <Feature icon={<ShieldCheck size={16} />} title="Reliable Filters" desc="Province, city, barangay in seconds" />
-            <Feature icon={<TrendingUp size={16} />} title="Instant Insights" desc="Nearby POIs and quick facts" />
-            <Feature icon={<Zap size={16} />} title="1‑Click Report" desc="Beautiful PDF with branded layout" />
+          <div className="mt-6 grid sm:grid-cols-2 gap-3 max-w-3xl">
+            <Feature icon={<Compass size={25}  />} title="Smart Pinning" desc="Street‑level accuracy with Google + snap" />
+            <Feature icon={<ShieldCheck size={25} />} title="Reliable Filters" desc="Province, city, barangay in seconds" />
+            <Feature icon={<TrendingUp size={25} />} title="Instant Insights" desc="Nearby POIs and quick facts" />
+            <Feature icon={<Zap size={25} />} title="1‑Click Report" desc="Beautiful PDF with branded layout" />
           </div>
 
           <div className="mt-8 flex items-center gap-3">
@@ -101,9 +100,9 @@ export default function WelcomePage() {
       {/* Stats bar */}
       <section className="relative z-10 bg-transparent">
         <div className="max-w-7xl mx-auto px-6 py-6 grid grid-cols-3 gap-2 sm:gap-4 text-center">
-          <Stat k="Provinces" v="80+" icon={<Landmark size={18} />} />
-          <Stat k="Cities" v="1,600+" icon={<Building2 size={18} />} />
-          <Stat k="Barangays" v="42,000+" icon={<Home size={18} />} />
+          <Stat k="Provinces" v="80+" icon={<Landmark size={20} />} />
+          <Stat k="Cities" v="1,600+" icon={<Building2 size={20} />} />
+          <Stat k="Barangays" v="42,000+" icon={<Home size={20} />} />
         </div>
       </section>
 
