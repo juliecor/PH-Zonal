@@ -66,11 +66,11 @@ export default function WelcomePage() {
             >
               {loading ? (
                 <>
-                  <Zap size={16} className="animate-spin" /> Loading…
+                  <Zap size={20} className="animate-spin" /> Loading…
                 </>
               ) : (
                 <>
-                  <MapPin size={16} /> Start Exploring
+                  <MapPin size={20} /> Start Exploring
                 </>
               )}
             </button>
