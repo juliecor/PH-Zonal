@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Map as MapIcon,
@@ -770,7 +771,11 @@ export default function Home() {
 
       {/* Top Bar Logo */}
       <div className="absolute top-4 left-16 sm:left-1/3 z-30">
-        <div className="rounded-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-lg px-3 py-2 flex items-center gap-3">
+        <Link
+          href="/welcome"
+          title="Go to Home"
+          className="rounded-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-lg px-3 py-2 flex items-center gap-3 hover:shadow-xl transition cursor-pointer"
+        >
           <Image
             src="/pictures/FilipinoHomes.png"
             alt="Filipino Homes"
@@ -783,7 +788,7 @@ export default function Home() {
             <div className="font-semibold text-gray-700 leading-tight">Zonal Value</div>
             <div className="leading-tight">{domain}</div>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* Map Type Buttons */}
