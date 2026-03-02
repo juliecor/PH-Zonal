@@ -22,7 +22,7 @@ export default function WelcomePage() {
         className="pointer-events-none absolute inset-0 -z-10 opacity-70"
         style={{
           backgroundImage:
-            "radial-gradient(600px 400px at 12% 8%, rgba(252,211,77,0.25), transparent 60%), radial-gradient(500px 320px at 88% 12%, rgba(125,211,252,0.28), transparent 60%), radial-gradient(520px 360px at 75% 75%, rgba(167,243,208,0.28), transparent 60%)",
+            "radial-gradient(600px 400px at 12% 8%, rgba(248, 215, 105, 0.25), transparent 60%), radial-gradient(500px 320px at 88% 12%, rgba(125,211,252,0.28), transparent 60%), radial-gradient(520px 360px at 75% 75%, rgba(167,243,208,0.28), transparent 60%)",
         }}
       />
       {/* Soft decorative blobs */}
@@ -31,7 +31,7 @@ export default function WelcomePage() {
 
       <header className="relative max-w-7xl mx-auto px-6 py-4 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-          <Image src="/pictures/FilipinoHomes.png" alt="Filipino Homes" width={220} height={56} priority />
+          <Image src="/pictures/FilipinoHomes.png" alt="Filipino Homes" width={220} height={60} priority />
           <span className="text-sm text-gray-600 hidden sm:block">Zonal Value Explorer</span>
         </div>
         <div className="flex items-center gap-2" />
@@ -79,20 +79,20 @@ export default function WelcomePage() {
         </div>
 
         {/* Hero map image (PH) with bouncing pointer overlay */}
-        <div className="relative h-[380px] sm:h-[460px] lg:h-[520px]">
+        <div className="relative h-[380px] sm:h-[460px] lg:h-[600px]">
           <Image
-            src="/pictures/phil2.png"
+            src="/pictures/phil3.png"
             alt="Philippines map"
             fill
-            sizes="(max-width: 1024px) 100vw, 50vw"
+            sizes="(max-width: 1024px) 120vw, 50vw"
             className="object-contain drop-shadow-2xl scale-110 lg:scale-125"
             priority
           />
           <img
             src="/pictures/filipinohomespointer.png"
             alt="Pointer"
-            width={140}
-            height={140}
+            width={120}
+            height={120}
             className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full animate-bounce drop-shadow-xl"
           />
         </div>
