@@ -15,19 +15,19 @@ export default function WelcomePage() {
   }
 
   return (
-    <main className="relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-sky-50 via-white to-emerald-50 text-gray-800">
+    <main className="relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-sky-200 via-sky-100 to-emerald-100 text-gray-800">
       {/* Ambient sunbursts + color wash */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 opacity-70"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-80"
         style={{
           backgroundImage:
-            "radial-gradient(600px 400px at 12% 8%, rgba(248, 215, 105, 0.25), transparent 60%), radial-gradient(500px 320px at 88% 12%, rgba(125,211,252,0.28), transparent 60%), radial-gradient(520px 360px at 75% 75%, rgba(167,243,208,0.28), transparent 60%)",
+            "radial-gradient(600px 400px at 12% 8%, rgba(248, 215, 105, 0.25), transparent 60%), radial-gradient(500px 320px at 88% 12%, rgba(125,211,252,0.35), transparent 60%), radial-gradient(520px 360px at 75% 75%, rgba(167,243,208,0.32), transparent 60%)",
         }}
       />
       {/* Soft decorative blobs */}
-      <div className="pointer-events-none absolute -top-24 -left-24 h-[420px] w-[420px] rounded-full bg-gradient-to-br from-sky-200 via-blue-200 to-indigo-200 blur-3xl opacity-30" />
-      <div className="pointer-events-none absolute -bottom-28 -right-28 h-[420px] w-[420px] rounded-full bg-gradient-to-tr from-amber-200 via-rose-200 to-pink-200 blur-3xl opacity-30" />
+      <div className="pointer-events-none absolute -top-24 -left-24 h-[420px] w-[420px] rounded-full bg-gradient-to-br from-sky-300 via-blue-200 to-indigo-200 blur-3xl opacity-40" />
+      <div className="pointer-events-none absolute -bottom-28 -right-28 h-[420px] w-[420px] rounded-full bg-gradient-to-tr from-amber-200 via-rose-200 to-pink-200 blur-3xl opacity-40" />
 
       <header className="relative max-w-7xl mx-auto px-6 py-4 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
@@ -99,7 +99,7 @@ export default function WelcomePage() {
       </section>
 
       {/* Stats bar */}
-      <section className="relative z-10 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-t border-b border-white/60">
+      <section className="relative z-10 bg-transparent">
         <div className="max-w-7xl mx-auto px-6 py-6 grid grid-cols-3 gap-2 sm:gap-4 text-center">
           <Stat k="Provinces" v="80+" icon={<Landmark size={18} />} />
           <Stat k="Cities" v="1,600+" icon={<Building2 size={18} />} />
@@ -139,9 +139,9 @@ function Feature({ icon, title, desc }: { icon: React.ReactNode; title: string; 
 
 function Stat({ k, v, icon }: { k: string; v: string; icon?: React.ReactNode }) {
   return (
-    <div className="rounded-xl bg-gradient-to-br from-slate-50 to-white border border-white/70 p-3 sm:p-4 shadow-sm flex items-center gap-2 sm:gap-3">
+    <div className="rounded-xl bg-transparent border border-white/40 p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
       {icon && (
-        <div className="hidden sm:grid shrink-0 w-9 h-9 rounded-full place-items-center bg-gradient-to-br from-blue-100 to-indigo-100 text-blue-700 shadow-sm animate-[pulse_3s_ease-in-out_infinite]">
+        <div className="hidden sm:grid shrink-0 w-9 h-9 rounded-full place-items-center bg-white/70 text-blue-700 shadow-sm animate-[pulse_3s_ease-in-out_infinite]">
           {icon}
         </div>
       )}

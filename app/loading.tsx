@@ -5,11 +5,11 @@ export default function Loading() {
         <img
           src="/pictures/filipinohomespointer.png"
           alt="Loading"
-          width={64}
-          height={64}
+          width={74}
+          height={74}
           className="animate-bounce"
         />
-        <p className="text-sm text-gray-600">Loading…</p>
+        <p className="text-sm text-gray-700">Loading…</p>
       </div>
     </div>
   );
