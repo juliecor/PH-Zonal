@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { MapPin, Zap, Compass, ShieldCheck, Sparkles, TrendingUp, Landmark, Building2, Home } from "lucide-react";
 import { useState } from "react";
+import Disclaimer from "../components/Disclaimer";
 
 export default function WelcomePage() {
   const router = useRouter();
@@ -115,6 +116,11 @@ export default function WelcomePage() {
           <Step n={2} title="Pinpoint & snap" desc="Google‑smart geocode refined to the street centerline." />
           <Step n={3} title="Generate report" desc="Nearby POIs and a branded PDF in one click." />
         </div>
+      </section>
+
+      {/* Disclaimer */}
+      <section className="relative z-10 max-w-7xl mx-auto px-6">
+        <Disclaimer className="mb-6" />
       </section>
 
       <footer className="relative z-10 max-w-7xl mx-auto px-6 py-10 text-xs text-gray-600">

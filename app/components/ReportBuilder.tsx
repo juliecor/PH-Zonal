@@ -356,6 +356,10 @@ export default function ReportBuilder(props: {
     pdf.setFontSize(11);
     pdf.text("CEO / Founder of Filipino Homes", sigX, sigBaseY + 24);
 
+    // Collect disclaimer text; applied to all pages later
+    const disclaimerText =
+      "The Zonal Value information provided in this report is intended for informational purposes only. It is not an official appraisal report. The values presented are based on our data-driven analysis of Filipino homes and should not be used as the sole basis for property valuation, legal, or financial decisions. For official appraisal, please consult a licensed appraiser or the appropriate government authority (e.g., BIR).";
+
     // =========================
     // PAGE 2 (cards)
     // =========================
@@ -478,7 +482,7 @@ export default function ReportBuilder(props: {
 
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
-    pdf.text("Copyright © 2026 All rights reserved. Filipino Homes | Developers", pageW / 2, pageH - 26, {
+    pdf.text("Copyright © 2026 All rights reserved. Filipino Homes | Developers", pageW / 2, pageH - 16, {
       align: "center",
     });
 
@@ -567,9 +571,20 @@ export default function ReportBuilder(props: {
 
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
-    pdf.text("Copyright © 2026 All rights reserved. Filipino Homes | Developers", pageW / 2, pageH - 26, {
+    pdf.text("Copyright © 2026 All rights reserved. Filipino Homes | Developers", pageW / 2, pageH - 16, {
       align: "center",
     });
+
+    // Apply simple disclaimer footer on every page
+    const totalPages = (pdf as any).getNumberOfPages ? (pdf as any).getNumberOfPages() : pdf.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      pdf.setPage(i);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(0);
+      const lines = pdf.splitTextToSize(disclaimerText, pageW - margin * 2);
+      pdf.text(lines, margin, pageH - 52);
+    }
 
     const blob = pdf.output("blob");
 
