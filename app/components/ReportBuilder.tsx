@@ -669,7 +669,7 @@ export default function ReportBuilder(props: {
                 alt="Generating"
                 width={47}
                 height={47}
-                className="object-contain animate-spin"
+                className="object-contain pointer-flip"
                 style={{ animationDuration: "1.1s" }}
               />
             </div>
@@ -685,8 +685,14 @@ export default function ReportBuilder(props: {
             </div>
           </div>
           <style jsx>{`
-            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            .animate-spin { animation: spin 1.1s linear infinite; }
+            @keyframes pointerFlip {
+          0%   { transform: rotateY(0deg); }
+          100% { transform: rotateY(360deg); }
+        }
+        .pointer-flip {
+          animation: pointerFlip 1.2s linear infinite;
+          transform-origin: center center;
+        }
           `}</style>
         </div>
       )}

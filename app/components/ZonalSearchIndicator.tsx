@@ -6,17 +6,14 @@ export default function ZonalSearchIndicator({ visible }: { visible: boolean }) 
   return (
     <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center">
       <div className="flex items-center gap-3 rounded-full bg-white/90 backdrop-blur-sm border border-blue-200 shadow-lg px-6 py-4">
-        {/* Spinning Filipino Homes pointer */}
-        <div className="relative w-8 h-8">
+        {/* Flipping Filipino Homes pointer */}
+        <div className="relative w-8 h-8 flex items-center justify-center">
           <img
             src="/pictures/filipinohomespointer.png"
             alt="Loading"
-            width={47}
-            height={47}
-            className="object-contain animate-spin"
-            style={{
-              animationDuration: "1.2s",
-            }}
+            width={57}
+            height={57}
+            className="object-contain pointer-flip"
           />
         </div>
 
@@ -28,16 +25,13 @@ export default function ZonalSearchIndicator({ visible }: { visible: boolean }) 
       </div>
 
       <style jsx>{`
-        @keyframes spin {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
+        @keyframes pointerFlip {
+          0%   { transform: rotateY(0deg); }
+          100% { transform: rotateY(360deg); }
         }
-        .animate-spin {
-          animation: spin 1.2s linear infinite;
+        .pointer-flip {
+          animation: pointerFlip 1.2s linear infinite;
+          transform-origin: center center;
         }
       `}</style>
     </div>
