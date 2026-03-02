@@ -11,8 +11,8 @@ export default function ZonalSearchIndicator({ visible }: { visible: boolean }) 
           <img
             src="/pictures/filipinohomespointer.png"
             alt="Loading"
-            width={32}
-            height={32}
+            width={47}
+            height={47}
             className="object-contain animate-spin"
             style={{
               animationDuration: "1.2s",
