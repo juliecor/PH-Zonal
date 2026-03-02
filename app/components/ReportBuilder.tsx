@@ -90,6 +90,8 @@ export default function ReportBuilder(props: {
   const [pdfErr, setPdfErr] = useState("");
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [pdfStage, setPdfStage] = useState<string>("");
+  const [pdfStep, setPdfStep] = useState<number>(0);
   const pdfFilenameRef = useRef<string>("zonal-report.pdf");
   const [activeCat, setActiveCat] = useState<
     "hospitals" | "schools" | "policeStations" | "fireStations" | "pharmacies" | "clinics" | null
@@ -589,11 +591,17 @@ export default function ReportBuilder(props: {
     }
 
     setPdfLoading(true);
+    setPdfStage("Initializing…");
+    setPdfStep(0);
     try {
       const { default: html2canvas } = await import("html2canvas-pro");
+      setPdfStage("Preparing map snapshot…");
+      setPdfStep(1);
 
       await waitForZonalMapIdle({ minEvents: 2, timeoutMs: 4500 });
       await new Promise((r) => setTimeout(r, 80));
+      setPdfStage("Capturing high‑res map…");
+      setPdfStep(2);
 
       const mapEl = document.getElementById(mapContainerId);
       if (!mapEl) throw new Error(`Map container not found (${mapContainerId})`);
@@ -626,7 +634,11 @@ export default function ReportBuilder(props: {
       });
 
       const mapDataUrl = canvas.toDataURL("image/png");
+      setPdfStage("Composing report pages…");
+      setPdfStep(3);
       const { blob, filename } = await buildPdfBlob(mapDataUrl);
+      setPdfStage("Finalizing preview…");
+      setPdfStep(4);
       pdfFilenameRef.current = filename;
 
       if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
@@ -637,6 +649,10 @@ export default function ReportBuilder(props: {
       setPdfErr(e?.message ?? "Failed to generate PDF preview");
     } finally {
       setPdfLoading(false);
+      setTimeout(() => {
+        setPdfStage("");
+        setPdfStep(0);
+      }, 300);
     }
   }
 
@@ -644,6 +660,36 @@ export default function ReportBuilder(props: {
 
   return (
     <>
+      {pdfLoading && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/20 backdrop-blur-sm">
+          <div className="rounded-2xl bg-white/95 border border-gray-200 shadow-2xl px-5 py-4 flex items-center gap-3 min-w-[280px]">
+            <div className="relative w-9 h-9">
+              <img
+                src="/pictures/filipinohomespointer.png"
+                alt="Generating"
+                width={47}
+                height={47}
+                className="object-contain animate-spin"
+                style={{ animationDuration: "1.1s" }}
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-black text-slate-900 truncate">Preparing PDF Report…</div>
+              <div className="text-xs text-gray-600 truncate">{pdfStage || "Working…"}</div>
+              <div className="mt-2 h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-600 transition-all"
+                  style={{ width: `${Math.min(100, ((pdfStep + 1) / 5) * 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+          <style jsx>{`
+            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            .animate-spin { animation: spin 1.1s linear infinite; }
+          `}</style>
+        </div>
+      )}
       <PdfPreviewModal open={pdfPreviewOpen} url={pdfPreviewUrl} onClose={closePreview} onDownload={downloadPreviewPdf} />
 
       <aside className="w-80 border-l border-gray-200 bg-white p-5 overflow-auto">
