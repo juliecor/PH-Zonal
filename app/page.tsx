@@ -452,12 +452,40 @@ export default function Home() {
       if (myId !== reqIdRef.current) return;
       setPoiData({ counts: poi.counts, items: poi.items });
 
-      const ideas = suggestBusinesses({
-        zonalValueText: String(selectedRow?.["ZonalValuepersqm.-"] ?? ""),
-        classification: String(selectedRow?.["Classification-"] ?? ""),
-        poi,
-      });
-      setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
+      // Try AI-generated business ideas first, fallback to heuristic
+      try {
+        const aiRes = await fetch("/api/ideal-business", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            city: String(selectedRow?.["City-"] ?? ""),
+            barangay: String(selectedRow?.["Barangay-"] ?? ""),
+            province: String(selectedRow?.["Province-"] ?? ""),
+            classification: String(selectedRow?.["Classification-"] ?? ""),
+            zonalValuePerSqm: String(selectedRow?.["ZonalValuepersqm.-"] ?? ""),
+            poiCounts: poi.counts,
+          }),
+        });
+        const aiData = await aiRes.json().catch(() => null);
+        if (myId !== reqIdRef.current) return;
+        if (aiRes.ok && aiData?.ok && Array.isArray(aiData.ideas) && aiData.ideas.length) {
+          setIdealBusinessText(aiData.ideas.map((x: string) => `• ${x}`).join("\n"));
+        } else {
+          const ideas = suggestBusinesses({
+            zonalValueText: String(selectedRow?.["ZonalValuepersqm.-"] ?? ""),
+            classification: String(selectedRow?.["Classification-"] ?? ""),
+            poi,
+          });
+          setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
+        }
+      } catch {
+        const ideas = suggestBusinesses({
+          zonalValueText: String(selectedRow?.["ZonalValuepersqm.-"] ?? ""),
+          classification: String(selectedRow?.["Classification-"] ?? ""),
+          poi,
+        });
+        setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
+      }
 
       describeArea({
         lat: selectedLocation.lat,
@@ -614,12 +642,40 @@ export default function Home() {
       if (myId !== reqIdRef.current) return;
       setPoiData({ counts: poi.counts, items: poi.items });
 
-      const ideas = suggestBusinesses({
-        zonalValueText: String(row?.["ZonalValuepersqm.-"] ?? ""),
-        classification: String(row?.["Classification-"] ?? ""),
-        poi,
-      });
-      setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
+      // Try AI-generated business ideas first, fallback to heuristic
+      try {
+        const aiRes = await fetch("/api/ideal-business", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            city: String(row?.["City-"] ?? ""),
+            barangay: String(row?.["Barangay-"] ?? ""),
+            province: String(row?.["Province-"] ?? ""),
+            classification: String(row?.["Classification-"] ?? ""),
+            zonalValuePerSqm: String(row?.["ZonalValuepersqm.-"] ?? ""),
+            poiCounts: poi.counts,
+          }),
+        });
+        const aiData = await aiRes.json().catch(() => null);
+        if (myId !== reqIdRef.current) return;
+        if (aiRes.ok && aiData?.ok && Array.isArray(aiData.ideas) && aiData.ideas.length) {
+          setIdealBusinessText(aiData.ideas.map((x: string) => `• ${x}`).join("\n"));
+        } else {
+          const ideas = suggestBusinesses({
+            zonalValueText: String(row?.["ZonalValuepersqm.-"] ?? ""),
+            classification: String(row?.["Classification-"] ?? ""),
+            poi,
+          });
+          setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
+        }
+      } catch {
+        const ideas = suggestBusinesses({
+          zonalValueText: String(row?.["ZonalValuepersqm.-"] ?? ""),
+          classification: String(row?.["Classification-"] ?? ""),
+          poi,
+        });
+        setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
+      }
 
       describeArea({
         lat,

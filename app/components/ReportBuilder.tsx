@@ -724,7 +724,7 @@ export default function ReportBuilder(props: {
           {/* Hazards removed */}
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">Ideal Business Uses</label>
+            <label className="block text-xs font-medium text-gray-700 mb-2">Ideal Business Uses (AI)</label>
             <textarea
               className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={idealBusinessText}
