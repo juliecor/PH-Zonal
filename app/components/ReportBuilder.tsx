@@ -159,7 +159,7 @@ export default function ReportBuilder(props: {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            lat: selectedLocation.lat,
+            lat: selectedLocation.lat, //the main source
             lon: selectedLocation.lon,
             type: amenityMap[activeCat],
             items: toFetch.map((x) => ({ name: x.name, lat: x.lat, lon: x.lon, type: x.type })),
