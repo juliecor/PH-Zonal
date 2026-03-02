@@ -576,14 +576,18 @@ export default function ReportBuilder(props: {
     });
 
     // Apply simple disclaimer footer on every page
-    const totalPages = (pdf as any).getNumberOfPages ? (pdf as any).getNumberOfPages() : pdf.internal.getNumberOfPages();
+    const totalPages =
+      typeof (pdf as any).getNumberOfPages === "function"
+        ? (pdf as any).getNumberOfPages()
+        : ((pdf as any).internal?.pages?.length ?? 1);
     for (let i = 1; i <= totalPages; i++) {
       pdf.setPage(i);
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(7.5);
       pdf.setTextColor(0);
       const lines = pdf.splitTextToSize(disclaimerText, pageW - margin * 2);
-      pdf.text(lines, margin, pageH - 52);
+      const discY = pageH - 36 - Math.max(0, (lines.length - 1) * 0);
+      pdf.text(lines, margin, discY);
     }
 
     const blob = pdf.output("blob");
