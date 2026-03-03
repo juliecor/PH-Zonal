@@ -19,7 +19,7 @@ export default function ZonalSearchIndicator({ visible }: { visible: boolean }) 
 
         {/* Text */}
         <div className="flex flex-col gap-0.5">
-          <div className="text-sm font-black text-slate-900">Please wait, boss 😊</div>
+          <div className="text-sm font-black text-slate-900">Please wait, boss.. 😊</div>
           <div className="text-xs text-gray-600">Searching zonal values…</div>
         </div>
       </div>
