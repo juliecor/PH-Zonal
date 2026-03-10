@@ -44,6 +44,8 @@ type CompsResp = { ok: true; stats: { min: number | null; median: number | null;
 export default function Home() {
   const [regionSearch, setRegionSearch] = useState("");
   const [matches, setMatches] = useState<RegionMatch[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchMode, setSearchMode] = useState<"province" | "city">("province");
   const [domain, setDomain] = useState("cebu.zonalvalue.com");
   const [selectedProvince, setSelectedProvince] = useState("Cebu");
   const [selectedProvinceCity, setSelectedProvinceCity] = useState("");
@@ -102,6 +104,8 @@ export default function Home() {
   const centerCacheRef = useRef<Map<string, { lat: number; lon: number; label: string; boundary?: Boundary | null }>>(new Map());
   const pinpointReqIdRef = useRef(0);
   const filterPinpointRef = useRef(0);
+  const noCacheRef = useRef(false);
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // -------- LocalStorage-backed caches --------
   const GEO_LS_KEY = "geoCacheV1";
@@ -138,6 +142,24 @@ export default function Home() {
     }
   }, []);
 
+  // Allow overriding domain/province via URL query (?domain=negrosoriental.zonalvalue.com&province=NEGROS%20ORIENTAL)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const d = sp.get("domain");
+      const p = sp.get("province");
+      noCacheRef.current = sp.has("nocache") || sp.get("devNoCache") === "1";
+      if (d) {
+        setDomain(d);
+        setShowRegionPicker(false);
+      }
+      if (p) {
+        setSelectedProvince(p);
+      }
+    } catch {}
+  }, []);
+
   const columns = useMemo(
     () => [
       "Street/Subdivision-",
@@ -166,10 +188,82 @@ export default function Home() {
     return city;
   }
 
+  // Helper copied from API routes – map hostname subdomain to province name
+  function domainToProvince(domain: string): string | null {
+    const host = String(domain || "").trim().toLowerCase();
+    if (!host) return null;
+    const sub = host.split(".")[0] || host;
+    if (sub.includes("negrosoriental-siquijor")) return "NEGROS ORIENTAL";
+    if (sub.includes("cebu")) return "CEBU";
+    if (sub.includes("bohol")) return "BOHOL";
+    if (sub.includes("iloilo")) return "ILOILO";
+    if (sub.includes("davaodelsur")) return "DAVAO DEL SUR";
+    if (sub.includes("davaodelnorte-samal-compostelavalley")) return "DAVAO DEL NORTE";
+    if (sub.includes("negrosoriental") || sub.includes("negros-oriental")) return "NEGROS ORIENTAL";
+    if (sub.includes("siquijor")) return "SIQUIJOR";
+    if (sub.includes("zamboangadelsur")) return "ZAMBOANGA DEL SUR";
+    if (sub.includes("agusandelnorte")) return "AGUSAN DEL NORTE";
+    if (sub.includes("ncr1stdistrict")) return "NCR";
+    if (sub.includes("benguet")) return "BENGUET";
+    if (sub.includes("cagayan-batanes")) return "CAGAYAN";
+    if (sub.includes("abra")) return "ABRA";
+    if (sub.includes("misamisoriental-camiguin")) return "CAMIGUIN-MISAMISORIENTAL";
+    if(sub.includes("agusandelsur")) return "AGUSAN DEL SUR";
+    if(sub.includes("kalinga-apayao")) return "KALINGA";
+    if(sub.includes("aklan")) return "AKLAN";
+    if (sub.includes("aurora")) return "AURORA";
+    if(sub.includes("laguna")) return "LAGUNA";
+    if (sub.includes("lanaodelsur")) return "LANAO DEL SUR";
+    if (sub.includes("leyte-bilaran")) return "LEYTE";
+    if(sub.includes("mtprovince")) return "MOUNTAIN PROVINCE";
+    if(sub.includes("northernsamar")) return "NORTHERN SAMAR";
+    if(sub.includes("nuevavizcaya")) return "NUEVA VIZCAYA"; 
+    if(sub.includes("quirino")) return "QUIRINO";
+    if(sub.includes("southcotabato")) return "SOUTH COTABATO";
+    if(sub.includes("tawitawi")) return "TAWI-TAWI";
+    if(sub.includes("zamboangadelnorte")) return "ZAMBOANGA DEL NORTE";
+    if(sub.includes("zamboangasibugay")) return "ZAMBOANGA SIBUGAY";
+    if(sub.includes("zamboangadelsur")) return "ZAMBOANGA DEL SUR";
+
+
+    return null;
+  }
+
+  // keep selectedProvince in sync when domain state is changed programmatically
+  useEffect(() => {
+    const p = domainToProvince(domain);
+    if (p) setSelectedProvince(p);
+  }, [domain]);
+
   function fmtPeso(v: any) {
     const s = String(v ?? "").trim();
     if (!s) return "-";
     return `₱${s}`;
+  }
+
+  // Safely parse zonal value strings like "₱15,500.00" or "15,500"
+  function parseZonalValueToNumber(v: any): number | null {
+    if (typeof v === "number") return Number.isFinite(v) ? v : null;
+    const raw = String(v ?? "").trim();
+    if (!raw) return null;
+    // Remove peso sign, commas, spaces and non-numeric (keep first dot)
+    const cleaned = raw
+      .replace(/₱/g, "")
+      .replace(/,/g, "")
+      .replace(/\s+/g, "")
+      .replace(/[^0-9.]/g, "");
+    if (!cleaned) return null;
+    const num = parseFloat(cleaned);
+    return Number.isFinite(num) ? num : null;
+  }
+
+  function fmtPesoNumber(n: number, opts?: { fractionDigits?: number }) {
+    const d = opts?.fractionDigits ?? 0;
+    try {
+      return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: d, maximumFractionDigits: d })}`;
+    } catch {
+      return `₱${Math.round(n).toString()}`;
+    }
   }
 
   function fallbackDescribe(payload: { label: string; row?: Row | null; poi?: PoiData | null }) {
@@ -201,34 +295,89 @@ export default function Home() {
     return lines.join("\n");
   }
 
-  async function findRegions() {
-    setErr("");
-    try {
-      const res = await fetch(`/api/regions?q=${encodeURIComponent(regionSearch)}`);
-      if (!res.ok) throw new Error(`Regions failed: ${res.status}`);
-      const data = await res.json();
-      setMatches(data.matches ?? []);
-      try {
-        const tops = Array.isArray(data.matches) ? data.matches.slice(0, 3) : [];
-        for (const m of tops) {
-          if (m?.domain) loadCities(m.domain).catch(() => {});
-        }
-      } catch {}
-    } catch (e: any) {
-      setErr(e?.message ?? "Unknown error");
+  // Smart search that tries city search first, then province search
+  function performSmartSearch(query: string) {
+    if (query.length < 2) {
       setMatches([]);
+      setSearchMode("province");
+      return;
     }
+
+    setSearchLoading(true);
+    setErr("");
+
+    // Try city search first (more powerful)
+    fetch(`/api/city-search?q=${encodeURIComponent(query)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const cityMatches = Array.isArray(data?.matches) ? data.matches : [];
+        if (cityMatches.length > 0) {
+          setSearchMode("city");
+          const converted: RegionMatch[] = cityMatches.map((m: any) => ({
+            city: m.city,
+            province: m.province,
+            domain: m.domain,
+          }));
+          setMatches(converted);
+          try {
+            const tops = converted.slice(0, 3);
+            for (const m of tops) {
+              if (m?.domain) loadCities(m.domain).catch(() => {});
+            }
+          } catch {}
+          setSearchLoading(false);
+        } else {
+          // Fall back to province search
+          return fetch(`/api/regions?q=${encodeURIComponent(query)}`);
+        }
+      })
+      .then((res) => res?.json())
+      .then((data) => {
+        if (data) {
+          setSearchMode("province");
+          setMatches(data.matches ?? []);
+          try {
+            const tops = Array.isArray(data.matches) ? data.matches.slice(0, 3) : [];
+            for (const m of tops) {
+              if (m?.domain) loadCities(m.domain).catch(() => {});
+            }
+          } catch {}
+          setSearchLoading(false);
+        }
+      })
+      .catch((e: any) => {
+        setErr(e?.message ?? "Search failed");
+        setMatches([]);
+        setSearchLoading(false);
+      });
   }
+
+  function debouncedSearch(query: string) {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      performSmartSearch(query);
+    }, 300);
+  }
+
+  // Auto-search as user types
+  useEffect(() => {
+    if (!regionSearch.trim()) {
+      setMatches([]);
+      setSearchMode("province");
+      return;
+    }
+    debouncedSearch(regionSearch);
+  }, [regionSearch]);
 
   async function loadCities(forDomain: string) {
     setFacetsLoading(true);
     setErr("");
     try {
-      const bag = lsLoad<Record<string, { ts: number; cities: string[] }>>("facetCitiesCacheV1", {});
+      const bag = noCacheRef.current ? {} as Record<string, { ts: number; cities: string[] }> : lsLoad<Record<string, { ts: number; cities: string[] }>>("facetCitiesCacheV1", {});
       const key = String(forDomain || "").toLowerCase();
       const TTL = 1000 * 60 * 60 * 24 * 3;
-      const hit = bag[key];
-      if (hit && Date.now() - (hit.ts ?? 0) < TTL) {
+      const hit = (bag as any)[key];
+      if (!noCacheRef.current && hit && Date.now() - (hit.ts ?? 0) < TTL) {
         setFacetCities(hit.cities ?? []);
         return;
       }
@@ -239,8 +388,10 @@ export default function Home() {
       const cities = Array.isArray(data?.cities) ? data.cities : [];
       setFacetCities(cities);
       try {
-        bag[key] = { ts: Date.now(), cities };
-        lsSave("facetCitiesCacheV1", bag);
+        if (!noCacheRef.current) {
+          (bag as any)[key] = { ts: Date.now(), cities };
+          lsSave("facetCitiesCacheV1", bag);
+        }
       } catch {}
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load cities");
@@ -250,6 +401,12 @@ export default function Home() {
     }
   }
 
+  // Ensure facets are loaded for the active domain on mount and whenever domain changes
+  useEffect(() => {
+    if (!domain) return;
+    loadCities(domain).catch(() => {});
+  }, [domain]);
+
   async function loadBarangays(forDomain: string, forCity: string) {
     if (!forCity) {
       setFacetBarangays([]);
@@ -258,11 +415,11 @@ export default function Home() {
     setBarangaysLoading(true);
     setErr("");
     try {
-      const bag = lsLoad<Record<string, { ts: number; list: string[] }>>("facetBarangaysCacheV1", {});
+      const bag = noCacheRef.current ? {} as Record<string, { ts: number; list: string[] }> : lsLoad<Record<string, { ts: number; list: string[] }>>("facetBarangaysCacheV1", {});
       const key = `${String(forDomain || "").toLowerCase()}|${String(forCity || "").toLowerCase()}`;
       const TTL = 1000 * 60 * 60 * 24 * 3;
-      const hit = bag[key];
-      if (hit && Date.now() - (hit.ts ?? 0) < TTL) {
+      const hit = (bag as any)[key];
+      if (!noCacheRef.current && hit && Date.now() - (hit.ts ?? 0) < TTL) {
         setFacetBarangays(hit.list ?? []);
         return;
       }
@@ -275,8 +432,10 @@ export default function Home() {
       const list = Array.isArray(data?.barangays) ? data.barangays : [];
       setFacetBarangays(list);
       try {
-        bag[key] = { ts: Date.now(), list };
-        lsSave("facetBarangaysCacheV1", bag);
+        if (!noCacheRef.current) {
+          (bag as any)[key] = { ts: Date.now(), list };
+          lsSave("facetBarangaysCacheV1", bag);
+        }
       } catch {}
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load barangays");
@@ -307,9 +466,9 @@ export default function Home() {
 
       const cacheKey = params.toString();
       const ZONAL_TTL_MS = 1000 * 60 * 10;
-      const bag = lsLoad<Record<string, { ts: number; payload: any }>>(ZONAL_LS_KEY, {});
-      const hit = bag[cacheKey];
-      if (hit && Date.now() - (hit.ts ?? 0) < ZONAL_TTL_MS) {
+      const bag = noCacheRef.current ? {} as Record<string, { ts: number; payload: any }> : lsLoad<Record<string, { ts: number; payload: any }>>(ZONAL_LS_KEY, {});
+      const hit = (bag as any)[cacheKey];
+      if (!noCacheRef.current && hit && Date.now() - (hit.ts ?? 0) < ZONAL_TTL_MS) {
         const data = hit.payload;
         setRows(data.rows ?? []);
         setItemsPerPage(Number(data.itemsPerPage ?? 16));
@@ -336,16 +495,18 @@ export default function Home() {
       setHasNext(Boolean(data.hasNext));
 
       try {
-        bag[cacheKey] = { ts: Date.now(), payload: data };
-        const keys = Object.keys(bag);
-        if (keys.length > 80) {
-          const sorted = keys
-            .map((k) => ({ k, ts: bag[k]?.ts ?? 0 }))
-            .sort((a, b) => a.ts - b.ts)
-            .slice(0, Math.max(0, keys.length - 80));
-          for (const s of sorted) delete bag[s.k];
+        if (!noCacheRef.current) {
+          (bag as any)[cacheKey] = { ts: Date.now(), payload: data };
+          const keys = Object.keys(bag as any);
+          if (keys.length > 80) {
+            const sorted = keys
+              .map((k) => ({ k, ts: (bag as any)[k]?.ts ?? 0 }))
+              .sort((a, b) => a.ts - b.ts)
+              .slice(0, Math.max(0, keys.length - 80));
+            for (const s of sorted) delete (bag as any)[s.k];
+          }
+          lsSave(ZONAL_LS_KEY, bag as any);
         }
-        lsSave(ZONAL_LS_KEY, bag);
       } catch {}
 
       if (targetPage !== page) setPage(targetPage);
@@ -362,8 +523,9 @@ export default function Home() {
     }
   }
 
-  async function fetchPoi(lat: number, lon: number) {
-    const key = `${lat.toFixed(3)}|${lon.toFixed(3)}|${Math.round(poiRadiusKm * 1000)}`;
+  async function fetchPoi(lat: number, lon: number, radiusKm?: number) {
+    const radius = radiusKm ?? poiRadiusKm;
+    const key = `${lat.toFixed(3)}|${lon.toFixed(3)}|${Math.round(radius * 1000)}`;
     const poiBag = lsLoad<Record<string, { ts: number; payload: { ok: true; counts: PoiData["counts"]; items: PoiData["items"] } }>>(POI_LS_KEY, {});
     const hit = poiBag[key];
     if (hit && Date.now() - (hit.ts ?? 0) < POI_TTL_MS) {
@@ -373,7 +535,7 @@ export default function Home() {
     const res = await fetch("/api/poi-counts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lat, lon, radius: Math.round(poiRadiusKm * 1000), limit: 120 }),
+      body: JSON.stringify({ lat, lon, radius: Math.round(radius * 1000), limit: 120 }),
     });
     const data = await res.json();
     if (!res.ok || !data?.ok) throw new Error(data?.error ?? "POI failed");
@@ -448,7 +610,7 @@ export default function Home() {
     const myId = ++reqIdRef.current;
     setPoiLoading(true);
     try {
-      const poi = await fetchPoi(selectedLocation.lat, selectedLocation.lon);
+      const poi = await fetchPoi(selectedLocation.lat, selectedLocation.lon, newKm);
       if (myId !== reqIdRef.current) return;
       setPoiData({ counts: poi.counts, items: poi.items });
 
@@ -468,8 +630,23 @@ export default function Home() {
         });
         const aiData = await aiRes.json().catch(() => null);
         if (myId !== reqIdRef.current) return;
-        if (aiRes.ok && aiData?.ok && Array.isArray(aiData.ideas) && aiData.ideas.length) {
-          setIdealBusinessText(aiData.ideas.map((x: string) => `• ${x}`).join("\n"));
+        if (aiRes.ok && aiData?.ok && Array.isArray(aiData.businesses) && aiData.businesses.length) {
+          // Format detailed business analysis
+          const formatted = aiData.businesses.map((biz: any, idx: number) => {
+            const lines = [
+              `${idx + 1}. ${biz.type || "Business"}`,
+              `   Reason: ${biz.reason || "-"}`,
+              `   Target Market: ${biz.target_market || "-"}`,
+              `   Capital: ${biz.capital_level || "-"}`,
+              `   Profit Potential: ${biz.profit_potential || "-"}`,
+              `   Suitability: ${biz.suitability_score}/10`,
+            ];
+            return lines.join("\n");
+          }).join("\n\n");
+          
+          // Append best recommendation if available
+          const recommendation = aiData.best_recommendation ? `\n\n✓ BEST OVERALL: ${aiData.best_recommendation}` : "";
+          setIdealBusinessText(formatted + recommendation);
         } else {
           const ideas = suggestBusinesses({
             zonalValueText: String(selectedRow?.["ZonalValuepersqm.-"] ?? ""),
@@ -658,8 +835,23 @@ export default function Home() {
         });
         const aiData = await aiRes.json().catch(() => null);
         if (myId !== reqIdRef.current) return;
-        if (aiRes.ok && aiData?.ok && Array.isArray(aiData.ideas) && aiData.ideas.length) {
-          setIdealBusinessText(aiData.ideas.map((x: string) => `• ${x}`).join("\n"));
+        if (aiRes.ok && aiData?.ok && Array.isArray(aiData.businesses) && aiData.businesses.length) {
+          // Format detailed business analysis
+          const formatted = aiData.businesses.map((biz: any, idx: number) => {
+            const lines = [
+              `${idx + 1}. ${biz.type || "Business"}`,
+              `   Reason: ${biz.reason || "-"}`,
+              `   Target Market: ${biz.target_market || "-"}`,
+              `   Capital: ${biz.capital_level || "-"}`,
+              `   Profit Potential: ${biz.profit_potential || "-"}`,
+              `   Suitability: ${biz.suitability_score}/10`,
+            ];
+            return lines.join("\n");
+          }).join("\n\n");
+          
+          // Append best recommendation if available
+          const recommendation = aiData.best_recommendation ? `\n\n✓ BEST OVERALL: ${aiData.best_recommendation}` : "";
+          setIdealBusinessText(formatted + recommendation);
         } else {
           const ideas = suggestBusinesses({
             zonalValueText: String(row?.["ZonalValuepersqm.-"] ?? ""),
@@ -705,6 +897,20 @@ export default function Home() {
     setAreaDescErr("");
     setShowStreetHighlight(false);
     setStreetGeo(null);
+
+    // Sync city and barangay filters to match the selected row
+    const rowCity = String(r["City-"] ?? "");
+    const rowBarangay = String(r["Barangay-"] ?? "");
+    if (rowCity && rowCity !== city) {
+      setCity(rowCity);
+    }
+    if (rowBarangay && rowBarangay !== barangay) {
+      setBarangay(rowBarangay);
+    }
+    // Reload barangays for this city if needed
+    if (rowCity && (!facetBarangays.length || rowCity !== city)) {
+      loadBarangays(domain, rowCity);
+    }
 
     // On mobile, collapse panels to focus on the map
     if (typeof window !== "undefined" && window.innerWidth < 640) {
@@ -891,21 +1097,29 @@ export default function Home() {
           {leftOpen && (
             <div className="h-full flex flex-col">
               {/* Search header */}
-              <div className="p-4 pb-3 border-b border-gray-200">
+              <div className="p-4 pb-3 border-b border-gray-200 bg-gradient-to-br from-blue-50 to-indigo-50">
+                <div className="flex items-center gap-2 mb-2">
+                  <h2 className="text-sm font-black text-gray-900">🏘️ Property Search</h2>
+                </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-900" size={18} />
                       <input
                         value={regionSearch}
                         onChange={(e) => setRegionSearch(e.target.value)}
-                        placeholder="Enter province (e.g., Cebu, Bohol, Davao)"
-                        className="w-full rounded-2xl border border-transparent bg-[#0F2854] px-10 py-3 text-sm text-white placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-white/50"
+                        placeholder="Search city or province…"
+                        className="w-full rounded-xl border-2 border-blue-200 bg-white px-10 py-2.5 text-sm text-gray-900 placeholder-gray-500 shadow-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition"
                       />
-                      {regionSearch && (
+                      {searchLoading && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin">
+                          <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full" />
+                        </div>
+                      )}
+                      {regionSearch && !searchLoading && (
                         <button
                           onClick={() => setRegionSearch("")}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
                           title="Clear"
                         >
                           <X size={18} />
@@ -913,16 +1127,6 @@ export default function Home() {
                       )}
                     </div>
                   </div>
-
-                  <button
-                    onClick={() => {
-                      setShowRegionPicker(true);
-                      findRegions();
-                    }}
-                    className="rounded-2xl bg-blue-600 text-white px-4 py-3 text-sm font-semibold hover:bg-blue-700 transition shadow"
-                  >
-                    Find
-                  </button>
                 </div>
 
                 {/* Toolbar */}
@@ -935,6 +1139,23 @@ export default function Home() {
                     Filters
                   </button>
 
+                  {/* cache refresh button for development */}
+                  <button
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        localStorage.removeItem('facetCitiesCacheV1');
+                        localStorage.removeItem('facetBarangaysCacheV1');
+                        localStorage.removeItem('zonalCacheV1');
+                        loadCities(domain).catch(() => {});
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    title="Clear cached facet lists and reload"
+                  >
+                    🔄
+                    Refresh
+                  </button>
+
                   <button
                     onClick={() => setRightOpen((v) => !v)}
                     className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
@@ -945,52 +1166,78 @@ export default function Home() {
                   </button>
                 </div>
 
-                {/* Region picker */}
-                {showRegionPicker && matches.length > 0 && (
-                  <div className="mt-3 max-h-56 overflow-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
-                    {matches.map((m, idx) => (
-                      <button
-                        key={idx}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-blue-50 border-b last:border-b-0 transition"
-                        onClick={async () => {
-                          setDomain(m.domain);
-                          setSelectedProvince(m.province);
-                          setSelectedProvinceCity(m.city);
-
-                          setCity("");
-                          setBarangay("");
-                          setClassification("");
-                          setQ("");
-                          setPage(1);
-
-                          setRows([]);
-                          setErr("");
-                          setSelectedRow(null);
-                          setPoiData(null);
-                          setDetailsErr("");
-                          setFacetCities([]);
-                          setFacetBarangays([]);
-                          setBoundary(null);
-                          setComps(null);
-                          setAreaDescription("");
-                          setAreaDescErr("");
-
-                          await loadCities(m.domain);
-                          searchZonal({ page: 1 });
-
-                          // Pinpoint to region center
-                          await pinpointFilterLocation(m.city, "", m.province);
-
-                          setShowRegionPicker(false);
-                          setShowFilters(true);
-                        }}
-                      >
-                        <div className="font-semibold text-gray-900">
-                          {m.province} — {m.city}
+                {/* Region picker results */}
+                {(showRegionPicker || (regionSearch.length > 0 && matches.length > 0)) && (
+                  <div className="mt-3">
+                    {searchLoading ? (
+                      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="h-4 w-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+                          <span className="text-sm text-gray-600">Searching...</span>
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5">{m.domain}</div>
-                      </button>
-                    ))}
+                      </div>
+                    ) : matches.length > 0 ? (
+                      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                        <div className="px-4 py-2 bg-gray-50 border-b text-xs font-semibold text-gray-700">
+                          {searchMode === "city" ? "📍 Cities Found" : "🗺️ Provinces Found"} ({matches.length})
+                        </div>
+                        <div className="max-h-56 overflow-auto">
+                          {matches.map((m, idx) => (
+                            <button
+                              key={idx}
+                              className="w-full text-left px-4 py-3 text-sm hover:bg-blue-50 border-b last:border-b-0 transition"
+                              onClick={async () => {
+                                setDomain(m.domain);
+                                setSelectedProvince(m.province);
+                                setSelectedProvinceCity(m.city);
+
+                                setCity("");
+                                setBarangay("");
+                                setClassification("");
+                                setQ("");
+                                setPage(1);
+
+                                setRows([]);
+                                setErr("");
+                                setSelectedRow(null);
+                                setPoiData(null);
+                                setDetailsErr("");
+                                setFacetCities([]);
+                                setFacetBarangays([]);
+                                setBoundary(null);
+                                setComps(null);
+                                setAreaDescription("");
+                                setAreaDescErr("");
+                                setRegionSearch("");
+
+                                await loadCities(m.domain);
+                                searchZonal({ page: 1 });
+
+                                // Pinpoint to region center
+                                await pinpointFilterLocation(m.city, "", m.province);
+
+                                setShowRegionPicker(false);
+                                setShowFilters(true);
+                              }}
+                            >
+                              <div className="font-semibold text-gray-900">
+                                {m.province} {searchMode === "city" ? `→ ${m.city}` : ""}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">{m.domain}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : regionSearch.length >= 2 ? (
+                      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4 text-center">
+                        <div className="text-sm text-gray-600">
+                          ❌ No results found for "<strong>{regionSearch}</strong>"
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2">
+                          Try searching by province or city name
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 )}
 
@@ -1139,15 +1386,19 @@ export default function Home() {
 
               {/* Results list */}
               <div className="flex-1 overflow-auto">
-                <div className="px-4 py-3 sticky top-0 bg-white/95 backdrop-blur border-b border-gray-200 flex items-center justify-between">
-                  <div className="text-xs font-extrabold tracking-wide text-gray-700 flex items-center gap-2">
-                    <List size={16} />
-                    RESULTS {loading && <Zap size={14} className="animate-spin text-orange-500" />}
+                <div className="px-4 py-3 sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 backdrop-blur border-b border-gray-200 flex items-center justify-between">
+                  <div className="text-xs font-black tracking-widest text-gray-900 flex items-center gap-2 uppercase">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm">
+                      📊
+                    </div>
+                    Results {loading && <Zap size={14} className="animate-spin text-orange-500 ml-1" />}
                   </div>
-                  <div className="text-[11px] text-gray-600">
+                  <div className="text-[11px] font-semibold text-gray-700 bg-white px-2.5 py-1 rounded-lg border border-blue-200">
                     {totalRows ? (
                       <>
-                        {showingFrom.toLocaleString()}–{showingTo.toLocaleString()} of {totalRows.toLocaleString()}
+                        <span className="text-blue-600">#{showingFrom.toLocaleString()}–{showingTo.toLocaleString()}</span>
+                        <span className="text-gray-600"> of </span>
+                        <span className="text-blue-600 font-bold">{totalRows.toLocaleString()}</span>
                       </>
                     ) : (
                       "No results"
@@ -1155,53 +1406,79 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="divide-y divide-gray-200">
-                  {rows.map((r, i) => (
-                    <button
-                      key={`${r.rowIndex}-${i}`}
-                      onClick={() => selectRow(r)}
-                      className={[
-                        "w-full text-left px-4 py-3 transition",
-                        selectedRow?.rowIndex === r.rowIndex ? "bg-blue-50 border-l-4 border-l-blue-600" : "hover:bg-gray-50",
-                      ].join(" ")}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="font-extrabold text-[13px] text-gray-900">
-                            {String(r["Street/Subdivision-"] ?? "").slice(0, 44) || "Unnamed"}
+                <div className="space-y-2 px-2">
+                  {rows.map((r, i) => {
+                    const parsed = parseZonalValueToNumber(r["ZonalValuepersqm.-"]);
+                    const pricePerSqm = parsed ?? 0;
+                    const priceTier = pricePerSqm > 100000 ? 'premium' : pricePerSqm > 50000 ? 'high' : pricePerSqm > 20000 ? 'medium' : 'affordable';
+                    const tierColor = priceTier === 'premium' ? 'from-amber-400 to-orange-500' : priceTier === 'high' ? 'from-blue-400 to-cyan-500' : priceTier === 'medium' ? 'from-green-400 to-emerald-500' : 'from-gray-400 to-blue-500';
+                    const tierLabel = priceTier === 'premium' ? '💎 Premium' : priceTier === 'high' ? '⭐ High' : priceTier === 'medium' ? '✓ Fair' : 'Budget';
+
+                    return (
+                      <button
+                        key={`${r.rowIndex}-${i}`}
+                        onClick={() => selectRow(r)}
+                        className={[
+                          "w-full text-left rounded-2xl border-2 p-3 transition-all duration-200",
+                          selectedRow?.rowIndex === r.rowIndex 
+                            ? `border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 shadow-md` 
+                            : `border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm hover:bg-gradient-to-br hover:from-blue-50 hover:to-gray-50`,
+                        ].join(" ")}
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-black text-[13px] text-gray-900 truncate">
+                              {String(r["Street/Subdivision-"] ?? "").slice(0, 44) || "Unnamed"}
+                            </div>
+                            <div className="text-[11px] text-gray-600 mt-0.5">
+                              {String(r["Barangay-"] ?? "")}, {String(r["City-"] ?? "")}
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-600 mt-1">
-                            {String(r["Barangay-"] ?? "")}, {String(r["City-"] ?? "")}
+                          <div className={`px-2 py-1 rounded-lg text-[10px] font-bold bg-gradient-to-r ${tierColor} text-white whitespace-nowrap`}>
+                            {tierLabel}
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-[12px] font-black text-blue-700">{fmtPeso(r["ZonalValuepersqm.-"])}</div>
-                          <div className="text-[10px] text-gray-500">per sqm</div>
+                        
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                          <div className="flex items-baseline gap-1">
+                            {parsed != null ? (
+                              <>
+                                <span className="text-xs text-gray-600">₱</span>
+                                <span className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-800">{pricePerSqm.toLocaleString('en-PH')}</span>
+                                <span className="text-[10px] text-gray-500">per sqm</span>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-gray-500">—</span>
+                            )}
+                          </div>
+                          <div className="text-[11px] font-semibold text-gray-500">
+                            #{i + 1 + (page - 1) * 10}
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Pagination */}
-                <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-2 bg-white/95 backdrop-blur">
+                <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 backdrop-blur">
                   <button
                     onClick={() => searchZonal({ page: Math.max(1, page - 1) })}
                     disabled={loading || !hasPrev}
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                    className="flex-1 rounded-xl border-2 border-gray-300 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-blue-100 hover:border-blue-400 transition disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Previous
+                    ← Previous
                   </button>
-                  <div className="text-[11px] text-gray-600">
-                    Page <span className="font-bold">{page}</span>
-                    {pageCount ? <> / {pageCount}</> : null}
+                  <div className="text-[11px] text-gray-700 font-semibold px-2 py-1.5 bg-white rounded-lg border border-gray-200">
+                    <span className="text-blue-600 font-black">{page}</span>
+                    {pageCount ? <> / <span className="text-blue-600 font-black">{pageCount}</span></> : null}
                   </div>
                   <button
                     onClick={() => searchZonal({ page: page + 1 })}
                     disabled={loading || !hasNext}
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                    className="flex-1 rounded-xl border-2 border-gray-300 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-blue-100 hover:border-blue-400 transition disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Next
+                    Next →
                   </button>
                 </div>
               </div>
@@ -1224,9 +1501,12 @@ export default function Home() {
         {rightOpen && (
           <div className="h-full bg-white/95 backdrop-blur border-l border-gray-200 shadow-2xl">
             <div className="h-full flex flex-col">
-              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-                <div className="text-sm font-black text-gray-900">Report</div>
-                <button onClick={() => setRightOpen(false)} className="rounded-xl p-2 hover:bg-gray-100 text-gray-700" title="Close">
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-lg">📋</div>
+                  <div className="text-sm font-black text-gray-900">Property Report</div>
+                </div>
+                <button onClick={() => setRightOpen(false)} className="rounded-xl p-2 hover:bg-blue-200 transition text-gray-700" title="Close">
                   <X size={18} />
                 </button>
               </div>
@@ -1234,11 +1514,11 @@ export default function Home() {
               <div className="flex-1 overflow-auto p-4 space-y-3">
                 <div className="rounded-2xl border border-gray-200 bg-white p-3">
                   <div className="flex items-center justify-between">
-                    <div className="text-xs font-black text-gray-900">Quick facts about the place</div>
+                    <div className="text-xs font-black text-gray-900">Business & Investment Potential</div>
                     {areaDescLoading && <div className="text-[11px] text-gray-500">Generating…</div>}
                   </div>
                   <div className="text-sm text-gray-800 mt-2 leading-relaxed whitespace-pre-line">
-                    {areaDescription || "Select a property or click the map to generate a short description."}
+                    {areaDescription || "Select a property or click the map to generate a real estate assessment."}
                   </div>
                 </div>
 
@@ -1265,16 +1545,16 @@ export default function Home() {
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[92vw] sm:w-[560px]">
         <div
           className={[
-            "rounded-3xl border border-gray-200 bg-white/95 backdrop-blur shadow-2xl overflow-hidden transition-all duration-300",
-            bottomOpen ? "max-h-[38vh]" : "max-h-[48px]",
+            "rounded-3xl border-2 border-gray-200 bg-white/98 backdrop-blur shadow-2xl overflow-hidden transition-all duration-300",
+            bottomOpen ? "max-h-[38vh]" : "max-h-[52px]",
           ].join(" ")}
         >
-          <button onClick={() => setBottomOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition">
+          <button onClick={() => setBottomOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition">
             <div className="min-w-0 text-left">
-              <div className="text-[11px] text-gray-500 font-semibold">Selected Property</div>
+              <div className="text-[10px] text-gray-500 font-black uppercase tracking-wider">📌 Selected Property</div>
               <div className="text-sm font-black text-gray-900 truncate">{selectedTitle}</div>
             </div>
-            <div className="text-xs font-bold text-gray-700">{bottomOpen ? "Collapse" : "Expand"}</div>
+            <div className="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded-lg">{bottomOpen ? "▼" : "▶"}</div>
           </button>
 
           {bottomOpen && (
@@ -1288,16 +1568,16 @@ export default function Home() {
                 </div>
               ) : (
                 <>
-                  <div className="rounded-2xl bg-[#1C4D8D] text-white p-4 flex items-center justify-between shadow">
+                  <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white p-4 flex items-center justify-between shadow-lg border border-blue-400/30">
                     <div>
-                      <div className="text-[11px] font-semibold opacity-90">Zonal Value</div>
-                      <div className="text-2xl font-black mt-1">{fmtPeso(selectedRow["ZonalValuepersqm.-"])}</div>
-                      <div className="text-[11px] opacity-90">per square meter</div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider opacity-90">💰 Zonal Value</div>
+                      <div className="text-3xl font-black mt-1 drop-shadow-lg">{fmtPeso(selectedRow["ZonalValuepersqm.-"])}</div>
+                      <div className="text-[11px] opacity-90 font-semibold">per square meter</div>
                     </div>
-                    <div className="text-right text-[11px] opacity-90">
-                      <div>{String(selectedRow["City-"] ?? "")}</div>
+                    <div className="text-right text-[11px] opacity-90 font-semibold">
+                      <div className="font-bold text-lg">{String(selectedRow["City-"] ?? "")}</div>
                       <div>{String(selectedRow["Barangay-"] ?? "")}</div>
-                      <div className="truncate max-w-[220px]">{String(selectedRow["Street/Subdivision-"] ?? "")}</div>
+                      <div className="truncate max-w-[200px] text-xs">{String(selectedRow["Street/Subdivision-"] ?? "")}</div>
                     </div>
                   </div>
 

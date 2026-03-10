@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 // use plain <img> for local assets to avoid any Next Image config/caching issues
 import type { LatLng, PoiData, PoiItem, Row } from "../lib/types";
 import PdfPreviewModal from "./PdfPreviewModal";
+import PoiLoadingSpinner from "./PoiLoadingSpinner";
 import { waitForZonalMapIdle } from "../lib/zonal-util";
 
 function toTitleSafe(s: string) {
@@ -747,62 +748,193 @@ export default function ReportBuilder(props: {
           )}
 
           <div className="border-t border-gray-200 pt-4 mt-4">
+            {/* Investment Potential Score Section */}
+            {poiData && !poiLoading && (
+              <div className="mb-5 p-4 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 shadow-sm">
+                <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-3">Investment Viability Score</h3>
+                
+                {/* Calculate viability based on POIs */}
+                {(() => {
+                  const healthcare = (poiData.counts.hospitals || 0) + (poiData.counts.clinics || 0);
+                  const education = poiData.counts.schools || 0;
+                  const security = (poiData.counts.policeStations || 0) + (poiData.counts.fireStations || 0);
+                  const services = (poiData.counts.pharmacies || 0);
+                  const totalScore = Math.min(100, Math.round((healthcare * 15 + education * 15 + security * 10 + services * 10) / 5));
+                  const viability = totalScore >= 75 ? 'Excellent' : totalScore >= 60 ? 'Good' : totalScore >= 45 ? 'Moderate' : 'Limited';
+                  const color = totalScore >= 75 ? 'from-green-400 to-emerald-500' : totalScore >= 60 ? 'from-blue-400 to-cyan-500' : totalScore >= 45 ? 'from-yellow-400 to-amber-500' : 'from-orange-400 to-red-500';
+                  
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-end justify-between">
+                        <div>
+                          <p className="text-2xl font-black text-gray-900">{totalScore}</p>
+                          <p className={`text-xs font-bold ${totalScore >= 75 ? 'text-green-700' : totalScore >= 60 ? 'text-blue-700' : totalScore >= 45 ? 'text-yellow-700' : 'text-red-700'}`}>
+                            {viability}
+                          </p>
+                        </div>
+                        <div className="flex gap-1">
+                          {[...Array(5)].map((_, i) => (
+                            <div key={i} className={`h-1.5 rounded-full ${i < Math.ceil(totalScore / 20) ? `bg-gradient-to-r ${color}` : 'bg-gray-300'}`} style={{width: '12px'}} />
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-blue-200">
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+                          <span className="text-gray-700"><strong>{healthcare}</strong> Healthcare</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                          <span className="text-gray-700"><strong>{education}</strong> Schools</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+                          <span className="text-gray-700"><strong>{security}</strong> Security</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                          <span className="text-gray-700"><strong>{services}</strong> Services</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Facilities Section Header */}
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-semibold text-gray-900">Nearby Facilities ({poiRadiusKm}km)</h4>
-              <div className="flex items-center gap-2">
-                <label className="text-[11px] text-gray-600">Radius</label>
+              <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs">📍</span>
+                Nearby Facilities ({poiRadiusKm}km)
+              </h4>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+                <label className="text-[11px] font-semibold text-gray-600">Radius:</label>
                 <select
-                  className="rounded-md border border-gray-300 text-xs px-2 py-1 bg-white"
+                  className="rounded-md border border-gray-300 text-xs px-2 py-0.5 bg-white font-semibold"
                   value={String(poiRadiusKm)}
                   onChange={(e) => onChangePoiRadius?.(Number(e.target.value))}
                 >
                   <option value="1.5">1.5</option>
+                  <option value="2">2</option>
+                  <option value="2.5">2.5</option>
                   <option value="3">3</option>
+                  <option value="3.3">3.3</option>
+                  <option value="4">4</option>
+                  <option value="4.5">4.5</option>
+                  <option value="5">5</option>
                 </select>
-                <span className="text-[11px] text-gray-600">km</span>
+                <span className="text-[11px] font-semibold text-gray-600">km</span>
               </div>
             </div>
 
-            {poiLoading ? (
-              <p className="text-sm text-gray-500">Loading facilities…</p>
-            ) : poiData ? (
+            {poiLoading && (
+              <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/20 backdrop-blur-sm">
+                <div className="rounded-2xl bg-white/95 border border-gray-200 shadow-2xl p-6 w-full max-w-sm">
+                  <PoiLoadingSpinner />
+                </div>
+              </div>
+            )}
+
+            {!poiLoading && poiData ? (
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => setActiveCat("hospitals")} className={`rounded-lg border p-3 text-center transition ${activeCat==='hospitals' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-red-50'}`}>
-                    <img src="/pictures/hospital.png" alt="Hospitals" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(18%) sepia(87%) saturate(5458%) hue-rotate(351deg) brightness(96%) contrast(102%)'}} loading="lazy" />
-                    <p className="text-xs text-gray-600">Hospitals</p>
-                    <p className="text-lg font-bold text-gray-900">{poiData.counts.hospitals}</p>
+                {/* Professional Facilities Grid */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {/* Hospitals Card */}
+                  <button 
+                    onClick={() => setActiveCat("hospitals")} 
+                    className={`group rounded-xl border-2 p-3 text-center transition-all duration-200 ${activeCat==='hospitals' ? 'border-red-500 bg-gradient-to-br from-red-50 to-pink-50 shadow-md' : 'border-gray-200 bg-white hover:border-red-300 hover:shadow-sm'}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <img src="/pictures/hospital.png" alt="Hospitals" width={20} height={20} className="icon" style={{filter:'invert(18%) sepia(87%) saturate(5458%) hue-rotate(351deg) brightness(96%) contrast(102%)'}} loading="lazy" />
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${activeCat==='hospitals' ? 'bg-red-200 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {(poiData.counts.hospitals || 0) > 5 ? '✓ Good' : (poiData.counts.hospitals || 0) > 2 ? '◐ Fair' : '✗ Low'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-600 font-medium">Hospitals</p>
+                    <p className="text-2xl font-black text-red-600 mt-0.5">{poiData.counts.hospitals}</p>
                   </button>
-                  <button onClick={() => setActiveCat("schools")} className={`rounded-lg border p-3 text-center transition ${activeCat==='schools' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-blue-50'}`}>
-                    <img src="/pictures/school.png" alt="Schools" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(25%) sepia(96%) saturate(2035%) hue-rotate(194deg) brightness(92%) contrast(102%)'}} loading="lazy" />
-                    <p className="text-xs text-gray-600">Schools</p>
-                    <p className="text-lg font-bold text-gray-900">{poiData.counts.schools}</p>
+
+                  {/* Schools Card */}
+                  <button 
+                    onClick={() => setActiveCat("schools")} 
+                    className={`group rounded-xl border-2 p-3 text-center transition-all duration-200 ${activeCat==='schools' ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-cyan-50 shadow-md' : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm'}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <img src="/pictures/school.png" alt="Schools" width={20} height={20} className="icon" style={{filter:'invert(25%) sepia(96%) saturate(2035%) hue-rotate(194deg) brightness(92%) contrast(102%)'}} loading="lazy" />
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${activeCat==='schools' ? 'bg-blue-200 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {(poiData.counts.schools || 0) > 8 ? '✓ Good' : (poiData.counts.schools || 0) > 3 ? '◐ Fair' : '✗ Low'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-600 font-medium">Schools</p>
+                    <p className="text-2xl font-black text-blue-600 mt-0.5">{poiData.counts.schools}</p>
                   </button>
-                  <button onClick={() => setActiveCat("policeStations")} className={`rounded-lg border p-3 text-center transition ${activeCat==='policeStations' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-amber-50'}`}>
-                    <img src="/pictures/police-station.png" alt="Police" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(58%) sepia(96%) saturate(531%) hue-rotate(351deg) brightness(98%) contrast(104%)'}} loading="lazy" />
-                    <p className="text-xs text-gray-600">Police</p>
-                    <p className="text-lg font-bold text-gray-900">{poiData.counts.policeStations}</p>
+
+                  {/* Police Card */}
+                  <button 
+                    onClick={() => setActiveCat("policeStations")} 
+                    className={`group rounded-xl border-2 p-3 text-center transition-all duration-200 ${activeCat==='policeStations' ? 'border-amber-500 bg-gradient-to-br from-amber-50 to-yellow-50 shadow-md' : 'border-gray-200 bg-white hover:border-amber-300 hover:shadow-sm'}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <img src="/pictures/police-station.png" alt="Police" width={20} height={20} className="icon" style={{filter:'invert(58%) sepia(96%) saturate(531%) hue-rotate(351deg) brightness(98%) contrast(104%)'}} loading="lazy" />
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${activeCat==='policeStations' ? 'bg-amber-200 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {(poiData.counts.policeStations || 0) > 2 ? '✓ Good' : (poiData.counts.policeStations || 0) > 0 ? '◐ Fair' : '✗ Low'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-600 font-medium">Police</p>
+                    <p className="text-2xl font-black text-amber-600 mt-0.5">{poiData.counts.policeStations}</p>
                   </button>
-                  <button onClick={() => setActiveCat("fireStations")} className={`rounded-lg border p-3 text-center transition ${activeCat==='fireStations' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-orange-50'}`}>
-                    <img src="/pictures/fire-department.png" alt="Fire" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(46%) sepia(86%) saturate(1408%) hue-rotate(1deg) brightness(100%) contrast(103%)'}} loading="lazy" />
-                    <p className="text-xs text-gray-600">Fire</p>
-                    <p className="text-lg font-bold text-gray-900">{poiData.counts.fireStations}</p>
+
+                  {/* Fire Card */}
+                  <button 
+                    onClick={() => setActiveCat("fireStations")} 
+                    className={`group rounded-xl border-2 p-3 text-center transition-all duration-200 ${activeCat==='fireStations' ? 'border-orange-500 bg-gradient-to-br from-orange-50 to-red-50 shadow-md' : 'border-gray-200 bg-white hover:border-orange-300 hover:shadow-sm'}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <img src="/pictures/fire-department.png" alt="Fire" width={20} height={20} className="icon" style={{filter:'invert(46%) sepia(86%) saturate(1408%) hue-rotate(1deg) brightness(100%) contrast(103%)'}} loading="lazy" />
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${activeCat==='fireStations' ? 'bg-orange-200 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {(poiData.counts.fireStations || 0) > 1 ? '✓ Good' : (poiData.counts.fireStations || 0) > 0 ? '◐ Fair' : '✗ Low'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-600 font-medium">Fire</p>
+                    <p className="text-2xl font-black text-orange-600 mt-0.5">{poiData.counts.fireStations}</p>
                   </button>
-                  <button onClick={() => setActiveCat("pharmacies")} className={`rounded-lg border p-3 text-center transition ${activeCat==='pharmacies' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-green-50'}`}>
-                    <img src="/pictures/pharmacy.png" alt="Pharmacy" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(45%) sepia(12%) saturate(2470%) hue-rotate(90deg) brightness(92%) contrast(92%)'}} loading="lazy" />
-                    <p className="text-xs text-gray-600">Pharmacy</p>
-                    <p className="text-lg font-bold text-gray-900">{poiData.counts.pharmacies}</p>
+
+                  {/* Pharmacy Card */}
+                  <button 
+                    onClick={() => setActiveCat("pharmacies")} 
+                    className={`group rounded-xl border-2 p-3 text-center transition-all duration-200 ${activeCat==='pharmacies' ? 'border-green-500 bg-gradient-to-br from-green-50 to-emerald-50 shadow-md' : 'border-gray-200 bg-white hover:border-green-300 hover:shadow-sm'}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <img src="/pictures/pharmacy.png" alt="Pharmacy" width={20} height={20} className="icon" style={{filter:'invert(45%) sepia(12%) saturate(2470%) hue-rotate(90deg) brightness(92%) contrast(92%)'}} loading="lazy" />
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${activeCat==='pharmacies' ? 'bg-green-200 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {(poiData.counts.pharmacies || 0) > 5 ? '✓ Good' : (poiData.counts.pharmacies || 0) > 2 ? '◐ Fair' : '✗ Low'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-600 font-medium">Pharmacy</p>
+                    <p className="text-2xl font-black text-green-600 mt-0.5">{poiData.counts.pharmacies}</p>
                   </button>
-                  <button onClick={() => setActiveCat("clinics")} className={`rounded-lg border p-3 text-center transition ${activeCat==='clinics' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-purple-50'}`}>
-                    <img src="/pictures/clinic.png" alt="Clinics" width={22} height={22} className="mx-auto mb-1 icon" style={{filter:'invert(19%) sepia(84%) saturate(1640%) hue-rotate(253deg) brightness(88%) contrast(98%)'}} loading="lazy" />
-                    <p className="text-xs text-gray-600">Clinics</p>
-                    <p className="text-lg font-bold text-gray-900">{poiData.counts.clinics}</p>
+
+                  {/* Clinics Card */}
+                  <button 
+                    onClick={() => setActiveCat("clinics")} 
+                    className={`group rounded-xl border-2 p-3 text-center transition-all duration-200 ${activeCat==='clinics' ? 'border-purple-500 bg-gradient-to-br from-purple-50 to-pink-50 shadow-md' : 'border-gray-200 bg-white hover:border-purple-300 hover:shadow-sm'}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <img src="/pictures/clinic.png" alt="Clinics" width={20} height={20} className="icon" style={{filter:'invert(19%) sepia(84%) saturate(1640%) hue-rotate(253deg) brightness(88%) contrast(98%)'}} loading="lazy" />
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${activeCat==='clinics' ? 'bg-purple-200 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {(poiData.counts.clinics || 0) > 5 ? '✓ Good' : (poiData.counts.clinics || 0) > 2 ? '◐ Fair' : '✗ Low'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-600 font-medium">Clinics</p>
+                    <p className="text-2xl font-black text-purple-600 mt-0.5">{poiData.counts.clinics}</p>
                   </button>
                 </div>
 
                 <div className="text-xs space-y-3">
                   {!activeCat ? (
-                    <p className="text-[11px] text-gray-500 mt-1">Click a category above to view detailed results.</p>
+                    <p className="text-[11px] text-gray-500 mt-2 p-2 text-center">Click a category above to view detailed results.</p>
                   ) : (
                     (() => {
                       const byKey: Record<string, {label: string; list: PoiItem[]; icon: string; color: string}> = {

@@ -2,6 +2,113 @@ import { NextResponse } from "next/server";
 import { fetchZonalValuesByDomain, fetchZonalIndex } from "../../lib/zonalByDomain";
 import { fuzzyMatchStreets } from "../../lib/zonal-util";
 
+// --- Optional: DB backend (Laravel) integration for Cebu ---
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "";
+
+function domainToProvince(domain: string): string | null {
+  const host = String(domain || "").trim().toLowerCase();
+  if (!host) return null;
+  const sub = host.split(".")[0] || host; // handle apex domains like negrosoriental-siquijor.com
+  // Flexible includes-based matching to support combined domains (e.g., negrosoriental-siquijor)
+  if (sub.includes("negrosoriental-siquijor")) return "NEGROS ORIENTAL"; // explicit preference
+  if (sub.includes("cebu")) return "CEBU";
+  if (sub.includes("bohol")) return "BOHOL";
+  if (sub.includes("iloilo")) return "ILOILO";
+  if (sub.includes("davaodelsur")) return "DAVAO DEL SUR";
+  if (sub.includes("davaodelnorte-samal-compostelavalley")) return "DAVAO DEL NORTE";
+  if (sub.includes("zamboangadelsur")) return "ZAMBOANGA DEL SUR";
+  if (sub.includes("agusandelnorte")) return "AGUSAN DEL NORTE";
+  if (sub.includes("ncr1stdistrict")) return "NCR";
+  if (sub.includes("benguet")) return "BENGUET";
+  if (sub.includes("cagayan-batanes")) return "CAGAYAN";
+  if (sub.includes("abra")) return "ABRA";
+  if (sub.includes("misamisoriental-camiguin")) return "CAMIGUIN-MISAMISORIENTAL";
+  if(sub.includes("agusandelsur")) return "AGUSAN DEL SUR";
+  if(sub.includes("kalinga-apayao")) return "KALINGA";
+  if(sub.includes("aklan")) return "AKLAN";
+  if (sub.includes("aurora")) return "AURORA";
+  if(sub.includes("laguna")) return "LAGUNA";
+  if (sub.includes("lanaodelsur")) return "LANAO DEL SUR";
+  if (sub.includes("leyte-bilaran")) return "LEYTE";
+  if(sub.includes("mtprovince")) return "MOUNTAIN PROVINCE";
+  if(sub.includes("northernsamar")) return "NORTHERN SAMAR";
+  if(sub.includes("nuevavizcaya")) return "NUEVA VIZCAYA"; 
+  if(sub.includes("quirino")) return "QUIRINO";
+  if(sub.includes("southcotabato")) return "SOUTH COTABATO";
+  if(sub.includes("tawitawi")) return "TAWI-TAWI";
+  if(sub.includes("zamboangadelnorte")) return "ZAMBOANGA DEL NORTE";
+  if(sub.includes("zamboangasibugay")) return "ZAMBOANGA SIBUGAY";
+  if(sub.includes("zamboangadelsur")) return "ZAMBOANGA DEL SUR";
+
+  return null;
+}
+
+function formatMoney(n: any): string {
+  const v = Number(n);
+  if (!isFinite(v)) return String(n ?? "");
+  return v.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function fetchFromDbBackend(args: {
+  province: string;
+  page: number;
+  city?: string;
+  barangay?: string;
+  classification?: string;
+  q?: string;
+  itemsPerPage: number;
+}) {
+  if (!BACKEND_URL) throw new Error("BACKEND_URL not configured");
+  const { province, page, city = "", barangay = "", classification = "", q = "", itemsPerPage } = args;
+
+  const params = new URLSearchParams();
+  params.set("province", province);
+  if (city) params.set("city", city);
+  if (barangay) params.set("barangay", barangay);
+  // Pass code-like classifications only (e.g., GP, RR, CR, A50)
+  if (/^[A-Z0-9-]{1,5}$/.test(classification)) params.set("classification_code", classification);
+  if (q) params.set("q", q);
+  params.set("page", String(page));
+  params.set("per_page", String(itemsPerPage));
+
+  const url = `${BACKEND_URL.replace(/\/$/, "")}/api/zonal-values?${params.toString()}`;
+  const res = await fetch(url, { headers: { "Accept": "application/json" } });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Backend failed: ${res.status}${t ? ` — ${t}` : ""}`);
+  }
+  const j = await res.json();
+
+  const data = Array.isArray(j?.data) ? j.data : [];
+  const currentPage = Number(j?.current_page ?? page ?? 1);
+  const perPage = Number(j?.per_page ?? itemsPerPage ?? 16);
+  const total = Number(j?.total ?? data.length);
+  const lastPage = Number((j?.last_page ?? Math.ceil(total / perPage)) || 1);
+
+  const rows = data.map((r: any, idx: number) => ({
+    rowIndex: r?.id ?? idx,
+    route: undefined,
+    "Street/Subdivision-": String(r?.street_location ?? ""),
+    "Vicinity-": String(r?.vicinity ?? ""),
+    "Barangay-": String(r?.barangay ?? ""),
+    "City-": String(r?.city_municipality ?? ""),
+    "Province-": String(r?.province ?? ""),
+    "Classification-": String(r?.classification_code ?? ""),
+    "ZonalValuepersqm.-": formatMoney(r?.value_per_sqm),
+    __zonal_raw: r?.value_per_sqm,
+  }));
+
+  return {
+    page: currentPage,
+    rows,
+    itemsPerPage: perPage,
+    totalRows: total,
+    pageCount: lastPage,
+    hasPrev: currentPage > 1,
+    hasNext: currentPage < lastPage,
+  };
+}
+
 export const runtime = "nodejs";
 
 type AnyRow = Record<string, any>;
@@ -223,6 +330,74 @@ export async function GET(req: Request) {
 
     const itemsPerPage = 16;
 
+    // If domain maps to a DB-backed province and BACKEND_URL is set
+    // - No filters: return DB as-is (fast)
+    // - With filters: UNION DB + spreadsheet and paginate combined results
+    const province = domainToProvince(domain);
+    if (province && BACKEND_URL) {
+      const hasFilters = Boolean(city || barangay || classification || q);
+      if (!hasFilters) {
+        const payload = await fetchFromDbBackend({ province, page, city, barangay, classification, q, itemsPerPage });
+        return NextResponse.json(payload, { headers: { "Cache-Control": "public, max-age=20, stale-while-revalidate=60" } });
+      }
+
+      // Collect DB rows sufficient to cover requested page
+      const need = page * itemsPerPage + itemsPerPage * 2; // some headroom
+      const dbRows = await collectDbRows({ province, city, barangay, classification, q, want: need });
+
+      // Collect spreadsheet rows that match filters (just enough pages)
+      const desired = page * itemsPerPage + itemsPerPage * 2;
+      const meta = await getDomainMetadata(domain);
+      const estPages = Math.ceil((meta.totalRows || 0) / PAGE_SIZE) || 1;
+      let collected: AnyRow[] = [];
+      let currentPage = 1;
+      let exhausted = false;
+      while (collected.length < desired && currentPage <= estPages && currentPage <= MAX_PAGES && !exhausted) {
+        const pagesToFetch: number[] = [];
+        for (let i = 0; i < PARALLEL_FETCH && currentPage + i <= estPages && currentPage + i <= MAX_PAGES; i++) {
+          pagesToFetch.push(currentPage + i);
+        }
+        const allRows = await getMultiplePagesParallel(domain, pagesToFetch);
+        if (!allRows.length) { exhausted = true; break; }
+        const filtered = allRows.filter((row) =>
+          filterRow(row, { city, barangay, classification, q })
+        );
+        collected.push(...filtered);
+        const lastPageSize = (allRows.length % PAGE_SIZE) || PAGE_SIZE;
+        if (lastPageSize < PAGE_SIZE) exhausted = true;
+        currentPage += pagesToFetch.length;
+      }
+
+      // UNION (prefer spreadsheet rows, DB adds missing)
+      const map = new Map<string, AnyRow>();
+      for (const r of collected) map.set(makeKey(r), r);
+      for (const r of dbRows) {
+        const k = makeKey(r);
+        if (!map.has(k)) map.set(k, r);
+      }
+      const combined = Array.from(map.values());
+
+      const totalRows = combined.length;
+      const pageCount = Math.ceil(totalRows / itemsPerPage) || 1;
+      const validPage = Math.min(page, pageCount);
+      const start = (validPage - 1) * itemsPerPage;
+      const end = start + itemsPerPage;
+
+      return NextResponse.json(
+        {
+          domain,
+          page: validPage,
+          rows: combined.slice(start, end),
+          itemsPerPage,
+          totalRows,
+          pageCount,
+          hasPrev: validPage > 1,
+          hasNext: validPage < pageCount,
+        },
+        { headers: { "Cache-Control": "public, max-age=20, stale-while-revalidate=60" } }
+      );
+    }
+
     // ✅ Get metadata (total count, etc) - very fast!
     const meta = await getDomainMetadata(domain);
     const estTotalRows = meta.totalRows;
@@ -318,4 +493,55 @@ export async function GET(req: Request) {
     console.error("[ZONAL API ERROR]", e);
     return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
   }
+}
+
+// Helper: collect multiple DB pages until we have enough rows
+async function collectDbRows(args: {
+  province: string;
+  city?: string;
+  barangay?: string;
+  classification?: string;
+  q?: string;
+  want: number; // number of rows desired
+}): Promise<AnyRow[]> {
+  const per = 100;
+  let page = 1;
+  const rows: AnyRow[] = [];
+  while (rows.length < args.want) {
+    const payload = await fetchFromDbBackend({
+      province: args.province,
+      page,
+      city: args.city,
+      barangay: args.barangay,
+      classification: args.classification,
+      q: args.q,
+      itemsPerPage: per,
+    });
+    rows.push(...(payload.rows || []));
+    if (!payload.hasNext) break;
+    page += 1;
+    if (page > 100) break; // hard safety
+  }
+  return rows;
+}
+
+function loose(s: any) {
+  return String(s ?? "")
+    .toUpperCase()
+    .replace(/\(.*?\)/g, "")
+    .replace(/\bBRGY\.?\b/g, "")
+    .replace(/\bBARANGAY\b/g, "")
+    .replace(/Ñ/g, "N")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function makeKey(row: AnyRow) {
+  const street = loose(getVal(row, "Street/Subdivision-"));
+  const vic = loose(getVal(row, "Vicinity-"));
+  const brgy = loose(getVal(row, "Barangay-"));
+  const city = loose(getVal(row, "City-"));
+  const prov = loose(getVal(row, "Province-"));
+  return `${street}|${vic}|${brgy}|${city}|${prov}`;
 }

@@ -43,12 +43,13 @@ export async function POST(req: Request) {
         : "";
 
     const userPrompt = `
-Write ONE short description (max 50 words) about what living/doing business here feels like.
+Write ONE short business assessment (max 50 words) about the real estate & investment potential here.
 Location: ${loc}
 Classification: ${classification || "-"}
 Zonal value (per sqm): ${zonalValue || "-"}
 ${poiText}
-Avoid fake facts. If uncertain, use cautious language. No bullet points.
+Focus on: market demand, commercial viability, tenant/buyer appeal, profit potential.
+No fake facts. Avoid lifestyle language - use business/investment terminology.
 `.trim();
 
     const completion = await client.chat.completions.create({
@@ -59,7 +60,7 @@ Avoid fake facts. If uncertain, use cautious language. No bullet points.
         {
           role: "system",
           content:
-            "You write concise Philippine neighborhood descriptions. Output a single paragraph, maximum 50 words.",
+            "You are a Philippine real estate investment analyst. Write concise business/investment assessments for properties. Focus on market potential, ROI, tenant demand, and commercial viability. Output a single paragraph, maximum 50 words. Use professional real estate terminology.",
         },
         { role: "user", content: userPrompt },
       ],

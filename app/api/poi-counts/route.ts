@@ -154,15 +154,30 @@ out center;`;
       } else if (targetType === "policeStations") arr = await fetchPlaces("police");
       else if (targetType === "fireStations") arr = await fetchPlaces("fire_station");
       else if (targetType === "pharmacies") arr = await fetchPlaces("pharmacy");
-      else if (targetType === "clinics") {
-        const a = await fetchPlaces("doctor");
-        const b = await fetchPlaces("hospital", "clinic");
-        arr = [...a, ...b];
-      }
+      else if (targetType === "clinics") arr = await fetchPlaces("doctor");
+      
       for (const p of arr) {
+        // Apply filters based on name
+        if (targetType === "hospitals" && !isLikelyHospital(p.name)) continue;
+        if (targetType === "clinics" && !isLikelyClinic(p.name)) continue;
+        
         const item: PoiItem = { idKey: p.idKey, name: p.name, lat: p.lat, lon: p.lon, type: targetType.slice(0, -1) } as any;
         addWithNameNear(target, item);
       }
+    }
+
+    // Helper: filter out clinic/birthing keywords from hospital names
+    function isLikelyHospital(name: string): boolean {
+      const lower = name.toLowerCase();
+      const excludeKeywords = ["clinic", "birthing", "doctor", "dental", "eye", "optometry", "veterinary", "surgery"];
+      return !excludeKeywords.some(kw => lower.includes(kw));
+    }
+
+    // Helper: filter out non-clinic keywords from clinic names  
+    function isLikelyClinic(name: string): boolean {
+      const lower = name.toLowerCase();
+      const excludeKeywords = ["hospital"];
+      return !excludeKeywords.some(kw => lower.includes(kw));
     }
 
     // run in parallel to reduce total latency
@@ -170,8 +185,9 @@ out center;`;
     const osmElements = await fetchAllAmenitiesOnce();
     for (const el of osmElements) {
       const a = String(el?.tags?.amenity || "");
-      if (a === "hospital") pushElementToTarget(el, hospitals, "hospital");
-      else if (a === "clinic") pushElementToTarget(el, clinics, "clinic");
+      const name = pickName(el?.tags ?? {});
+      if (a === "hospital" && isLikelyHospital(name)) pushElementToTarget(el, hospitals, "hospital");
+      else if (a === "clinic" && isLikelyClinic(name)) pushElementToTarget(el, clinics, "clinic");
       else if (a === "pharmacy") pushElementToTarget(el, pharmacies, "pharmacy");
       else if (a === "police") pushElementToTarget(el, policeStations, "police");
       else if (a === "fire_station") pushElementToTarget(el, fireStations, "fire_station");

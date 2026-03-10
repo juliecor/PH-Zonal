@@ -5,20 +5,59 @@ export const runtime = "nodejs";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-function normalizeIdeas(text: string): string[] {
-  const lines = String(text || "")
-    .split(/\r?\n/)
-    .map((l) => l.replace(/^\s*[•\-\d.\)]\s*/, "").trim())
-    .filter(Boolean);
-  // If there's a single paragraph, try splitting by semicolons
-  if (lines.length <= 1) {
-    const parts = text
-      .split(/;|\u2022|\n|,\s(?=[A-Z])/)
-      .map((p) => p.replace(/^\s*[•\-\d.\)]\s*/, "").trim())
-      .filter(Boolean);
-    return parts.slice(0, 6);
+function parseBusinessAnalysis(text: string): any {
+  try {
+    // Try to parse as JSON first (if GPT returns structured format)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+  } catch {}
+  
+  // Fallback: parse as structured text
+  const result: any = { businesses: [], best_recommendation: "" };
+  const sections = text.split(/\n\n+/);
+  
+  let currentBusiness: any = null;
+  for (const section of sections) {
+    if (/^\d+\.|Business \d+:/i.test(section)) {
+      // New business entry
+      currentBusiness = {
+        type: "",
+        reason: "",
+        target_market: "",
+        capital_level: "",
+        profit_potential: "",
+        suitability_score: 0,
+      };
+      
+      const lines = section.split("\n");
+      for (const line of lines) {
+        if (/business type|^type|^business:/i.test(line)) {
+          currentBusiness.type = line.split(":")[1]?.trim() || "";
+        } else if (/reason|rationale:/i.test(line)) {
+          currentBusiness.reason = line.split(":")[1]?.trim() || "";
+        } else if (/target market:/i.test(line)) {
+          currentBusiness.target_market = line.split(":")[1]?.trim() || "";
+        } else if (/capital|investment:/i.test(line)) {
+          currentBusiness.capital_level = line.split(":")[1]?.trim() || "";
+        } else if (/profit|revenue:/i.test(line)) {
+          currentBusiness.profit_potential = line.split(":")[1]?.trim() || "";
+        } else if (/suitability|score:/i.test(line)) {
+          const match = line.match(/(\d+)/);
+          currentBusiness.suitability_score = match ? parseInt(match[1]) : 0;
+        }
+      }
+      
+      if (currentBusiness.type) {
+        result.businesses.push(currentBusiness);
+      }
+    } else if (/best overall|recommendation:/i.test(section)) {
+      result.best_recommendation = section.split(":")[1]?.trim() || section;
+    }
   }
-  return lines.slice(0, 6);
+  
+  return result;
 }
 
 function deriveContextHints(params: {
@@ -83,40 +122,60 @@ export async function POST(req: Request) {
     const contextHints = deriveContextHints({ barangay, city, classification, poiCounts });
 
     const userPrompt = `
-Suggest 4-6 specific, location-aware business uses suited for this Philippine area.
-Location: ${loc}
-Classification: ${classification || "-"}
-Zonal value (per sqm): ${zonalValuePerSqm || "-"}
+Analyze this selected place and suggest the top 5 ideal businesses to open there.
+
+Location Details:
+- Place: ${loc}
+- Classification: ${classification || "Unknown"}
+- Zonal Value (per sqm): ₱${zonalValuePerSqm || "N/A"}
 ${poiText}
-   Context hints: ${contextHints}
-Guidelines:
-- Be realistic for the Philippines context and the given amenities.
-- Favor short, punchy items (2–6 words each).
-- Avoid duplicates, avoid generic fluff like "retail" alone.
-- Output as simple bullet lines (no numbering).
+- Context: ${contextHints}
+
+For each business recommendation, provide:
+1. Business Type (e.g., "Sari-sari Store", "Laundromat")
+2. Short Reason (why it works here)
+3. Target Market (who will buy)
+4. Capital Level (low/medium/high estimate)
+5. Profit Potential (low/medium/high)
+6. Suitability Score (1-10)
+
+Requirements:
+- Base suggestions on EXACT location details (not generic)
+- Consider foot traffic, accessibility, nearby establishments, and land value
+- Only recommend practical Philippine businesses
+- Rank the top 5 from most to least suitable
+- End with the single best overall recommendation
+
+Format each business clearly with numbered headings (Business 1:, Business 2:, etc.).
 `.trim();
 
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.6,
-      max_tokens: 220,
+      temperature: 0.7,
+      max_tokens: 1500,
       messages: [
         {
           role: "system",
           content:
-            "You are a Philippine real estate assistant. Propose concise, practical business uses for the local context.",
+            "You are a Philippine real estate and business consultant. Analyze locations and provide accurate, practical business recommendations based on local market conditions, zonal values, and accessibility. Be specific to the Philippine context and provide detailed reasoning for each suggestion.",
         },
         { role: "user", content: userPrompt },
       ],
     });
 
     const raw = completion.choices?.[0]?.message?.content ?? "";
-    const ideas = normalizeIdeas(String(raw));
+    const analysis = parseBusinessAnalysis(String(raw));
 
-    if (!ideas.length) {
-      return NextResponse.json({ ok: false, error: "No ideas generated" }, { status: 500 });
+    if (!analysis.businesses || analysis.businesses.length === 0) {
+      return NextResponse.json({ ok: false, error: "No business suggestions generated" }, { status: 500 });
     }
-    return NextResponse.json({ ok: true, ideas });
+
+    return NextResponse.json({ 
+      ok: true, 
+      businesses: analysis.businesses.slice(0, 5),  // Top 5
+      best_recommendation: analysis.best_recommendation,
+      raw_analysis: raw  // Include raw text for debugging
+    });
   } catch (e: any) {
     console.error("ideal-business error:", e);
     return NextResponse.json({ ok: false, error: e?.message ?? "Unknown error" }, { status: 500 });

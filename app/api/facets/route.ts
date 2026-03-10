@@ -2,6 +2,50 @@ import { NextResponse } from "next/server";
 import { fetchZonalValuesByDomain, fetchZonalIndex } from "../../lib/zonalByDomain";
 
 export const runtime = "nodejs";
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "";
+
+function domainToProvince(domain: string): string | null {
+  const host = String(domain || "").trim().toLowerCase();
+  const sub = (host.split(".")[0] || host);
+  if (!sub) return null;
+  // explicit combined-domain preference must come first
+  if (sub.includes("negrosoriental-siquijor")) return "NEGROS ORIENTAL";
+  if (sub.includes("cebu")) return "CEBU";
+  if (sub.includes("bohol")) return "BOHOL";
+  if (sub.includes("iloilo")) return "ILOILO"; 
+  if (sub.includes("davaodelsur")) return "DAVAO DEL SUR";
+  if (sub.includes("davaodelnorte-samal-compostelavalley")) return "DAVAO DEL NORTE";
+  if (sub.includes("negrosoriental") || sub.includes("negros-oriental")) return "NEGROS ORIENTAL";
+  if (sub.includes("siquijor")) return "SIQUIJOR";
+  if (sub.includes("zamboangadelsur")) return "ZAMBOANGA DEL SUR";
+  if (sub.includes("agusandelnorte")) return "AGUSAN DEL NORTE";
+  if (sub.includes("ncr1stdistrict")) return "NCR";
+  if (sub.includes("benguet")) return "BENGUET";
+  if (sub.includes("cagayan-batanes")) return "CAGAYAN";
+  if (sub.includes("abra")) return "ABRA";
+  if (sub.includes("misamisoriental-camiguin")) return "CAMIGUIN-MISAMISORIENTAL";
+  if(sub.includes("agusandelsur")) return "AGUSAN DEL SUR";
+  if(sub.includes("kalinga-apayao")) return "KALINGA";
+  if(sub.includes("aklan")) return "AKLAN";
+  if (sub.includes("aurora")) return "AURORA";
+  if(sub.includes("kalinga-apayao")) return "KALINGA";
+  if(sub.includes("lanaodelsur")) return "LANAO DEL SUR";
+  if(sub.includes("leyte-bilaran")) return "LEYTE";
+  if(sub.includes("mtprovince")) return "MOUNTAIN PROVINCE";
+  if(sub.includes("northernsamar")) return "NORTHERN SAMAR";
+  if(sub.includes("nuevavizcaya")) return "NUEVA VIZCAYA"; 
+  if(sub.includes("quirino")) return "QUIRINO";
+  if(sub.includes("southcotabato")) return "SOUTH COTABATO";
+  if(sub.includes("tawitawi")) return "TAWI-TAWI";
+  if(sub.includes("zamboangadelnorte")) return "ZAMBOANGA DEL NORTE";
+  if(sub.includes("zamboangasibugay")) return "ZAMBOANGA SIBUGAY";
+  if(sub.includes("zamboangadelsur")) return "ZAMBOANGA DEL SUR";
+
+
+  return null;
+}
+
+
 
 type AnyRow = Record<string, any>;
 
@@ -68,16 +112,23 @@ async function getAllDomainRows(domain: string) {
 
   const pagesNeeded = Math.min(HARD_CAP_PAGES, Math.max(1, Math.ceil(rowsLimit / PAGE_SIZE)));
 
+  // Fetch all pages in parallel instead of sequentially
+  const pagePromises = [];
+  for (let p = 1; p <= pagesNeeded; p++) {
+    pagePromises.push(
+      fetchZonalValuesByDomain({
+        domain,
+        page: p,
+        itemsPerPage: PAGE_SIZE,
+        search: "", // IMPORTANT: keep empty so we fetch everything
+      })
+    );
+  }
+
+  const results = await Promise.all(pagePromises);
   const all: AnyRow[] = [];
 
-  for (let p = 1; p <= pagesNeeded; p++) {
-    const result = await fetchZonalValuesByDomain({
-      domain,
-      page: p,
-      itemsPerPage: PAGE_SIZE,
-      search: "", // IMPORTANT: keep empty so we fetch everything
-    });
-
+  for (const result of results) {
     const batch = Array.isArray(result?.rows) ? result.rows : [];
     all.push(...batch);
 
@@ -99,6 +150,83 @@ export async function GET(req: Request) {
 
     if (!domain || !domain.includes(".") || domain.includes(" ")) {
       return NextResponse.json({ error: "Invalid domain", domain }, { status: 400 });
+    }
+
+    const province = domainToProvince(domain);
+
+    // If this domain maps to a DB-backed province and BACKEND_URL configured, prefer backend facet endpoints but UNION with spreadsheet
+    if (province && BACKEND_URL) {
+      const base = BACKEND_URL.replace(/\/$/, "");
+      if (mode === "cities") {
+        const url = `${base}/api/facets/cities?province=${encodeURIComponent(province)}`;
+        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        const j = await res.json().catch(() => null);
+        if (!res.ok || !j) return NextResponse.json({ error: j?.error || "Backend facets failed" }, { status: 502 });
+
+        // Backend cities
+        const backendCities: string[] = Array.isArray(j?.cities) ? j.cities : [];
+
+        // Spreadsheet cities (union)
+        const { rows } = await getAllDomainRows(domain);
+        const set = new Set<string>(backendCities);
+        for (const r of rows) {
+          const c = norm(getVal(r, "City-"));
+          if (c) set.add(c);
+        }
+        const cities = Array.from(set).sort((a, b) => a.localeCompare(b));
+        return NextResponse.json(
+          { domain, cities, cached: false },
+          { headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" } }
+        );
+      }
+      if (mode === "barangays") {
+        if (!city) return NextResponse.json({ error: "city is required" }, { status: 400 });
+        const url = `${base}/api/facets/barangays?province=${encodeURIComponent(province)}&city=${encodeURIComponent(city)}`;
+        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        const j = await res.json().catch(() => null);
+        if (!res.ok || !j) return NextResponse.json({ error: j?.error || "Backend facets failed" }, { status: 502 });
+
+        const backendList: string[] = Array.isArray(j?.barangays) ? j.barangays : [];
+
+        // Spreadsheet barangays (union for selected city)
+        const { rows } = await getAllDomainRows(domain);
+        const set = new Set<string>(backendList);
+        for (const r of rows) {
+          const rowCity = String(getVal(r, "City-") ?? "");
+          if (!matchesLoose(rowCity, city)) continue;
+          const b = norm(getVal(r, "Barangay-"));
+          if (b) set.add(b);
+        }
+        const list = Array.from(set).sort((a, b) => a.localeCompare(b));
+        return NextResponse.json(
+          { domain, city, barangays: list, cached: false },
+          { headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" } }
+        );
+      }
+      if (mode === "classifications") {
+        const url = `${base}/api/facets/classifications?province=${encodeURIComponent(province)}${city ? `&city=${encodeURIComponent(city)}` : ""}${barangay ? `&barangay=${encodeURIComponent(barangay)}` : ""}`;
+        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        const j = await res.json().catch(() => null);
+        if (!res.ok || !j) return NextResponse.json({ error: j?.error || "Backend facets failed" }, { status: 502 });
+
+        const backendList: string[] = Array.isArray(j?.classifications) ? j.classifications : [];
+
+        // Spreadsheet classifications (optional union, filtered if city/barangay provided)
+        const { rows } = await getAllDomainRows(domain);
+        let filtered = rows;
+        if (city) filtered = filtered.filter((r) => matchesLoose(getVal(r, "City-"), city));
+        if (barangay) filtered = filtered.filter((r) => matchesBarangay(getVal(r, "Barangay-"), barangay));
+        const set = new Set<string>(backendList);
+        for (const r of filtered) {
+          const c = norm(getVal(r, "Classification-"));
+          if (c) set.add(c);
+        }
+        const list = Array.from(set).sort((a, b) => a.localeCompare(b));
+        return NextResponse.json(
+          { domain, city, barangay, classifications: list, cached: false },
+          { headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" } }
+        );
+      }
     }
 
     const { rows, fromCache } = await getAllDomainRows(domain);
