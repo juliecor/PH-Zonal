@@ -155,30 +155,67 @@ export function suggestBusinesses(args: {
   zonalValueText: string;
   classification?: string;
   poi?: PoiData | null;
+  barangay?: string;
+  city?: string;
+  province?: string;
 }) {
   const zonal = parseZonalNumber(args.zonalValueText);
   const cls = String(args.classification ?? "").toUpperCase();
   const poi = args.poi;
+  const brgy = String(args.barangay ?? "").toLowerCase();
+  const city = String(args.city ?? "").toLowerCase();
+
+  const totalPOI = poi
+    ? (poi.counts.hospitals || 0) +
+      (poi.counts.clinics || 0) +
+      (poi.counts.schools || 0) +
+      (poi.counts.policeStations || 0) +
+      (poi.counts.fireStations || 0) +
+      (poi.counts.pharmacies || 0)
+    : 0;
+
+  const isUpland = /(upper|mountain|highland|hills?|bukid|sapa|sitio|upland|elevation)/i.test(brgy);
+  const isUrban = /(poblacion|downtown|central|centrum|district|proper|market|business|commercial)/i.test(brgy) || /(city proper|city center|district)/i.test(city);
+  const density: "low" | "medium" | "high" = totalPOI >= 25 ? "high" : totalPOI >= 10 ? "medium" : "low";
+  const isAgri = /AGRI|AGRICULTUR/.test(cls);
 
   const ideas: string[] = [];
 
-  if (cls.includes("COMMERCIAL")) ideas.push("Retail / Convenience Store", "Food & Beverage (Cafe / Quick Service)");
-  if (cls.includes("RESIDENTIAL")) ideas.push("Apartment / Boarding House", "Small Grocery / Laundry Shop");
-  if (cls.includes("INDUSTRIAL")) ideas.push("Warehouse / Logistics", "Hardware / Building Supplies");
+  // Prioritize location-aware base suggestions first
+  if (isUpland || isAgri || (!isUrban && density === "low")) {
+    ideas.push(
+      "Sari-sari / Micro-retail",
+      "Carinderia / Basic Food Stall",
+      "Fresh Produce Selling / Trading",
+      "Rice Retailing",
+      "Feed / Seed / Farm Supply",
+      "Motorcycle Repair / Vulcanizing",
+      "Small Hardware & Construction Supplies",
+      "Water Refilling / Purified Ice",
+      "Prepaid Load / E-wallet / Remittance Kiosk",
+      "Laundry Services"
+    );
+  } else {
+    // Urban/suburban patterns
+    if (cls.includes("COMMERCIAL")) ideas.push("Retail / Convenience Store", "Food & Beverage (Cafe / Quick Service)");
+    if (cls.includes("RESIDENTIAL")) ideas.push("Apartment / Boarding House", "Small Grocery / Laundry Shop");
+    if (cls.includes("INDUSTRIAL")) ideas.push("Warehouse / Logistics", "Hardware / Building Supplies");
 
-  if (zonal != null) {
-    if (zonal >= 25000) ideas.push("Premium Retail", "Clinics / Professional Services", "Franchise Food");
-    else if (zonal >= 12000) ideas.push("Mid-scale Restaurant", "Pharmacy", "Salon / Wellness");
-    else ideas.push("Sari-sari / Micro-retail", "Motorcycle Services", "Basic Food Stall");
+    if (zonal != null) {
+      if (zonal >= 25000) ideas.push("Premium Retail", "Clinics / Professional Services", "Franchise Food");
+      else if (zonal >= 12000) ideas.push("Mid-scale Restaurant", "Pharmacy", "Salon / Wellness");
+      else ideas.push("Sari-sari / Micro-retail", "Motorcycle Services", "Basic Food Stall");
+    }
+
+    if (poi) {
+      if (poi.counts.schools >= 3) ideas.push("School Supplies / Printing", "Snacks / Milk Tea near schools");
+      if (poi.counts.hospitals + poi.counts.clinics >= 2) ideas.push("Pharmacy / Medical Supplies", "Convenience near clinics");
+      if (poi.counts.policeStations + poi.counts.fireStations >= 1) ideas.push("24/7 Convenience / Safe-area services");
+    }
   }
 
-  if (poi) {
-    if (poi.counts.schools >= 3) ideas.push("School Supplies / Printing", "Snacks / Milk Tea near schools");
-    if (poi.counts.hospitals + poi.counts.clinics >= 2) ideas.push("Pharmacy / Medical Supplies", "Convenience near clinics");
-    if (poi.counts.policeStations + poi.counts.fireStations >= 1) ideas.push("24/7 Convenience / Safe-area services");
-  }
-
-  return Array.from(new Set(ideas)).slice(0, 6);
+  // Deduplicate and cap
+  return Array.from(new Set(ideas)).slice(0, 8);
 }
 
 export function defaultRisks() {

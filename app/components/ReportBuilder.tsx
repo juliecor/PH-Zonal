@@ -13,7 +13,7 @@ function toTitleSafe(s: string) {
 
 function formatMoneyLikeSample(v: string) {
   const n = Number(String(v ?? "").replace(/,/g, "").trim());
-  if (!Number.isFinite(n)) return "PHP - / sqm";
+  if (!Number.isFinite(n) || n === 0) return "Not Appraised";
   return `PHP ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / sqm`;
 }
 
@@ -40,6 +40,34 @@ function arrayBufferToBase64(buf: ArrayBuffer) {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
   }
   return btoa(binary);
+}
+
+// Convert rich text (emojis, smart quotes, bullets, non-ASCII) into
+// PDF-safe ASCII so jsPDF's core fonts render cleanly.
+function toPdfAscii(text: string): string {
+  const map: Record<string, string> = {
+    "📍": "",
+    "💼": "",
+    "🏢": "",
+    "⭐": "",
+    "•": "-",
+    "●": "-",
+    "○": "-",
+    "▪": "-",
+    "–": "-",
+    "—": "-",
+    "“": '"',
+    "”": '"',
+    "’": "'",
+    "‒": "-",
+    " ": " ", // narrow no-break space
+    " ": " ", // nbsp
+  };
+  let s = String(text || "");
+  s = s.replace(/[📍💼🏢⭐•●○▪–—“”’‒\u202F\u00A0]/g, (m) => map[m] ?? "");
+  // Strip any remaining non-ASCII (keep tabs/newlines and standard spaces)
+  s = s.replace(/[^\t\n\r\x20-\x7E]/g, "");
+  return s;
 }
 
 async function tryRegisterHurricaneFont(pdf: any) {
@@ -101,6 +129,8 @@ export default function ReportBuilder(props: {
   const [enriching, setEnriching] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(4);
+  const [expandedAnalysis, setExpandedAnalysis] = useState(true);
+  const [expandedBusinessUses, setExpandedBusinessUses] = useState(true);
 
   // distance helpers
   function distMeters(aLat?: number, aLon?: number, bLat?: number, bLon?: number) {
@@ -273,48 +303,59 @@ export default function ReportBuilder(props: {
 
     pdf.addImage(mapDataUrl, "PNG", mapX + 8, mapY + 8, mapW - 16, mapH - 16);
 
+    let y = mapY + 30;
+
+    // HBU - Moved to later (both sections on page 1 now)
+    // This section is now replaced by Business & Market Opportunity + Recommended Business Uses
     const bulletsFromText = (t: string) =>
       String(t || "")
         .split("\n")
-        .map((x: string) => x.replace(/^•\s*/, "").trim())
-        .filter(Boolean);
+        .map((x: string) => x.replace(/^([•\-\*]\s*)/, "").trim())
+        .filter(Boolean)
+        .map((x: string) => toPdfAscii(x));
 
-    const hbuItems = bulletsFromText(idealBusinessText).slice(0, 6);
-
-    let y = mapY + 30;
-
-    // HBU
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(12);
-    pdf.text("Highest and Best Use (HBU)", rightX, y);
-
-    y += 18;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(11);
-
-    for (const item of hbuItems.length ? hbuItems : ["(Add items)"]) {
-      pdf.text(`• ${item}`, rightX, y);
-      y += 14;
-    }
-
-    // ✅ Area description (AI)
+    // ✅ Area description (AI) - Business & Market Opportunity
     y += 12;
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(12);
-    pdf.text("Area Description", rightX, y);
+    pdf.text("Business & Market Opportunity", rightX, y);
 
     y += 16;
     pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10.5);
+    pdf.setFontSize(9.5);
 
     const desc =
-      String(areaDescription || "").trim() || "(No description yet — select a property to generate.)";
+      String(areaDescription || "").trim() || "(No description yet - select a property to generate.)";
 
-    const wrappedDesc = pdf.splitTextToSize(desc, pageW - rightX - margin);
-    const maxLines = 6;
-    for (const line of wrappedDesc.slice(0, maxLines)) {
-      pdf.text(line, rightX, y);
-      y += 12;
+    const wrappedDesc = pdf.splitTextToSize(toPdfAscii(desc), pageW - rightX - margin);
+    const maxLinesDesc = 8;
+    for (const line of wrappedDesc.slice(0, maxLinesDesc)) {
+      if (y > pageH - 180) break;
+      pdf.text(toPdfAscii(line), rightX, y);
+      y += 11;
+    }
+
+    // ✅ Recommended Business Uses
+    y += 14;
+    if (y < pageH - 120) {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.text("Recommended Business Uses", rightX, y);
+
+      y += 16;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9.5);
+
+      const hbuItems = bulletsFromText(idealBusinessText).slice(0, 5);
+      const maxLinesHBU = 5;
+      let hbuCount = 0;
+
+      for (const item of hbuItems.length ? hbuItems : ["(Add items)"]) {
+        if (y > pageH - 120 || hbuCount >= maxLinesHBU) break;
+        pdf.text(`- ${toPdfAscii(item)}`, rightX, y);
+        y += 11;
+        hbuCount++;
+      }
     }
 
     // Watermark (visible but not overpowering)
@@ -718,21 +759,52 @@ export default function ReportBuilder(props: {
       )}
       <PdfPreviewModal open={pdfPreviewOpen} url={pdfPreviewUrl} onClose={closePreview} onDownload={downloadPreviewPdf} />
 
-      <aside className="w-80 border-l border-gray-200 bg-white p-5 overflow-auto">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Report Builder</h3>
+      <aside className="w-96 border-l border-gray-200 bg-white p-5 overflow-auto">
+        <h3 className="text-lg font-bold text-gray-900 mb-5">Real Estate Assessment</h3>
 
         <div className="space-y-4">
-          {/* Hazards removed */}
-
+          {/* Real Estate Assessment Section */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">Ideal Business Uses (AI)</label>
+            <label className="block text-sm font-bold uppercase tracking-wide text-gray-900 mb-3 flex items-center gap-2">
+              <span className="text-lg">🏢</span> Business & Market Opportunity
+            </label>
+            <div className={`w-full rounded-lg border border-gray-300 px-4 py-3 leading-relaxed bg-gray-50 text-gray-800 transition-all ${
+              expandedAnalysis ? "" : "max-h-[120px] overflow-hidden"
+            }`}>
+              <p className="text-sm font-medium whitespace-pre-line">
+                {areaDescription || (
+                  <span className="text-gray-500 italic">Select a property to generate real estate assessment…</span>
+                )}
+              </p>
+            </div>
+            {areaDescription && (
+              <button
+                onClick={() => setExpandedAnalysis(!expandedAnalysis)}
+                className="text-blue-600 hover:text-blue-800 text-sm font-semibold mt-2 transition"
+              >
+                {expandedAnalysis ? "See Less ▲" : "See More ▼"}
+              </button>
+            )}
+          </div>
+
+          {/* Recommended Business Uses */}
+          <div>
+            <label className="block text-sm font-bold uppercase tracking-wide text-gray-900 mb-3 flex items-center gap-2">
+              <span className="text-lg">💼</span> Recommended Business Uses
+            </label>
             <textarea
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               value={idealBusinessText}
               onChange={(e) => setIdealBusinessText(e.target.value)}
-              placeholder={"• Basic Food Stall\n• Sari-sari / Micro-retail\n• Pharmacy / Medical Supplies"}
-              rows={6}
+              placeholder={"• Retail Store\n• Food & Beverage\n• Personal Services\n• Professional Office"}
+              rows={expandedBusinessUses ? 8 : 5}
             />
+            <button
+              onClick={() => setExpandedBusinessUses(!expandedBusinessUses)}
+              className="text-blue-600 hover:text-blue-800 text-sm font-semibold mt-2 transition"
+            >
+              {expandedBusinessUses ? "Collapse ▲" : "Expand ▼"}
+            </button>
           </div>
 
           <button

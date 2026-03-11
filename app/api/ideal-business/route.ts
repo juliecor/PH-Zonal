@@ -72,30 +72,38 @@ function deriveContextHints(params: {
   const counts = params.poiCounts || {} as Record<string, number>;
   const totalPOI = Object.values(counts).reduce((a, b) => a + (typeof b === "number" ? b : 0), 0);
 
+  // LOCATION TYPE DETECTION
+  const isMountain = /(upper|mountain|highland|hills?|bukid|sapa|sitio|upland|elevation)/i.test(brgy);
+  const isUrban = /(poblacion|downtown|central|centrum|district|proper|market|business|commercial)/i.test(brgy) || /(city proper|city center|district)/i.test(cty);
+  const isRural = totalPOI < 8 && !isUrban;
+  const isCoastal = /(beach|daw|dagat|coastal|port)/i.test(brgy);
+  const isAgricultural = /agricultural|farm|agri/i.test(cls);
+
   const hints: string[] = [];
 
-  // Heuristic: POI density → urban vs rural feel
-  if (totalPOI >= 25) hints.push("urban / city-center density");
-  else if (totalPOI >= 10) hints.push("suburban / mixed-use density");
-  else hints.push("rural / low-density area");
-
-  // Heuristic: mountain/upland indicators in barangay names
-  if (/(upper|mountain|highland|hills?|bukid|sapa|sitio)/i.test(params.barangay)) {
-    hints.push("mountain/upland barangay (limited foot traffic; local essentials)");
+  // Location category
+  if (isMountain) {
+    hints.push("MOUNTAIN/UPLAND AREA - Limited road access, local community focus, essentials-based economy");
+  } else if (isUrban) {
+    hints.push("URBAN/POBLACION - High foot traffic, diverse consumer base, commercial viability");
+  } else if (isCoastal) {
+    hints.push("COASTAL AREA - Tourism potential, fishing-related opportunities");
+  } else if (isRural) {
+    hints.push("RURAL AREA - Agricultural communities, local demand, subsistence-focused");
   }
 
-  // Heuristic: poblacion/downtown indicators
-  if (/(poblacion|downtown|central|centrum|district|proper|market)/i.test(params.barangay) || /(city proper|district)/i.test(params.city)) {
-    hints.push("near poblacion/market area (higher foot traffic)");
+  if (isAgricultural) {
+    hints.push("Agricultural classification - farming/agribusiness focus");
   }
 
-  // Classification cue
-  if (cls.includes("residential")) hints.push("primarily residential");
-  if (cls.includes("commercial")) hints.push("commercial corridor possible");
-  if (cls.includes("agricultural")) hints.push("agri-adjacent opportunities");
+  // POI density assessment
+  if (totalPOI >= 25) hints.push("High service density (urban commercial potential)");
+  else if (totalPOI >= 10) hints.push("Moderate service density (suburban opportunities)");
+  else hints.push("Low service density (essentials and local services only)");
 
-  return hints.join("; ");
+  return hints.join(" | ");
 }
+
 
 export async function POST(req: Request) {
   try {
@@ -112,52 +120,107 @@ export async function POST(req: Request) {
     const poiCounts = body.poiCounts ?? null;
 
     const loc = [barangay, city, province].filter(Boolean).join(", ") || "the selected area";
-    const poiText =
-      poiCounts && typeof poiCounts === "object"
-        ? `POI counts within ~1.5km: ${Object.entries(poiCounts)
-            .map(([k, v]) => `${k}=${v}`)
-            .join(", ")}.`
-        : "";
+    
+    // Enhanced POI Analysis
+    const poiAnalysis = (() => {
+      if (!poiCounts || typeof poiCounts !== "object") return "";
+      const entries = Object.entries(poiCounts)
+        .filter(([, v]) => typeof v === "number" && (v as number) > 0)
+        .sort((a, b) => (b[1] as number) - (a[1] as number))
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(", ");
+      const total = Object.values(poiCounts).reduce((a: number, b: any) => a + (typeof b === "number" ? b : 0), 0);
+      return `POI Infrastructure (1.5km radius):
+  Services: ${entries}
+  Total facilities: ${total}
+  Density classification: ${total >= 25 ? "Urban/High traffic area" : total >= 10 ? "Suburban/Medium foot traffic" : "Rural/Low traffic area"}`;
+    })();
 
     const contextHints = deriveContextHints({ barangay, city, classification, poiCounts });
 
+    // Compute strict allow/avoid lists based on context to keep outputs realistic
+    const totalPOI = poiCounts && typeof poiCounts === "object"
+      ? Object.values(poiCounts).reduce((a: number, b: any) => a + (typeof b === "number" ? b : 0), 0)
+      : 0;
+    const isUpland = /(upper|mountain|highland|hills?|bukid|sapa|sitio|upland|elevation)/i.test(barangay);
+    const isUrban = /(poblacion|downtown|central|centrum|district|proper|market|business|commercial)/i.test(barangay) || /(city proper|city center|district)/i.test(city);
+    const density = totalPOI >= 25 ? "high" : totalPOI >= 10 ? "medium" : "low";
+    const isAgricultural = /agri|agricultural|farm/i.test(classification);
+
+    const allowedForUpland = [
+      "Sari-sari / Micro-retail",
+      "Carinderia / Basic food stall",
+      "Fresh produce aggregation & selling",
+      "Feed/seed/farm supply",
+      "Water refilling & purified ice",
+      "Motorcycle repair / vulcanizing",
+      "Small hardware & construction supplies",
+      "Rice retailing",
+      "Prepaid load / e-wallet / remittance kiosk",
+      "Laundry services",
+    ];
+    const avoidUrban = [
+      "Malls and chain retail",
+      "Big-brand cafés/fine dining",
+      "Co-working/BPO centers",
+      "Nightlife bars/clubs",
+      "Large supermarkets",
+    ];
+
     const userPrompt = `
-Analyze this selected place and suggest the top 5 ideal businesses to open there.
+  RECOMMENDED BUSINESS OPPORTUNITIES FOR THIS LOCATION
 
-Location Details:
-- Place: ${loc}
-- Classification: ${classification || "Unknown"}
-- Zonal Value (per sqm): ₱${zonalValuePerSqm || "N/A"}
-${poiText}
-- Context: ${contextHints}
+Location: ${loc}
+Classification: ${classification || "Unclassified"}
+Zonal Value: ₱${zonalValuePerSqm}/sqm
+Context: ${contextHints}
 
-For each business recommendation, provide:
-1. Business Type (e.g., "Sari-sari Store", "Laundromat")
-2. Short Reason (why it works here)
-3. Target Market (who will buy)
-4. Capital Level (low/medium/high estimate)
-5. Profit Potential (low/medium/high)
-6. Suitability Score (1-10)
+---
 
-Requirements:
-- Base suggestions on EXACT location details (not generic)
-- Consider foot traffic, accessibility, nearby establishments, and land value
-- Only recommend practical Philippine businesses
-- Rank the top 5 from most to least suitable
-- End with the single best overall recommendation
+  FORMAT RESPONSE AS BULLET POINTS ONLY (professional layout):
 
-Format each business clearly with numbered headings (Business 1:, Business 2:, etc.).
+  LOCATION PROFILE:
+  - Upland/Mountain: ${isUpland ? "YES" : "NO"}
+  - Urban/Poblacion: ${isUrban ? "YES" : "NO"}
+  - POI Density: ${density.toUpperCase()}
+  - Agricultural Zoning: ${isAgricultural ? "YES" : "NO"}
+
+  STRICT RULES:
+  ${isUpland || isAgricultural || density === "low" ? `- Allowed examples only: ${allowedForUpland.join("; ")}
+  - Avoid: ${avoidUrban.join("; ")}
+  - Emphasize essentials and agri-adjacent services; must be feasible for limited foot traffic and road access.` : `- Urban context allowed but keep realistic to density and access.`}
+
+💼 Key Business Opportunities:
+• [Business Type 1] – [why it works here & who needs it]
+• [Business Type 2] – [why it works here & target market]
+• [Business Type 3] – [why it works here & customer base]
+
+⭐ Best Overall Recommendation:
+• [Single best business type for this location]
+• [Key reason why]
+
+---
+
+CRITICAL RULES:
+- If MOUNTAIN/UPLAND: ONLY sari-sari, agriculture, essentials (NO retail chains)
+- If URBAN: Can recommend diverse retail and services
+- If RURAL: Focus on agricultural, local services
+- Use bullet points ONLY - NO paragraphs
+- Be location-specific (not generic)
+- Include target customer type
+
+LENGTH: Keep entire response under 150 words.
 `.trim();
 
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.7,
-      max_tokens: 1500,
+      temperature: 0.8,
+      max_tokens: 400,
       messages: [
         {
           role: "system",
           content:
-            "You are a Philippine real estate and business consultant. Analyze locations and provide accurate, practical business recommendations based on local market conditions, zonal values, and accessibility. Be specific to the Philippine context and provide detailed reasoning for each suggestion.",
+            "You are a Philippine business consultant. Provide location-specific business recommendations in BULLET-POINT ONLY format  with emojis. For mountain/rural areas, only suggest practical, accessible businesses. NO urban chains for upland areas. Be concise and professional.",
         },
         { role: "user", content: userPrompt },
       ],
@@ -172,9 +235,9 @@ Format each business clearly with numbered headings (Business 1:, Business 2:, e
 
     return NextResponse.json({ 
       ok: true, 
-      businesses: analysis.businesses.slice(0, 5),  // Top 5
+      businesses: analysis.businesses.slice(0, 3),
       best_recommendation: analysis.best_recommendation,
-      raw_analysis: raw  // Include raw text for debugging
+      raw_analysis: raw
     });
   } catch (e: any) {
     console.error("ideal-business error:", e);

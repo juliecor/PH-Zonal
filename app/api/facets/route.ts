@@ -104,39 +104,55 @@ function matchesBarangay(value: any, want: any) {
 async function getAllDomainRows(domain: string) {
   const cached = FACET_CACHE.get(domain);
   if (cached && Date.now() - cached.ts < TTL_MS) {
+    console.log(`[getAllDomainRows] Cache HIT for ${domain} (age: ${Date.now() - cached.ts}ms)`);
     return { rows: cached.rows, fromCache: true as const };
   }
 
-  const idx = await fetchZonalIndex(domain);
-  const rowsLimit = Number(idx?.rowsLimit ?? 5000);
+  console.log(`[getAllDomainRows] Cache MISS for ${domain}, fetching from upstream...`);
+  const startTime = Date.now();
+  
+  try {
+    const idx = await fetchZonalIndex(domain);
+    const rowsLimit = Number(idx?.rowsLimit ?? 5000);
+    console.log(`[getAllDomainRows] Got index for ${domain} - rowsLimit: ${rowsLimit}`);
 
-  const pagesNeeded = Math.min(HARD_CAP_PAGES, Math.max(1, Math.ceil(rowsLimit / PAGE_SIZE)));
+    const pagesNeeded = Math.min(HARD_CAP_PAGES, Math.max(1, Math.ceil(rowsLimit / PAGE_SIZE)));
+    console.log(`[getAllDomainRows] Will fetch ${pagesNeeded} pages for ${domain}`);
 
-  // Fetch all pages in parallel instead of sequentially
-  const pagePromises = [];
-  for (let p = 1; p <= pagesNeeded; p++) {
-    pagePromises.push(
-      fetchZonalValuesByDomain({
-        domain,
-        page: p,
-        itemsPerPage: PAGE_SIZE,
-        search: "", // IMPORTANT: keep empty so we fetch everything
-      })
-    );
+    // Fetch all pages in parallel instead of sequentially
+    const pagePromises = [];
+    for (let p = 1; p <= pagesNeeded; p++) {
+      pagePromises.push(
+        fetchZonalValuesByDomain({
+          domain,
+          page: p,
+          itemsPerPage: PAGE_SIZE,
+          search: "", // IMPORTANT: keep empty so we fetch everything
+        })
+      );
+    }
+
+    const results = await Promise.all(pagePromises);
+    const all: AnyRow[] = [];
+
+    for (const result of results) {
+      const batch = Array.isArray(result?.rows) ? result.rows : [];
+      all.push(...batch);
+
+      if (batch.length < PAGE_SIZE) break;
+    }
+
+    FACET_CACHE.set(domain, { ts: Date.now(), rows: all });
+    console.log(`[getAllDomainRows] SUCCESS for ${domain} - fetched ${all.length} rows in ${Date.now() - startTime}ms`);
+    return { rows: all, fromCache: false as const };
+  } catch (err: any) {
+    console.error(`[getAllDomainRows] FAILED for ${domain} after ${Date.now() - startTime}ms:`, {
+      status: err?.response?.status,
+      code: err?.code,
+      message: err?.message,
+    });
+    throw err;
   }
-
-  const results = await Promise.all(pagePromises);
-  const all: AnyRow[] = [];
-
-  for (const result of results) {
-    const batch = Array.isArray(result?.rows) ? result.rows : [];
-    all.push(...batch);
-
-    if (batch.length < PAGE_SIZE) break;
-  }
-
-  FACET_CACHE.set(domain, { ts: Date.now(), rows: all });
-  return { rows: all, fromCache: false as const };
 }
 
 export async function GET(req: Request) {
@@ -291,7 +307,30 @@ export async function GET(req: Request) {
       { status: 400, headers: { "Cache-Control": "public, max-age=60" } }
     );
   } catch (e: any) {
-    console.error("Facets API error:", e);
-    return NextResponse.json({ error: e?.message ?? "Unknown error" }, { status: 500 });
+    const status = e?.response?.status ?? 500;
+    const code = e?.code || "UNKNOWN";
+    const message = e?.message || "Unknown error";
+    const url = e?.config?.url || "unknown URL";
+    
+    console.error("Facets API error:", {
+      status,
+      code,
+      message,
+      url,
+      stack: e?.stack,
+    });
+    
+    // If external API is down (503), return 503 instead of 500
+    if (status === 503) {
+      return NextResponse.json(
+        { error: "External service unavailable. BIR data temporarily unreachable.", status: 503 },
+        { status: 503, headers: { "Cache-Control": "public, max-age=60" } }
+      );
+    }
+    
+    return NextResponse.json(
+      { error: message ?? "Unknown error", status },
+      { status: 500, headers: { "Cache-Control": "public, max-age=60" } }
+    );
   }
 }

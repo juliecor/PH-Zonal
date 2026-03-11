@@ -236,14 +236,16 @@ export default function Home() {
   }, [domain]);
 
   function fmtPeso(v: any) {
+    const num = parseZonalValueToNumber(v);
+    if (!num) return "Not Appraised";
     const s = String(v ?? "").trim();
-    if (!s) return "-";
     return `₱${s}`;
   }
 
   // Safely parse zonal value strings like "₱15,500.00" or "15,500"
+  // Returns null if value is 0, empty, or invalid (treating 0 as missing data)
   function parseZonalValueToNumber(v: any): number | null {
-    if (typeof v === "number") return Number.isFinite(v) ? v : null;
+    if (typeof v === "number") return Number.isFinite(v) && v > 0 ? v : null;
     const raw = String(v ?? "").trim();
     if (!raw) return null;
     // Remove peso sign, commas, spaces and non-numeric (keep first dot)
@@ -254,7 +256,8 @@ export default function Home() {
       .replace(/[^0-9.]/g, "");
     if (!cleaned) return null;
     const num = parseFloat(cleaned);
-    return Number.isFinite(num) ? num : null;
+    // Return null if 0 or invalid (0 means no valuation data)
+    return Number.isFinite(num) && num > 0 ? num : null;
   }
 
   function fmtPesoNumber(n: number, opts?: { fractionDigits?: number }) {
@@ -271,26 +274,52 @@ export default function Home() {
     const brgyx = String(payload.row?.["Barangay-"] ?? "").trim();
     const provx = String(payload.row?.["Province-"] ?? "").trim();
     const cls = String(payload.row?.["Classification-"] ?? "").trim();
-    const zv = String(payload.row?.["ZonalValuepersqm.-"] ?? "").trim();
+    const zvStr = String(payload.row?.["ZonalValuepersqm.-"] ?? "").trim();
+    const zv = parseZonalValueToNumber(zvStr);
 
     const where = [brgyx, cityx, provx].filter(Boolean).join(", ") || payload.label || "Selected location";
 
     const counts = payload.poi?.counts;
-    const highlights: string[] = [];
-    if (counts) {
-      const top = Object.entries(counts)
-        .filter(([, v]) => typeof v === "number" && (v as number) > 0)
-        .sort((a, b) => (b[1] as number) - (a[1] as number))
-        .slice(0, 5);
-      if (top.length) highlights.push(`Nearby: ${top.map(([k, v]) => `${k} (${v})`).join(", ")}`);
+    const lines: string[] = [];
+    
+    // Location & Classification
+    lines.push(`📍 ${where}`);
+    if (cls) {
+      lines.push(`📋 ${cls}`);
     }
 
-    const lines = [
-      `Area: ${where}`,
-      cls ? `Classification: ${cls}` : "",
-      zv ? `Zonal value: ₱${zv} per sqm` : "",
-      ...highlights,
-    ].filter(Boolean);
+    // Valuation
+    if (zv && zv > 0) {
+      lines.push(`💰 ₱${zv.toLocaleString()}/sqm (BIR Assessed)`);
+    }
+
+    // Market Analysis
+    if (counts) {
+      const healthcare = (counts.hospitals || 0) + (counts.clinics || 0);
+      const education = counts.schools || 0;
+      const security = (counts.policeStations || 0) + (counts.fireStations || 0);
+      const services = counts.pharmacies || 0;
+      const totalServices = healthcare + education + security + services;
+
+      const infraItems: string[] = [];
+      if (healthcare > 0) infraItems.push(`${healthcare} healthcare`);
+      if (education > 0) infraItems.push(`${education} schools`);
+      if (security > 0) infraItems.push(`${security} security`);
+      if (services > 0) infraItems.push(`${services} services`);
+
+      if (infraItems.length > 0) {
+        lines.push(`🏢 Nearby: ${infraItems.join(", ")}`);
+      }
+
+      // Quick investment grade
+      let grade = "Limited";
+      if (totalServices >= 20) grade = "Excellent";
+      else if (totalServices >= 13) grade = "Strong";
+      else if (totalServices >= 8) grade = "Moderate";
+      else if (totalServices > 0) grade = "Emerging";
+
+      lines.push(`⭐ Investment Grade: ${grade}`);
+    }
 
     return lines.join("\n");
   }
@@ -652,6 +681,9 @@ export default function Home() {
             zonalValueText: String(selectedRow?.["ZonalValuepersqm.-"] ?? ""),
             classification: String(selectedRow?.["Classification-"] ?? ""),
             poi,
+            barangay: String(selectedRow?.["Barangay-"] ?? ""),
+            city: String(selectedRow?.["City-"] ?? ""),
+            province: String(selectedRow?.["Province-"] ?? ""),
           });
           setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
         }
@@ -660,6 +692,9 @@ export default function Home() {
           zonalValueText: String(selectedRow?.["ZonalValuepersqm.-"] ?? ""),
           classification: String(selectedRow?.["Classification-"] ?? ""),
           poi,
+          barangay: String(selectedRow?.["Barangay-"] ?? ""),
+          city: String(selectedRow?.["City-"] ?? ""),
+          province: String(selectedRow?.["Province-"] ?? ""),
         });
         setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
       }
@@ -857,6 +892,9 @@ export default function Home() {
             zonalValueText: String(row?.["ZonalValuepersqm.-"] ?? ""),
             classification: String(row?.["Classification-"] ?? ""),
             poi,
+            barangay: String(row?.["Barangay-"] ?? ""),
+            city: String(row?.["City-"] ?? ""),
+            province: String(row?.["Province-"] ?? ""),
           });
           setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
         }
@@ -865,6 +903,9 @@ export default function Home() {
           zonalValueText: String(row?.["ZonalValuepersqm.-"] ?? ""),
           classification: String(row?.["Classification-"] ?? ""),
           poi,
+          barangay: String(row?.["Barangay-"] ?? ""),
+          city: String(row?.["City-"] ?? ""),
+          province: String(row?.["Province-"] ?? ""),
         });
         setIdealBusinessText(ideas.map((x) => `• ${x}`).join("\n"));
       }
@@ -1448,7 +1489,7 @@ export default function Home() {
                                 <span className="text-[10px] text-gray-500">per sqm</span>
                               </>
                             ) : (
-                              <span className="text-[11px] text-gray-500">—</span>
+                              <span className="text-[11px] text-gray-500 font-medium">Not Appraised</span>
                             )}
                           </div>
                           <div className="text-[11px] font-semibold text-gray-500">
@@ -1512,16 +1553,6 @@ export default function Home() {
               </div>
 
               <div className="flex-1 overflow-auto p-4 space-y-3">
-                <div className="rounded-2xl border border-gray-200 bg-white p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-black text-gray-900">Business & Investment Potential</div>
-                    {areaDescLoading && <div className="text-[11px] text-gray-500">Generating…</div>}
-                  </div>
-                  <div className="text-sm text-gray-800 mt-2 leading-relaxed whitespace-pre-line">
-                    {areaDescription || "Select a property or click the map to generate a real estate assessment."}
-                  </div>
-                </div>
-
                 <ReportBuilder
                   selectedLocation={selectedLocation}
                   selectedRow={selectedRow}

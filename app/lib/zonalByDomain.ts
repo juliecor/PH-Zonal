@@ -21,13 +21,21 @@ const httpClient: AxiosInstance = axios.create({
 async function getWithRetry(url: string, opts: { timeout?: number; headers?: Record<string, string> } = {}, attempts = 3) {
   let lastErr: any = null;
   const perTryTimeout = opts.timeout ?? 12000;
+  const startTime = Date.now();
+  
   for (let i = 0; i < attempts; i++) {
     try {
       const res = await httpClient.get(url, { timeout: perTryTimeout, headers: opts.headers });
+      if (i > 0) {
+        console.log(`[getWithRetry] SUCCESS on attempt ${i + 1}/${attempts} after ${Date.now() - startTime}ms`);
+      }
       return res.data;
     } catch (e: any) {
       lastErr = e;
       const status = e?.response?.status ?? 0;
+      const code = e?.code || "NO_CODE";
+      console.warn(`[getWithRetry] Attempt ${i + 1}/${attempts} failed - Status: ${status}, Code: ${code}, URL: ${url}`);
+      
       const retriable =
         e?.code === "ECONNRESET" ||
         e?.code === "ETIMEDOUT" ||
@@ -35,14 +43,19 @@ async function getWithRetry(url: string, opts: { timeout?: number; headers?: Rec
         status === 0 ||
         status === 429 ||
         (status >= 500 && status < 600);
+      
       if (i < attempts - 1 && retriable) {
         const backoff = Math.min(1500 * (i + 1) + Math.random() * 400, 4000);
+        console.log(`[getWithRetry] Retrying in ${backoff}ms (retriable: ${retriable})...`);
         await new Promise((r) => setTimeout(r, backoff));
         continue;
       }
       break;
     }
   }
+  
+  const status = lastErr?.response?.status ?? 0;
+  console.error(`[getWithRetry] FAILED after ${attempts} attempts (${Date.now() - startTime}ms total) - Status: ${status}`);
   throw lastErr;
 }
 
