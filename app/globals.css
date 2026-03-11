@@ -1,9 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100;200;300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 /*@import "leaflet/dist/leaflet.css";*/
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
+}
+
+html, body {
+  font-family: var(--font-outfit, "Outfit", sans-serif);
 }
 
 @keyframes pulse {
