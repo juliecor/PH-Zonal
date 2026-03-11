@@ -1456,9 +1456,9 @@ export default function Home() {
                   {rows.map((r, i) => {
                     const parsed = parseZonalValueToNumber(r["ZonalValuepersqm.-"]);
                     const pricePerSqm = parsed ?? 0;
-                    const priceTier = pricePerSqm > 100000 ? 'premium' : pricePerSqm > 50000 ? 'high' : pricePerSqm > 20000 ? 'medium' : 'affordable';
-                    const tierColor = priceTier === 'premium' ? 'from-amber-400 to-orange-500' : priceTier === 'high' ? 'from-blue-400 to-cyan-500' : priceTier === 'medium' ? 'from-green-400 to-emerald-500' : 'from-gray-400 to-blue-500';
-                    const tierLabel = priceTier === 'premium' ? '💎 Premium' : priceTier === 'high' ? '⭐ High' : priceTier === 'medium' ? '✓ Fair' : 'Budget';
+                    const priceTier = pricePerSqm > 100000 ? 'prime' : pricePerSqm > 50000 ? 'high' : pricePerSqm > 20000 ? 'mid' : 'value';
+                    const tierColor = priceTier === 'prime' ? 'from-amber-500 to-orange-600' : priceTier === 'high' ? 'from-indigo-500 to-violet-600' : priceTier === 'mid' ? 'from-emerald-500 to-green-600' : 'from-slate-500 to-gray-600';
+                    const tierLabel = priceTier === 'prime' ? '💎 Prime' : priceTier === 'high' ? '⬆️ High-Value' : priceTier === 'mid' ? '✓ Mid‑Market' : 'Value';
 
                     return (
                       <button
