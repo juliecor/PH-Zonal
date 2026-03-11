@@ -296,6 +296,7 @@ export default function ReportBuilder(props: {
     const mapY = topY;
 
     const rightX = mapX + mapW + 36;
+    const contentBottom = pageH - 150; // keep clear space for signature line
 
     pdf.setDrawColor(140);
     pdf.setLineWidth(1);
@@ -303,7 +304,8 @@ export default function ReportBuilder(props: {
 
     pdf.addImage(mapDataUrl, "PNG", mapX + 8, mapY + 8, mapW - 16, mapH - 16);
 
-    let y = mapY + 30;
+    // Align right column content with the top of the map
+    let y = mapY + 10;
 
     // HBU - Moved to later (both sections on page 1 now)
     // This section is now replaced by Business & Market Opportunity + Recommended Business Uses
@@ -315,7 +317,7 @@ export default function ReportBuilder(props: {
         .map((x: string) => toPdfAscii(x));
 
     // ✅ Area description (AI) - Business & Market Opportunity
-    y += 12;
+    y += 0;
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(12);
     pdf.text("Business & Market Opportunity", rightX, y);
@@ -328,16 +330,16 @@ export default function ReportBuilder(props: {
       String(areaDescription || "").trim() || "(No description yet - select a property to generate.)";
 
     const wrappedDesc = pdf.splitTextToSize(toPdfAscii(desc), pageW - rightX - margin);
-    const maxLinesDesc = 8;
-    for (const line of wrappedDesc.slice(0, maxLinesDesc)) {
-      if (y > pageH - 180) break;
+    // Print as much of the description as will fit, leaving space for uses below
+    for (const line of wrappedDesc) {
+      if (y > contentBottom) break;
       pdf.text(toPdfAscii(line), rightX, y);
       y += 11;
     }
 
     // ✅ Recommended Business Uses
     y += 14;
-    if (y < pageH - 120) {
+    if (y < contentBottom - 10) {
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(12);
       pdf.text("Recommended Business Uses", rightX, y);
@@ -346,35 +348,19 @@ export default function ReportBuilder(props: {
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9.5);
 
-      const hbuItems = bulletsFromText(idealBusinessText).slice(0, 5);
-      const maxLinesHBU = 5;
+      const hbuItems = bulletsFromText(idealBusinessText); // include all items
+      const maxLinesHBU = 100; // high cap; contentBottom will limit
       let hbuCount = 0;
 
       for (const item of hbuItems.length ? hbuItems : ["(Add items)"]) {
-        if (y > pageH - 120 || hbuCount >= maxLinesHBU) break;
+        if (y > contentBottom || hbuCount >= maxLinesHBU) break;
         pdf.text(`- ${toPdfAscii(item)}`, rightX, y);
         y += 11;
         hbuCount++;
       }
     }
 
-    // Watermark (visible but not overpowering)
-    if (watermark) {
-      try {
-        const GState = (pdf as any).GState;
-        if (GState) pdf.setGState(new GState({ opacity: 0.22 }));
-      } catch {}
-
-      const wmW = pageW * 0.9;
-      const wmH = (wmW * 200) / 520;
-      const wmY = pageH - wmH - 180;
-      pdf.addImage(watermark, "PNG", (pageW - wmW) / 2, wmY, wmW, wmH);
-
-      try {
-        const GState = (pdf as any).GState;
-        if (GState) pdf.setGState(new GState({ opacity: 1 }));
-      } catch {}
-    }
+    // Note: Removed page-1 watermark to maximize usable content space
 
     // Signature area (bottom-right)
     const sigBaseY = pageH - 110;

@@ -970,16 +970,21 @@ export default function Home() {
         ? { lat: Number(zonalLat), lon: Number(zonalLon) }
         : null;
 
-      const street = normalizePH(r["Street/Subdivision-"]);
+      const rawStreet = String(r["Street/Subdivision-"] ?? "").trim();
+      const street = normalizePH(rawStreet);
       const vicinity = normalizePH(r["Vicinity-"]);
-      const brgy = r["Barangay-"];
+      const rawRowBarangay = String(r["Barangay-"] ?? "").trim();
+      const isAllAreas = /^(all\s*areas?|all)$/i.test(rawStreet) || /^(all\s*areas?|all)$/i.test(rawRowBarangay);
+      // If the row has blank/"ALL AREAS" barangay, fallback to current filter barangay
+      const brgy = (rawRowBarangay && !/^(all\s*areas?|all)$/i.test(rawRowBarangay)) ? rawRowBarangay : (barangay || rawRowBarangay);
       const cty = normalizeCityHint(String(r["City-"] ?? ""), String(r["Province-"] ?? ""));
       const prov = r["Province-"];
 
       // Use Google's smart pinpointing with zonal data as anchor
       const location = await geocodeWithZonalData({
-        query: [street, brgy, cty, prov].filter(Boolean).join(", "),
-        street: street || undefined,
+        // When street is empty or "ALL AREAS", query only by barangay/city/province to avoid city-centroid fallbacks
+        query: (isAllAreas || !street ? [brgy, cty, prov] : [street, brgy, cty, prov]).filter(Boolean).join(", "),
+        street: !isAllAreas && street ? street : undefined,
         barangay: brgy || undefined,
         city: cty || undefined,
         province: prov || undefined,
@@ -990,8 +995,8 @@ export default function Home() {
 
       const finalLoc = location || baseLatLon || { lat: 10.3085, lon: 123.8906 };
       setSelectedLocation({ lat: finalLoc.lat, lon: finalLoc.lon });
-      setGeoLabel(location?.label || `${street || brgy}, ${cty}`);
-      setMatchStatus("✓ Pinpointed to street");
+      setGeoLabel(location?.label || `${street && !isAllAreas ? street : (brgy || cty)}, ${cty}`);
+      setMatchStatus(street && !isAllAreas ? "✓ Pinpointed to street" : "✓ Pinpointed to barangay");
 
       // Load POIs immediately
       loadPoiIndependent(finalLoc.lat, finalLoc.lon, r, location?.label || `${street || brgy}, ${cty}`);
