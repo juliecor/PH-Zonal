@@ -131,6 +131,7 @@ export default function ReportBuilder(props: {
   const [pageSize] = useState(4);
   const [expandedAnalysis, setExpandedAnalysis] = useState(true);
   const [expandedBusinessUses, setExpandedBusinessUses] = useState(true);
+  const [newBusinessUse, setNewBusinessUse] = useState("");
 
   // distance helpers
   function distMeters(aLat?: number, aLon?: number, bLat?: number, bLon?: number) {
@@ -785,6 +786,48 @@ export default function ReportBuilder(props: {
               placeholder={"• Retail Store\n• Food & Beverage\n• Personal Services\n• Professional Office"}
               rows={expandedBusinessUses ? 8 : 5}
             />
+            
+            {/* Add new business use */}
+            <div className="flex gap-2 mt-3">
+              <input
+                type="text"
+                value={newBusinessUse}
+                onChange={(e) => setNewBusinessUse(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    const trimmed = newBusinessUse.trim();
+                    if (trimmed) {
+                      const currentText = idealBusinessText.trim();
+                      const newText = currentText 
+                        ? `${currentText}\n• ${trimmed}` 
+                        : `• ${trimmed}`;
+                      setIdealBusinessText(newText);
+                      setNewBusinessUse("");
+                    }
+                  }
+                }}
+                placeholder="Add more business uses (press Enter)..."
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <button
+                onClick={() => {
+                  const trimmed = newBusinessUse.trim();
+                  if (trimmed) {
+                    const currentText = idealBusinessText.trim();
+                    const newText = currentText 
+                      ? `${currentText}\n• ${trimmed}` 
+                      : `• ${trimmed}`;
+                    setIdealBusinessText(newText);
+                    setNewBusinessUse("");
+                  }
+                }}
+                disabled={!newBusinessUse.trim()}
+                className="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+              >
+                Add
+              </button>
+            </div>
+            
             <button
               onClick={() => setExpandedBusinessUses(!expandedBusinessUses)}
               className="text-blue-600 hover:text-blue-800 text-sm font-semibold mt-2 transition"
