@@ -106,6 +106,7 @@ export default function Home() {
   const filterPinpointRef = useRef(0);
   const noCacheRef = useRef(false);
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const citiesReqGenerationRef = useRef(0);
 
   // -------- LocalStorage-backed caches --------
   const GEO_LS_KEY = "geoCacheV1";
@@ -350,8 +351,9 @@ export default function Home() {
           setMatches(converted);
           try {
             const tops = converted.slice(0, 3);
+            const gen = citiesReqGenerationRef.current;
             for (const m of tops) {
-              if (m?.domain) loadCities(m.domain).catch(() => {});
+              if (m?.domain) loadCities(m.domain, gen).catch(() => {});
             }
           } catch {}
           setSearchLoading(false);
@@ -367,8 +369,9 @@ export default function Home() {
           setMatches(data.matches ?? []);
           try {
             const tops = Array.isArray(data.matches) ? data.matches.slice(0, 3) : [];
+            const gen = citiesReqGenerationRef.current;
             for (const m of tops) {
-              if (m?.domain) loadCities(m.domain).catch(() => {});
+              if (m?.domain) loadCities(m.domain, gen).catch(() => {});
             }
           } catch {}
           setSearchLoading(false);
@@ -398,16 +401,21 @@ export default function Home() {
     debouncedSearch(regionSearch);
   }, [regionSearch]);
 
-  async function loadCities(forDomain: string) {
+  async function loadCities(forDomain: string, forGeneration?: number) {
     setFacetsLoading(true);
     setErr("");
+    const generation = forGeneration ?? citiesReqGenerationRef.current;
+    
     try {
       const bag = noCacheRef.current ? {} as Record<string, { ts: number; cities: string[] }> : lsLoad<Record<string, { ts: number; cities: string[] }>>("facetCitiesCacheV1", {});
       const key = String(forDomain || "").toLowerCase();
       const TTL = 1000 * 60 * 60 * 24 * 3;
       const hit = (bag as any)[key];
       if (!noCacheRef.current && hit && Date.now() - (hit.ts ?? 0) < TTL) {
-        setFacetCities(hit.cities ?? []);
+        // Only update if this is still the latest request
+        if (generation === citiesReqGenerationRef.current) {
+          setFacetCities(hit.cities ?? []);
+        }
         return;
       }
 
@@ -415,7 +423,12 @@ export default function Home() {
       if (!res.ok) throw new Error(`Cities failed: ${res.status}`);
       const data = await res.json();
       const cities = Array.isArray(data?.cities) ? data.cities : [];
-      setFacetCities(cities);
+      
+      // Only update if this is still the latest request
+      if (generation === citiesReqGenerationRef.current) {
+        setFacetCities(cities);
+      }
+      
       try {
         if (!noCacheRef.current) {
           (bag as any)[key] = { ts: Date.now(), cities };
@@ -423,10 +436,16 @@ export default function Home() {
         }
       } catch {}
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to load cities");
-      setFacetCities([]);
+      // Only update error if this is still the latest request
+      if (generation === citiesReqGenerationRef.current) {
+        setErr(e?.message ?? "Failed to load cities");
+        setFacetCities([]);
+      }
     } finally {
-      setFacetsLoading(false);
+      // Only clear loading if this is still the latest request
+      if (generation === citiesReqGenerationRef.current) {
+        setFacetsLoading(false);
+      }
     }
   }
 
@@ -1233,6 +1252,9 @@ export default function Home() {
                               key={idx}
                               className="w-full text-left px-4 py-3 text-sm hover:bg-blue-50 border-b last:border-b-0 transition"
                               onClick={async () => {
+                                // Increment generation to invalidate stale preload requests
+                                citiesReqGenerationRef.current++;
+                                
                                 setDomain(m.domain);
                                 setSelectedProvince(m.province);
                                 setSelectedProvinceCity(m.city);
@@ -1256,7 +1278,7 @@ export default function Home() {
                                 setAreaDescErr("");
                                 setRegionSearch("");
 
-                                await loadCities(m.domain);
+                                await loadCities(m.domain, citiesReqGenerationRef.current);
                                 searchZonal({ page: 1 });
 
                                 // Pinpoint to region center
