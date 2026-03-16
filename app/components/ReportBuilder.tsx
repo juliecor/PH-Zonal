@@ -352,11 +352,26 @@ export default function ReportBuilder(props: {
       const hbuItems = bulletsFromText(idealBusinessText); // include all items
       const maxLinesHBU = 100; // high cap; contentBottom will limit
       let hbuCount = 0;
+      const bulletIndent = 10; // indent for bullet items
+      const availableWidth = pageW - rightX - margin - bulletIndent; // wrap width
 
       for (const item of hbuItems.length ? hbuItems : ["(Add items)"]) {
         if (y > contentBottom || hbuCount >= maxLinesHBU) break;
-        pdf.text(`- ${toPdfAscii(item)}`, rightX, y);
-        y += 11;
+        
+        // Wrap text to fit within available width
+        const wrappedItem = pdf.splitTextToSize(`• ${toPdfAscii(item)}`, availableWidth);
+        
+        for (let i = 0; i < wrappedItem.length; i++) {
+          if (y > contentBottom) break;
+          // First line gets the bullet, subsequent lines are indented to align
+          if (i === 0) {
+            pdf.text(wrappedItem[i], rightX + bulletIndent, y);
+          } else {
+            pdf.text(wrappedItem[i], rightX + bulletIndent + 10, y);
+          }
+          y += 11;
+        }
+        
         hbuCount++;
       }
     }

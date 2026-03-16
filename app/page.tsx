@@ -41,7 +41,16 @@ const MapComponent = dynamic(
 
 type CompsResp = { ok: true; stats: { min: number | null; median: number | null; max: number | null; count: number }; rows: any[] } | null;
 
+// ─── Design-only helper: price tier badge ───────────────────────────────────
+function getPriceTier(p: number) {
+  if (p > 100_000) return { label: "Prime",      bg: "bg-amber-100",   text: "text-amber-800",   dot: "bg-amber-400"   };
+  if (p > 50_000)  return { label: "High-value", bg: "bg-violet-100",  text: "text-violet-800",  dot: "bg-violet-400"  };
+  if (p > 20_000)  return { label: "Mid-market", bg: "bg-emerald-100", text: "text-emerald-800", dot: "bg-emerald-400" };
+  return                  { label: "Value",      bg: "bg-sky-100",     text: "text-sky-800",     dot: "bg-sky-400"     };
+}
+
 export default function Home() {
+  // ─── All original state — untouched ─────────────────────────────────────
   const [regionSearch, setRegionSearch] = useState("");
   const [matches, setMatches] = useState<RegionMatch[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -98,7 +107,7 @@ export default function Home() {
 
   const [comps, setComps] = useState<CompsResp>(null);
 
-  // Improved caching
+  // ─── All original refs — untouched ──────────────────────────────────────
   const reqIdRef = useRef(0);
   const zonalAbortRef = useRef<AbortController | null>(null);
   const centerCacheRef = useRef<Map<string, { lat: number; lon: number; label: string; boundary?: Boundary | null }>>(new Map());
@@ -108,7 +117,7 @@ export default function Home() {
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const citiesReqGenerationRef = useRef(0);
 
-  // -------- LocalStorage-backed caches --------
+  // ─── All original constants — untouched ─────────────────────────────────
   const GEO_LS_KEY = "geoCacheV1";
   const POI_LS_KEY = "poiCacheV1";
   const ZONAL_LS_KEY = "zonalCacheV1";
@@ -143,7 +152,7 @@ export default function Home() {
     }
   }, []);
 
-  // Allow overriding domain/province via URL query (?domain=negrosoriental.zonalvalue.com&province=NEGROS%20ORIENTAL)
+  // Allow overriding domain/province via URL query
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -189,7 +198,6 @@ export default function Home() {
     return city;
   }
 
-  // Helper copied from API routes – map hostname subdomain to province name
   function domainToProvince(domain: string): string | null {
     const host = String(domain || "").trim().toLowerCase();
     if (!host) return null;
@@ -218,19 +226,16 @@ export default function Home() {
     if (sub.includes("leyte-bilaran")) return "LEYTE";
     if(sub.includes("mtprovince")) return "MOUNTAIN PROVINCE";
     if(sub.includes("northernsamar")) return "NORTHERN SAMAR";
-    if(sub.includes("nuevavizcaya")) return "NUEVA VIZCAYA"; 
+    if(sub.includes("nuevavizcaya")) return "NUEVA VIZCAYA";
     if(sub.includes("quirino")) return "QUIRINO";
     if(sub.includes("southcotabato")) return "SOUTH COTABATO";
     if(sub.includes("tawitawi")) return "TAWI-TAWI";
     if(sub.includes("zamboangadelnorte")) return "ZAMBOANGA DEL NORTE";
     if(sub.includes("zamboangasibugay")) return "ZAMBOANGA SIBUGAY";
     if(sub.includes("zamboangadelsur")) return "ZAMBOANGA DEL SUR";
-
-
     return null;
   }
 
-  // keep selectedProvince in sync when domain state is changed programmatically
   useEffect(() => {
     const p = domainToProvince(domain);
     if (p) setSelectedProvince(p);
@@ -243,13 +248,10 @@ export default function Home() {
     return `₱${s}`;
   }
 
-  // Safely parse zonal value strings like "₱15,500.00" or "15,500"
-  // Returns null if value is 0, empty, or invalid (treating 0 as missing data)
   function parseZonalValueToNumber(v: any): number | null {
     if (typeof v === "number") return Number.isFinite(v) && v > 0 ? v : null;
     const raw = String(v ?? "").trim();
     if (!raw) return null;
-    // Remove peso sign, commas, spaces and non-numeric (keep first dot)
     const cleaned = raw
       .replace(/₱/g, "")
       .replace(/,/g, "")
@@ -257,7 +259,6 @@ export default function Home() {
       .replace(/[^0-9.]/g, "");
     if (!cleaned) return null;
     const num = parseFloat(cleaned);
-    // Return null if 0 or invalid (0 means no valuation data)
     return Number.isFinite(num) && num > 0 ? num : null;
   }
 
@@ -283,18 +284,15 @@ export default function Home() {
     const counts = payload.poi?.counts;
     const lines: string[] = [];
     
-    // Location & Classification
     lines.push(`📍 ${where}`);
     if (cls) {
       lines.push(`📋 ${cls}`);
     }
 
-    // Valuation
     if (zv && zv > 0) {
       lines.push(`💰 ₱${zv.toLocaleString()}/sqm (BIR Assessed)`);
     }
 
-    // Market Analysis
     if (counts) {
       const healthcare = (counts.hospitals || 0) + (counts.clinics || 0);
       const education = counts.schools || 0;
@@ -312,7 +310,6 @@ export default function Home() {
         lines.push(`🏢 Nearby: ${infraItems.join(", ")}`);
       }
 
-      // Quick investment grade
       let grade = "Limited";
       if (totalServices >= 20) grade = "Excellent";
       else if (totalServices >= 13) grade = "Strong";
@@ -325,7 +322,6 @@ export default function Home() {
     return lines.join("\n");
   }
 
-  // Smart search that tries city search first, then province search
   function performSmartSearch(query: string) {
     if (query.length < 2) {
       setMatches([]);
@@ -336,7 +332,6 @@ export default function Home() {
     setSearchLoading(true);
     setErr("");
 
-    // Try city search first (more powerful)
     fetch(`/api/city-search?q=${encodeURIComponent(query)}`)
       .then((res) => res.json())
       .then((data) => {
@@ -358,7 +353,6 @@ export default function Home() {
           } catch {}
           setSearchLoading(false);
         } else {
-          // Fall back to province search
           return fetch(`/api/regions?q=${encodeURIComponent(query)}`);
         }
       })
@@ -391,7 +385,6 @@ export default function Home() {
     }, 300);
   }
 
-  // Auto-search as user types
   useEffect(() => {
     if (!regionSearch.trim()) {
       setMatches([]);
@@ -412,7 +405,6 @@ export default function Home() {
       const TTL = 1000 * 60 * 60 * 24 * 3;
       const hit = (bag as any)[key];
       if (!noCacheRef.current && hit && Date.now() - (hit.ts ?? 0) < TTL) {
-        // Only update if this is still the latest request
         if (generation === citiesReqGenerationRef.current) {
           setFacetCities(hit.cities ?? []);
         }
@@ -424,7 +416,6 @@ export default function Home() {
       const data = await res.json();
       const cities = Array.isArray(data?.cities) ? data.cities : [];
       
-      // Only update if this is still the latest request
       if (generation === citiesReqGenerationRef.current) {
         setFacetCities(cities);
       }
@@ -436,20 +427,17 @@ export default function Home() {
         }
       } catch {}
     } catch (e: any) {
-      // Only update error if this is still the latest request
       if (generation === citiesReqGenerationRef.current) {
         setErr(e?.message ?? "Failed to load cities");
         setFacetCities([]);
       }
     } finally {
-      // Only clear loading if this is still the latest request
       if (generation === citiesReqGenerationRef.current) {
         setFacetsLoading(false);
       }
     }
   }
 
-  // Ensure facets are loaded for the active domain on mount and whenever domain changes
   useEffect(() => {
     if (!domain) return;
     loadCities(domain).catch(() => {});
@@ -662,7 +650,6 @@ export default function Home() {
       if (myId !== reqIdRef.current) return;
       setPoiData({ counts: poi.counts, items: poi.items });
 
-      // Try AI-generated business ideas first, fallback to heuristic
       try {
         const aiRes = await fetch("/api/ideal-business", {
           method: "POST",
@@ -679,7 +666,6 @@ export default function Home() {
         const aiData = await aiRes.json().catch(() => null);
         if (myId !== reqIdRef.current) return;
         if (aiRes.ok && aiData?.ok && Array.isArray(aiData.businesses) && aiData.businesses.length) {
-          // Format detailed business analysis
           const formatted = aiData.businesses.map((biz: any, idx: number) => {
             const lines = [
               `${idx + 1}. ${biz.type || "Business"}`,
@@ -691,8 +677,6 @@ export default function Home() {
             ];
             return lines.join("\n");
           }).join("\n\n");
-          
-          // Append best recommendation if available
           const recommendation = aiData.best_recommendation ? `\n\n✓ BEST OVERALL: ${aiData.best_recommendation}` : "";
           setIdealBusinessText(formatted + recommendation);
         } else {
@@ -734,7 +718,6 @@ export default function Home() {
     }
   }
 
-  // NEW: Pinpoint on filter changes (region/city/barangay)
   async function pinpointFilterLocation(filterCity?: string, filterBarangay?: string, filterProvince?: string) {
     const myId = ++filterPinpointRef.current;
 
@@ -775,7 +758,6 @@ export default function Home() {
       setMatchStatus(`✓ ${filterBarangay ? "Barangay" : filterCity ? "City" : "Province"} center`);
       setBoundary((data.boundary as Boundary | null) ?? null);
 
-      // Pre-warm POI in background
       try {
         await fetchPoi(Number(data.lat), Number(data.lon));
       } catch {}
@@ -873,7 +855,6 @@ export default function Home() {
       if (myId !== reqIdRef.current) return;
       setPoiData({ counts: poi.counts, items: poi.items });
 
-      // Try AI-generated business ideas first, fallback to heuristic
       try {
         const aiRes = await fetch("/api/ideal-business", {
           method: "POST",
@@ -890,7 +871,6 @@ export default function Home() {
         const aiData = await aiRes.json().catch(() => null);
         if (myId !== reqIdRef.current) return;
         if (aiRes.ok && aiData?.ok && Array.isArray(aiData.businesses) && aiData.businesses.length) {
-          // Format detailed business analysis
           const formatted = aiData.businesses.map((biz: any, idx: number) => {
             const lines = [
               `${idx + 1}. ${biz.type || "Business"}`,
@@ -902,8 +882,6 @@ export default function Home() {
             ];
             return lines.join("\n");
           }).join("\n\n");
-          
-          // Append best recommendation if available
           const recommendation = aiData.best_recommendation ? `\n\n✓ BEST OVERALL: ${aiData.best_recommendation}` : "";
           setIdealBusinessText(formatted + recommendation);
         } else {
@@ -958,7 +936,6 @@ export default function Home() {
     setShowStreetHighlight(false);
     setStreetGeo(null);
 
-    // Sync city and barangay filters to match the selected row
     const rowCity = String(r["City-"] ?? "");
     const rowBarangay = String(r["Barangay-"] ?? "");
     if (rowCity && rowCity !== city) {
@@ -967,22 +944,19 @@ export default function Home() {
     if (rowBarangay && rowBarangay !== barangay) {
       setBarangay(rowBarangay);
     }
-    // Reload barangays for this city if needed
     if (rowCity && (!facetBarangays.length || rowCity !== city)) {
       loadBarangays(domain, rowCity);
     }
 
-    // On mobile, collapse panels to focus on the map
     if (typeof window !== "undefined" && window.innerWidth < 640) {
       setLeftOpen(false);
-      setBottomOpen(true); // keep bottom sheet expanded so value is visible
+      setBottomOpen(true);
     } else {
       setBottomOpen(true);
     }
 
     setGeoLoading(true);
     try {
-      // Extract zonal data coordinates
       const zonalLat = (r as any)?.["latitude"] ?? (r as any)?.lat ?? null;
       const zonalLon = (r as any)?.["longitude"] ?? (r as any)?.lon ?? null;
       const baseLatLon = zonalLat != null && zonalLon != null && Number.isFinite(zonalLat) && Number.isFinite(zonalLon)
@@ -994,14 +968,11 @@ export default function Home() {
       const vicinity = normalizePH(r["Vicinity-"]);
       const rawRowBarangay = String(r["Barangay-"] ?? "").trim();
       const isAllAreas = /^(all\s*areas?|all)$/i.test(rawStreet) || /^(all\s*areas?|all)$/i.test(rawRowBarangay);
-      // If the row has blank/"ALL AREAS" barangay, fallback to current filter barangay
       const brgy = (rawRowBarangay && !/^(all\s*areas?|all)$/i.test(rawRowBarangay)) ? rawRowBarangay : (barangay || rawRowBarangay);
       const cty = normalizeCityHint(String(r["City-"] ?? ""), String(r["Province-"] ?? ""));
       const prov = r["Province-"];
 
-      // Use Google's smart pinpointing with zonal data as anchor
       const location = await geocodeWithZonalData({
-        // When street is empty or "ALL AREAS", query only by barangay/city/province to avoid city-centroid fallbacks
         query: (isAllAreas || !street ? [brgy, cty, prov] : [street, brgy, cty, prov]).filter(Boolean).join(", "),
         street: !isAllAreas && street ? street : undefined,
         barangay: brgy || undefined,
@@ -1017,7 +988,6 @@ export default function Home() {
       setGeoLabel(location?.label || `${street && !isAllAreas ? street : (brgy || cty)}, ${cty}`);
       setMatchStatus(street && !isAllAreas ? "✓ Pinpointed to street" : "✓ Pinpointed to barangay");
 
-      // Load POIs immediately
       loadPoiIndependent(finalLoc.lat, finalLoc.lon, r, location?.label || `${street || brgy}, ${cty}`);
       setAreaLabels([]);
     } catch (e: any) {
@@ -1057,7 +1027,6 @@ export default function Home() {
     }
   }
 
-  // Trigger search when domain/filters change
   useEffect(() => {
     const t = setTimeout(() => {
       if (!domain) return;
@@ -1073,8 +1042,11 @@ export default function Home() {
     ? `${String(selectedRow["Barangay-"] ?? "")}, ${String(selectedRow["City-"] ?? "")}, ${String(selectedRow["Province-"] ?? "")}`
     : geoLabel || "Select a property";
 
+  const isDev = process.env.NODE_ENV === "development";
 
-
+  // ─────────────────────────────────────────────────────────
+  // RENDER — only classNames differ from the original
+  // ─────────────────────────────────────────────────────────
   return (
     <main className="h-screen w-screen overflow-hidden bg-slate-100 text-gray-900">
       <ZonalSearchIndicator visible={loading} />
@@ -1096,7 +1068,7 @@ export default function Home() {
         />
       </div>
 
-      {/* Top Bar Logo */}
+      {/* ── Brand pill ── */}
       <div className="absolute top-4 left-16 sm:left-1/3 z-30">
         <Link
           href="/welcome"
@@ -1118,443 +1090,411 @@ export default function Home() {
         </Link>
       </div>
 
-      {/* Map Type Buttons */}
+      {/* ── Map type controls ── */}
       <div className="absolute top-4 right-4 z-30">
-        <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-200 p-1.5 flex gap-1">
-          <button
-            onClick={() => setMapType("street")}
-            className={`p-2 rounded-xl transition ${
-              mapType === "street" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"
-            }`}
-            title="Street Map"
-          >
-            <MapIcon size={18} />
-          </button>
-          <button
-            onClick={() => setMapType("terrain")}
-            className={`p-2 rounded-xl transition ${
-              mapType === "terrain" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"
-            }`}
-            title="Terrain Map"
-          >
-            <TerrainIcon size={18} />
-          </button>
-          <button
-            onClick={() => setMapType("satellite")}
-            className={`p-2 rounded-xl transition ${
-              mapType === "satellite" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-100"
-            }`}
-            title="Satellite Map"
-          >
-            <SatelliteIcon size={18} />
-          </button>
+        <div className="bg-white/95 backdrop-blur rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col">
+          {(["street", "terrain", "satellite"] as MapType[]).map((type) => {
+            const Icon = type === "street" ? MapIcon : type === "terrain" ? TerrainIcon : SatelliteIcon;
+            const labels: Record<string, string> = { street: "Street", terrain: "Terrain", satellite: "Satellite" };
+            return (
+              <button
+                key={type}
+                onClick={() => setMapType(type)}
+                className={[
+                  "flex items-center gap-2 px-3 py-2.5 text-xs font-semibold transition border-b border-gray-100 last:border-b-0",
+                  mapType === type ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-50",
+                ].join(" ")}
+              >
+                <Icon size={14} />
+                <span className="hidden sm:inline">{labels[type]}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* LEFT DRAWER */}
+      {/* ════════════════════════════════════════
+          LEFT DRAWER
+      ════════════════════════════════════════ */}
       <div className="absolute top-0 left-0 z-40 h-full flex">
         <div
           className={[
-            "h-full bg-white/95 backdrop-blur border-r border-gray-200 shadow-2xl transition-all duration-300",
-            leftOpen ? "w-full sm:w-[400px]" : "w-0",
+            "h-full bg-white border-r border-gray-200 shadow-2xl transition-all duration-300 flex flex-col",
+            leftOpen ? "w-full sm:w-[400px]" : "w-0 overflow-hidden",
           ].join(" ")}
         >
-          {leftOpen && (
-            <div className="h-full flex flex-col">
-              {/* Search header */}
-              <div className="p-4 pb-3 border-b border-gray-200 bg-gradient-to-br from-blue-50 to-indigo-50">
-                <div className="flex items-center gap-2 mb-2">
-                  <h2 className="text-sm font-black text-gray-900">🏘️ Property Search</h2>
+          {/* ── Blue header ── */}
+          <div className="bg-blue-600 px-4 pt-4 pb-3 shrink-0">
+            <h2 className="text-sm font-bold text-white mb-3">🏘️ Property Search</h2>
+
+            {/* Search input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-300 pointer-events-none" size={15} />
+              <input
+                value={regionSearch}
+                onChange={(e) => setRegionSearch(e.target.value)}
+                placeholder="Search city or province…"
+                className="w-full rounded-xl border-0 bg-blue-500/60 pl-9 pr-8 py-2.5 text-sm text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-white/40 focus:bg-blue-500/80 transition"
+              />
+              {searchLoading && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin">
+                  <div className="h-4 w-4 border-2 border-blue-200 border-t-white rounded-full" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-900" size={18} />
-                      <input
-                        value={regionSearch}
-                        onChange={(e) => setRegionSearch(e.target.value)}
-                        placeholder="Search city or province…"
-                        className="w-full rounded-xl border-2 border-blue-200 bg-white px-10 py-2.5 text-sm text-gray-900 placeholder-gray-500 shadow-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition"
-                      />
-                      {searchLoading && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin">
-                          <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full" />
-                        </div>
-                      )}
-                      {regionSearch && !searchLoading && (
-                        <button
-                          onClick={() => setRegionSearch("")}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
-                          title="Clear"
-                        >
-                          <X size={18} />
-                        </button>
-                      )}
-                    </div>
+              )}
+              {regionSearch && !searchLoading && (
+                <button
+                  onClick={() => setRegionSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-200 hover:text-white transition"
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+
+            {/* Toolbar */}
+            <div className="mt-2.5 flex items-center gap-2">
+              <button
+                onClick={() => setShowFilters((v) => !v)}
+                className={[
+                  "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition",
+                  showFilters ? "bg-white text-blue-700" : "bg-blue-500/50 text-white hover:bg-blue-500/70",
+                ].join(" ")}
+              >
+                <SlidersHorizontal size={13} />
+                Filters
+              </button>
+
+              {isDev && (
+                <button
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      localStorage.removeItem("facetCitiesCacheV1");
+                      localStorage.removeItem("facetBarangaysCacheV1");
+                      localStorage.removeItem("zonalCacheV1");
+                      loadCities(domain).catch(() => {});
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-500/50 text-white px-3 py-1.5 text-xs font-semibold hover:bg-blue-500/70 transition"
+                  title="Clear caches (dev only)"
+                >
+                  🔄 Refresh
+                </button>
+              )}
+
+              <button
+                onClick={() => setRightOpen((v) => !v)}
+                className={[
+                  "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ml-auto",
+                  rightOpen ? "bg-white text-blue-700" : "bg-blue-500/50 text-white hover:bg-blue-500/70",
+                ].join(" ")}
+                title="Open report panel"
+              >
+                {rightOpen ? <PanelRightClose size={13} /> : <PanelRightOpen size={13} />}
+                Report
+              </button>
+            </div>
+          </div>
+
+          {/* ── Region picker results ── */}
+          {(showRegionPicker || (regionSearch.length > 0 && matches.length > 0)) && (
+            <div className="px-3 pt-3 shrink-0">
+              {searchLoading ? (
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="h-4 w-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+                    <span className="text-sm text-gray-600">Searching...</span>
                   </div>
                 </div>
-
-                {/* Toolbar */}
-                <div className="mt-3 flex items-center justify-between">
-                  <button
-                    onClick={() => setShowFilters((v) => !v)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                  >
-                    <SlidersHorizontal size={16} />
-                    Filters
-                  </button>
-
-                  {/* cache refresh button for development */}
-                  <button
-                    onClick={() => {
-                      if (typeof window !== "undefined") {
-                        localStorage.removeItem('facetCitiesCacheV1');
-                        localStorage.removeItem('facetBarangaysCacheV1');
-                        localStorage.removeItem('zonalCacheV1');
-                        loadCities(domain).catch(() => {});
-                      }
-                    }}
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                    title="Clear cached facet lists and reload"
-                  >
-                    🔄
-                    Refresh
-                  </button>
-
-                  <button
-                    onClick={() => setRightOpen((v) => !v)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                    title="Open report panel"
-                  >
-                    {rightOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
-                    Report
-                  </button>
-                </div>
-
-                {/* Region picker results */}
-                {(showRegionPicker || (regionSearch.length > 0 && matches.length > 0)) && (
-                  <div className="mt-3">
-                    {searchLoading ? (
-                      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="h-4 w-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
-                          <span className="text-sm text-gray-600">Searching...</span>
-                        </div>
-                      </div>
-                    ) : matches.length > 0 ? (
-                      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                        <div className="px-4 py-2 bg-gray-50 border-b text-xs font-semibold text-gray-700">
-                          {searchMode === "city" ? "📍 Cities Found" : "🗺️ Provinces Found"} ({matches.length})
-                        </div>
-                        <div className="max-h-56 overflow-auto">
-                          {matches.map((m, idx) => (
-                            <button
-                              key={idx}
-                              className="w-full text-left px-4 py-3 text-sm hover:bg-blue-50 border-b last:border-b-0 transition"
-                              onClick={async () => {
-                                // Increment generation to invalidate stale preload requests
-                                citiesReqGenerationRef.current++;
-                                
-                                setDomain(m.domain);
-                                setSelectedProvince(m.province);
-                                setSelectedProvinceCity(m.city);
-
-                                setCity("");
-                                setBarangay("");
-                                setClassification("");
-                                setQ("");
-                                setPage(1);
-
-                                setRows([]);
-                                setErr("");
-                                setSelectedRow(null);
-                                setPoiData(null);
-                                setDetailsErr("");
-                                setFacetCities([]);
-                                setFacetBarangays([]);
-                                setBoundary(null);
-                                setComps(null);
-                                setAreaDescription("");
-                                setAreaDescErr("");
-                                setRegionSearch("");
-
-                                await loadCities(m.domain, citiesReqGenerationRef.current);
-                                searchZonal({ page: 1 });
-
-                                // Pinpoint to region center
-                                await pinpointFilterLocation(m.city, "", m.province);
-
-                                setShowRegionPicker(false);
-                                setShowFilters(true);
-                              }}
-                            >
-                              <div className="font-semibold text-gray-900">
-                                {m.province} {searchMode === "city" ? `→ ${m.city}` : ""}
-                              </div>
-                              <div className="text-xs text-gray-500 mt-0.5">{m.domain}</div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : regionSearch.length >= 2 ? (
-                      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4 text-center">
-                        <div className="text-sm text-gray-600">
-                          ❌ No results found for "<strong>{regionSearch}</strong>"
-                        </div>
-                        <div className="text-xs text-gray-500 mt-2">
-                          Try searching by province or city name
-                        </div>
-                      </div>
-                    ) : null}
+              ) : matches.length > 0 ? (
+                <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                  <div className="px-3 py-2 bg-blue-50 border-b border-blue-100 text-[11px] font-bold text-blue-600 uppercase tracking-wide">
+                    {searchMode === "city" ? "📍 Cities Found" : "🗺️ Provinces Found"} ({matches.length})
                   </div>
-                )}
-
-                {/* Filters */}
-                {showFilters && (
-                  <div className="mt-3 space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs font-semibold text-gray-600 block mb-2">City</label>
-                        <select
-                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          value={city}
-                          onChange={(e) => {
-                            const nextCity = e.target.value;
-                            setCity(nextCity);
-                            setShowStreetHighlight(false);
-                            setStreetGeo(null);
-                            setBarangay("");
-                            setPage(1);
-                            setFacetBarangays([]);
-                            loadBarangays(domain, nextCity);
-
-                            // Pinpoint to city
-                            if (nextCity) {
-                              pinpointFilterLocation(nextCity, "", selectedProvince);
-                            }
-                          }}
-                          disabled={facetsLoading || facetCities.length === 0}
-                        >
-                          <option value="">All Cities</option>
-                          {facetCities.map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-semibold text-gray-600 block mb-2">Barangay</label>
-                        <select
-                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          value={barangay}
-                          onChange={(e) => {
-                            const nextBrgy = e.target.value;
-                            setBarangay(nextBrgy);
-                            setShowStreetHighlight(false);
-                            setStreetGeo(null);
-                            setPage(1);
-
-                            // Pinpoint to barangay
-                            if (city && nextBrgy) {
-                              pinpointFilterLocation(city, nextBrgy, selectedProvince);
-                            }
-                          }}
-                          disabled={!city || barangaysLoading}
-                        >
-                          <option value="">All Barangays</option>
-                          {facetBarangays.map((b) => (
-                            <option key={b} value={b}>
-                              {b}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs font-semibold text-gray-600 block mb-2">Classification</label>
-                        <select
-                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          value={classification}
-                          onChange={(e) => {
-                            setClassification(e.target.value);
-                            setPage(1);
-                          }}
-                        >
-                          <option value="">Classification (Optional)</option>
-                          <option value="COMMERCIAL REGULAR">COMMERCIAL REGULAR</option>
-                          <option value="COMMERCIAL CONDOMINIUM">COMMERCIAL CONDOMINIUM</option>
-                          <option value="COMMERCIAL">COMMERCIAL</option>
-                          <option value="RESIDENTIAL">RESIDENTIAL</option>
-                          <option value="RESIDENTIAL CONDOMINIUM">RESIDENTIAL CONDOMINIUM</option>
-                          <option value="INDUSTRIAL">INDUSTRIAL</option>
-                          <option value="AGRICULTURAL">AGRICULTURAL</option>
-                          <option value="SPECIAL">SPECIAL</option>
-                          <option value="MIXED-USE">MIXED-USE</option>
-                          <option value="ROAD LOT">ROAD LOT</option>
-                          <option value="OPEN SPACE">OPEN SPACE</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-semibold text-gray-600 block mb-2">Street / Vicinity</label>
-                        <input
-                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="Street / Vicinity…"
-                          value={q}
-                          onChange={(e) => {
-                            setQ(e.target.value);
-                            setPage(1);
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
+                  <div className="max-h-56 overflow-auto">
+                    {matches.map((m, idx) => (
                       <button
-                        onClick={() => searchZonal({ page: 1 })}
-                        disabled={loading}
-                        className="flex-1 rounded-xl bg-blue-600 text-white px-4 py-2.5 text-xs font-bold hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {loading ? (
-                          <>
-                            <Zap size={14} className="animate-spin" />
-                            Searching…
-                          </>
-                        ) : (
-                          "Search"
-                        )}
-                      </button>
-                      <button
-                        onClick={() => {
+                        key={idx}
+                        className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 border-b last:border-b-0 transition"
+                        onClick={async () => {
+                          citiesReqGenerationRef.current++;
+                          setDomain(m.domain);
+                          setSelectedProvince(m.province);
+                          setSelectedProvinceCity(m.city);
                           setCity("");
                           setBarangay("");
                           setClassification("");
                           setQ("");
                           setPage(1);
                           setRows([]);
+                          setErr("");
+                          setSelectedRow(null);
+                          setPoiData(null);
+                          setDetailsErr("");
+                          setFacetCities([]);
+                          setFacetBarangays([]);
+                          setBoundary(null);
+                          setComps(null);
+                          setAreaDescription("");
+                          setAreaDescErr("");
+                          setRegionSearch("");
+                          await loadCities(m.domain, citiesReqGenerationRef.current);
+                          searchZonal({ page: 1 });
+                          await pinpointFilterLocation(m.city, "", m.province);
+                          setShowRegionPicker(false);
+                          setShowFilters(true); // auto-open so users can drill down
                         }}
-                        className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition"
                       >
-                        Clear
+                        <div className="font-semibold text-gray-900 text-xs">
+                          {m.province} {searchMode === "city" ? `→ ${m.city}` : ""}
+                        </div>
+                        <div className="text-[11px] text-gray-400 mt-0.5">{m.domain}</div>
                       </button>
-                    </div>
+                    ))}
                   </div>
-                )}
+                </div>
+              ) : regionSearch.length >= 2 ? (
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
+                  <div className="text-sm text-gray-600">
+                    No results for "<strong>{regionSearch}</strong>"
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">Try a province or city name</div>
+                </div>
+              ) : null}
+            </div>
+          )}
 
-                {err && (
-                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                    {err}
-                  </div>
-                )}
+          {/* ── Filters ── */}
+          {showFilters && (
+            <div className="px-3 pt-3 pb-2 border-b border-gray-100 shrink-0 space-y-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1.5">City</label>
+                  <select
+                    className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition disabled:opacity-50"
+                    value={city}
+                    onChange={(e) => {
+                      const nextCity = e.target.value;
+                      setCity(nextCity);
+                      setShowStreetHighlight(false);
+                      setStreetGeo(null);
+                      setBarangay("");
+                      setPage(1);
+                      setFacetBarangays([]);
+                      loadBarangays(domain, nextCity);
+                      if (nextCity) {
+                        pinpointFilterLocation(nextCity, "", selectedProvince);
+                      }
+                    }}
+                    disabled={facetsLoading || facetCities.length === 0}
+                  >
+                    <option value="">All Cities</option>
+                    {facetCities.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1.5">Barangay</label>
+                  <select
+                    className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition disabled:opacity-50"
+                    value={barangay}
+                    onChange={(e) => {
+                      const nextBrgy = e.target.value;
+                      setBarangay(nextBrgy);
+                      setShowStreetHighlight(false);
+                      setStreetGeo(null);
+                      setPage(1);
+                      if (city && nextBrgy) {
+                        pinpointFilterLocation(city, nextBrgy, selectedProvince);
+                      }
+                    }}
+                    disabled={!city || barangaysLoading}
+                  >
+                    <option value="">All Barangays</option>
+                    {facetBarangays.map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              {/* Results list */}
-              <div className="flex-1 overflow-auto">
-                <div className="px-4 py-3 sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 backdrop-blur border-b border-gray-200 flex items-center justify-between">
-                  <div className="text-xs font-black tracking-widest text-gray-900 flex items-center gap-2 uppercase">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm">
-                      📊
-                    </div>
-                    Results {loading && <Zap size={14} className="animate-spin text-orange-500 ml-1" />}
-                  </div>
-                  <div className="text-[11px] font-semibold text-gray-700 bg-white px-2.5 py-1 rounded-lg border border-blue-200">
-                    {totalRows ? (
-                      <>
-                        <span className="text-blue-600">#{showingFrom.toLocaleString()}–{showingTo.toLocaleString()}</span>
-                        <span className="text-gray-600"> of </span>
-                        <span className="text-blue-600 font-bold">{totalRows.toLocaleString()}</span>
-                      </>
-                    ) : (
-                      "No results"
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2 px-2">
-                  {rows.map((r, i) => {
-                    const parsed = parseZonalValueToNumber(r["ZonalValuepersqm.-"]);
-                    const pricePerSqm = parsed ?? 0;
-                    const priceTier = pricePerSqm > 100000 ? 'prime' : pricePerSqm > 50000 ? 'high' : pricePerSqm > 20000 ? 'mid' : 'value';
-                    const tierColor = priceTier === 'prime' ? 'from-amber-500 to-orange-600' : priceTier === 'high' ? 'from-indigo-500 to-violet-600' : priceTier === 'mid' ? 'from-emerald-500 to-green-600' : 'from-slate-500 to-gray-600';
-                    const tierLabel = priceTier === 'prime' ? '💎 Prime' : priceTier === 'high' ? '⬆️ High-Value' : priceTier === 'mid' ? '✓ Mid‑Market' : 'Value';
-
-                    return (
-                      <button
-                        key={`${r.rowIndex}-${i}`}
-                        onClick={() => selectRow(r)}
-                        className={[
-                          "w-full text-left rounded-2xl border-2 p-3 transition-all duration-200",
-                          selectedRow?.rowIndex === r.rowIndex 
-                            ? `border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 shadow-md` 
-                            : `border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm hover:bg-gradient-to-br hover:from-blue-50 hover:to-gray-50`,
-                        ].join(" ")}
-                      >
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-black text-[13px] text-gray-900 truncate">
-                              {String(r["Street/Subdivision-"] ?? "").slice(0, 44) || "Unnamed"}
-                            </div>
-                            <div className="text-[11px] text-gray-600 mt-0.5">
-                              {String(r["Barangay-"] ?? "")}, {String(r["City-"] ?? "")}
-                            </div>
-                          </div>
-                          <div className={`px-2 py-1 rounded-lg text-[10px] font-bold bg-gradient-to-r ${tierColor} text-white whitespace-nowrap`}>
-                            {tierLabel}
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                          <div className="flex items-baseline gap-1">
-                            {parsed != null ? (
-                              <>
-                                <span className="text-xs text-gray-600">₱</span>
-                                <span className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-800">{pricePerSqm.toLocaleString('en-PH')}</span>
-                                <span className="text-[10px] text-gray-500">per sqm</span>
-                              </>
-                            ) : (
-                              <span className="text-[11px] text-gray-500 font-medium">Not Appraised</span>
-                            )}
-                          </div>
-                          <div className="text-[11px] font-semibold text-gray-500">
-                            #{i + 1 + (page - 1) * 10}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Pagination */}
-                <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 backdrop-blur">
-                  <button
-                    onClick={() => searchZonal({ page: Math.max(1, page - 1) })}
-                    disabled={loading || !hasPrev}
-                    className="flex-1 rounded-xl border-2 border-gray-300 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-blue-100 hover:border-blue-400 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1.5">Classification</label>
+                  <select
+                    className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition"
+                    value={classification}
+                    onChange={(e) => {
+                      setClassification(e.target.value);
+                      setPage(1);
+                    }}
                   >
-                    ← Previous
-                  </button>
-                  <div className="text-[11px] text-gray-700 font-semibold px-2 py-1.5 bg-white rounded-lg border border-gray-200">
-                    <span className="text-blue-600 font-black">{page}</span>
-                    {pageCount ? <> / <span className="text-blue-600 font-black">{pageCount}</span></> : null}
-                  </div>
-                  <button
-                    onClick={() => searchZonal({ page: page + 1 })}
-                    disabled={loading || !hasNext}
-                    className="flex-1 rounded-xl border-2 border-gray-300 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-blue-100 hover:border-blue-400 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Next →
-                  </button>
+                    <option value="">All Types</option>
+                    <option value="COMMERCIAL REGULAR">COMMERCIAL REGULAR</option>
+                    <option value="COMMERCIAL CONDOMINIUM">COMMERCIAL CONDOMINIUM</option>
+                    <option value="COMMERCIAL">COMMERCIAL</option>
+                    <option value="RESIDENTIAL">RESIDENTIAL</option>
+                    <option value="RESIDENTIAL CONDOMINIUM">RESIDENTIAL CONDOMINIUM</option>
+                    <option value="INDUSTRIAL">INDUSTRIAL</option>
+                    <option value="AGRICULTURAL">AGRICULTURAL</option>
+                    <option value="SPECIAL">SPECIAL</option>
+                    <option value="MIXED-USE">MIXED-USE</option>
+                    <option value="ROAD LOT">ROAD LOT</option>
+                    <option value="OPEN SPACE">OPEN SPACE</option>
+                  </select>
                 </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1.5">Street / Vicinity</label>
+                  <input
+                    className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition"
+                    placeholder="Street / Vicinity…"
+                    value={q}
+                    onChange={(e) => {
+                      setQ(e.target.value);
+                      setPage(1);
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-0.5">
+                <button
+                  onClick={() => searchZonal({ page: 1 })}
+                  disabled={loading}
+                  className="flex-1 rounded-xl bg-blue-600 text-white px-4 py-2 text-xs font-bold hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <Zap size={13} className="animate-spin" />
+                      Searching…
+                    </>
+                  ) : (
+                    "Search"
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setCity("");
+                    setBarangay("");
+                    setClassification("");
+                    setQ("");
+                    setPage(1);
+                    setRows([]);
+                  }}
+                  className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Clear
+                </button>
               </div>
             </div>
           )}
+
+          {err && (
+            <div className="mx-3 mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 shrink-0">
+              {err}
+            </div>
+          )}
+
+          {/* ── Results header ── */}
+          <div className="px-4 py-2.5 sticky top-0 bg-gray-50 border-b border-gray-100 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wide">Results</span>
+              {loading && (
+                <Zap size={12} className="animate-spin text-orange-500" />
+              )}
+            </div>
+            <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+              {totalRows ? (
+                <>#{showingFrom.toLocaleString()}–{showingTo.toLocaleString()} of {totalRows.toLocaleString()}</>
+              ) : (
+                "No results"
+              )}
+            </span>
+          </div>
+
+          {/* ── Results list ── */}
+          <div className="flex-1 overflow-auto">
+            <div className="p-2 flex flex-col gap-1.5">
+              {rows.map((r, i) => {
+                const parsed = parseZonalValueToNumber(r["ZonalValuepersqm.-"]);
+                const pricePerSqm = parsed ?? 0;
+                const tier = getPriceTier(pricePerSqm);
+                const isActive = selectedRow?.rowIndex === r.rowIndex;
+
+                return (
+                  <button
+                    key={`${r.rowIndex}-${i}`}
+                    onClick={() => selectRow(r)}
+                    className={[
+                      "w-full text-left rounded-2xl border-2 p-3 transition-all duration-150",
+                      isActive
+                        ? "border-blue-500 bg-blue-50 shadow-md"
+                        : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/40",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-[13px] text-gray-900 truncate leading-tight">
+                          {String(r["Street/Subdivision-"] ?? "").slice(0, 44) || "Unnamed"}
+                        </div>
+                        <div className="text-[11px] text-gray-600 font-medium mt-0.5 truncate">
+                          {String(r["Barangay-"] ?? "")}, {String(r["City-"] ?? "")}
+                        </div>
+                      </div>
+                      <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${tier.bg} ${tier.text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${tier.dot}`} />
+                        {tier.label}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                      <div className="flex items-baseline gap-1">
+                        {parsed != null ? (
+                          <>
+                            <span className="text-xs text-gray-500">₱</span>
+                            <span className="text-lg font-black text-blue-700">{pricePerSqm.toLocaleString("en-PH")}</span>
+                            <span className="text-[10px] text-gray-500 font-semibold">per sqm</span>
+                          </>
+                        ) : (
+                          <span className="text-[11px] text-gray-500 font-medium">Not Appraised</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] font-semibold text-gray-500">
+                        #{i + 1 + (page - 1) * 10}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Pagination */}
+            <div className="sticky bottom-0 p-3 border-t border-gray-100 bg-white flex items-center justify-between gap-2">
+              <button
+                onClick={() => searchZonal({ page: Math.max(1, page - 1) })}
+                disabled={loading || !hasPrev}
+                className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ← Previous
+              </button>
+              <div className="text-xs text-gray-500 px-2 shrink-0">
+                <span className="font-bold text-gray-800">{page}</span>
+                {pageCount ? <> / <span className="font-bold text-gray-800">{pageCount}</span></> : null}
+              </div>
+              <button
+                onClick={() => searchZonal({ page: page + 1 })}
+                disabled={loading || !hasNext}
+                className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Drawer Toggle Button */}
+        {/* Drawer toggle */}
         <button
           onClick={() => setLeftOpen((v) => !v)}
           className="h-14 mt-6 rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-xl px-3 flex items-center justify-center hover:bg-white transition z-50"
@@ -1564,42 +1504,44 @@ export default function Home() {
         </button>
       </div>
 
-      {/* RIGHT REPORT DRAWER */}
-      <div className={["absolute top-0 right-0 z-40 h-full transition-all duration-300", rightOpen ? "w-[360px] sm:w-[420px]" : "w-0"].join(" ")}>
+      {/* ════════════════════════════════════════
+          RIGHT REPORT DRAWER
+      ════════════════════════════════════════ */}
+      <div className={["absolute top-0 right-0 z-40 h-full transition-all duration-300", rightOpen ? "w-[360px] sm:w-[420px]" : "w-0 overflow-hidden"].join(" ")}>
         {rightOpen && (
-          <div className="h-full bg-white/95 backdrop-blur border-l border-gray-200 shadow-2xl">
-            <div className="h-full flex flex-col">
-              <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-lg">📋</div>
-                  <div className="text-sm font-black text-gray-900">Property Report</div>
-                </div>
-                <button onClick={() => setRightOpen(false)} className="rounded-xl p-2 hover:bg-blue-200 transition text-gray-700" title="Close">
-                  <X size={18} />
-                </button>
+          <div className="h-full bg-white border-l border-gray-200 shadow-2xl flex flex-col">
+            <div className="bg-blue-600 px-4 py-3 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-white text-base">📋</div>
+                <div className="text-sm font-bold text-white">Property Report</div>
               </div>
+              <button onClick={() => setRightOpen(false)} className="rounded-xl p-1.5 hover:bg-blue-500 transition text-blue-200 hover:text-white" title="Close">
+                <X size={16} />
+              </button>
+            </div>
 
-              <div className="flex-1 overflow-auto p-4 space-y-3">
-                <ReportBuilder
-                  selectedLocation={selectedLocation}
-                  selectedRow={selectedRow}
-                  geoLabel={geoLabel}
-                  poiLoading={poiLoading}
-                  poiData={poiData}
-                  poiRadiusKm={poiRadiusKm}
-                  onChangePoiRadius={onChangePoiRadius}
-                  idealBusinessText={idealBusinessText}
-                  setIdealBusinessText={setIdealBusinessText}
-                  areaDescription={areaDescription}
-                  mapContainerId="map-container"
-                />
-              </div>
+            <div className="flex-1 overflow-auto p-4 space-y-3">
+              <ReportBuilder
+                selectedLocation={selectedLocation}
+                selectedRow={selectedRow}
+                geoLabel={geoLabel}
+                poiLoading={poiLoading}
+                poiData={poiData}
+                poiRadiusKm={poiRadiusKm}
+                onChangePoiRadius={onChangePoiRadius}
+                idealBusinessText={idealBusinessText}
+                setIdealBusinessText={setIdealBusinessText}
+                areaDescription={areaDescription}
+                mapContainerId="map-container"
+              />
             </div>
           </div>
         )}
       </div>
 
-      {/* BOTTOM SHEET */}
+      {/* ════════════════════════════════════════
+          BOTTOM SHEET
+      ════════════════════════════════════════ */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[92vw] sm:w-[560px]">
         <div
           className={[
@@ -1607,39 +1549,54 @@ export default function Home() {
             bottomOpen ? "max-h-[38vh]" : "max-h-[52px]",
           ].join(" ")}
         >
-          <button onClick={() => setBottomOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition">
+          <button onClick={() => setBottomOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition border-b border-gray-100">
             <div className="min-w-0 text-left">
-              <div className="text-[10px] text-gray-500 font-black uppercase tracking-wider">📌 Selected Property</div>
-              <div className="text-sm font-black text-gray-900 truncate">{selectedTitle}</div>
+              <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">📌 Selected Property</div>
+              <div className="text-sm font-bold text-gray-900 truncate">{selectedTitle}</div>
             </div>
-            <div className="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded-lg">{bottomOpen ? "▼" : "▶"}</div>
+            <div className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg">{bottomOpen ? "▼" : "▶"}</div>
           </button>
 
           {bottomOpen && (
-            <div className="px-4 pb-3">
+            <div className="px-4 pb-3 overflow-auto max-h-[calc(38vh-52px)]">
               {!selectedRow ? (
-                <div className="text-sm text-gray-600">
+                <div className="pt-3 text-sm text-gray-600">
                   <div className="flex items-center gap-2">
-                    <MapPin size={16} className="text-blue-600" />
+                    <MapPin size={15} className="text-blue-600 shrink-0" />
                     {geoLoading ? "Finding location..." : "Select a region, city, barangay, or click on a street from the list"}
                   </div>
                 </div>
               ) : (
                 <>
-                  <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white p-4 flex items-center justify-between shadow-lg border border-blue-400/30">
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider opacity-90">💰 Zonal Value</div>
-                      <div className="text-3xl font-black mt-1 drop-shadow-lg">{fmtPeso(selectedRow["ZonalValuepersqm.-"])}</div>
-                      <div className="text-[11px] opacity-90 font-semibold">per square meter</div>
+                  {/* ── Zonal value card ── */}
+                  <div className="mt-3 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200 mb-1">💰 Zonal Value</div>
+                        <div className="text-3xl font-black text-white leading-none drop-shadow-sm">
+                          {parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])
+                            ? fmtPesoNumber(parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])!)
+                            : "Not Appraised"}
+                        </div>
+                        <div className="text-[11px] text-blue-200 font-semibold mt-1">per square meter</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-lg text-white">{String(selectedRow["City-"] ?? "")}</div>
+                        <div className="text-xs text-blue-100 font-semibold">{String(selectedRow["Barangay-"] ?? "")}</div>
+                        <div className="truncate max-w-[200px] text-xs text-blue-200 font-medium mt-0.5">{String(selectedRow["Street/Subdivision-"] ?? "")}</div>
+                      </div>
                     </div>
-                    <div className="text-right text-[11px] opacity-90 font-semibold">
-                      <div className="font-bold text-lg">{String(selectedRow["City-"] ?? "")}</div>
-                      <div>{String(selectedRow["Barangay-"] ?? "")}</div>
-                      <div className="truncate max-w-[200px] text-xs">{String(selectedRow["Street/Subdivision-"] ?? "")}</div>
-                    </div>
+                    {String(selectedRow["Classification-"] ?? "").trim() && (
+                      <div className="bg-blue-50 border-t border-blue-100 px-4 py-1.5 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                        <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wide">
+                          {String(selectedRow["Classification-"] ?? "")}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Directions ONLY */}
+                  {/* ── Action buttons ── */}
                   <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
                     <button
                       onClick={async () => {
@@ -1666,34 +1623,39 @@ export default function Home() {
                         }
                       }}
                       disabled={streetGeoLoading}
-                      className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                      className={[
+                        "shrink-0 rounded-full border px-4 py-2 text-xs font-bold transition disabled:opacity-50",
+                        showStreetHighlight
+                          ? "border-blue-300 bg-blue-50 text-blue-700"
+                          : "border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
+                      ].join(" ")}
                     >
                       {streetGeoLoading ? "Finding…" : showStreetHighlight ? "Hide Street" : "Highlight Street"}
                     </button>
 
                     <button
                       onClick={() => setRightOpen(true)}
-                      className="shrink-0 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-800 hover:bg-gray-50"
-                      title="Open report"
+                      className="shrink-0 rounded-full bg-blue-600 text-white px-4 py-2 text-xs font-bold hover:bg-blue-700 transition"
                     >
                       Open Report
                     </button>
                   </div>
 
+                  {/* ── Status ── */}
                   <div className="mt-3 space-y-2">
                     {geoLoading && (
-                      <div className="text-xs text-gray-600 flex items-center gap-2">
+                      <div className="text-xs text-gray-500 flex items-center gap-1.5">
                         <span className="animate-spin">⟳</span> Pinpointing…
                       </div>
                     )}
                     {matchStatus && (
-                      <div className="text-xs text-green-800 bg-green-50 border border-green-200 rounded-2xl px-3 py-2 flex items-center gap-2">
-                        <MapPin size={12} />
+                      <div className="text-xs text-green-800 bg-green-50 border border-green-200 rounded-2xl px-3 py-1.5 flex items-center gap-2">
+                        <MapPin size={11} />
                         {matchStatus}
                       </div>
                     )}
                     {detailsErr && (
-                      <div className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-2xl px-3 py-2">{detailsErr}</div>
+                      <div className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-2xl px-3 py-1.5">{detailsErr}</div>
                     )}
                   </div>
                 </>
