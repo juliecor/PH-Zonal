@@ -8,7 +8,7 @@ function domainToProvince(domain: string): string | null {
   const host = String(domain || "").trim().toLowerCase();
   const sub = (host.split(".")[0] || host);
   if (!sub) return null;
-  // explicit combined-domain preference must come first
+  // explicit combined-domain preference must come first s
   if (sub.includes("negrosoriental-siquijor")) return "NEGROS ORIENTAL";
   if (sub.includes("cebu")) return "CEBU";
   if (sub.includes("bohol")) return "BOHOL";
