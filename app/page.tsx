@@ -41,6 +41,213 @@ const MapComponent = dynamic(
 
 type CompsResp = { ok: true; stats: { min: number | null; median: number | null; max: number | null; count: number }; rows: any[] } | null;
 
+// ─── ReportPanel: uses inline styles so positioning is 100% reliable
+//     across every phone regardless of Tailwind breakpoint resolution. ────────
+function ReportPanel({
+  onClose,
+  selectedLocation,
+  selectedRow,
+  geoLabel,
+  poiLoading,
+  poiData,
+  poiRadiusKm,
+  onChangePoiRadius,
+  idealBusinessText,
+  setIdealBusinessText,
+  areaDescription,
+}: {
+  onClose: () => void;
+  selectedLocation: any;
+  selectedRow: any;
+  geoLabel: string;
+  poiLoading: boolean;
+  poiData: any;
+  poiRadiusKm: number;
+  onChangePoiRadius: (km: number) => void;
+  idealBusinessText: string;
+  setIdealBusinessText: (v: string) => void;
+  areaDescription: string;
+}) {
+  const [isWide, setIsWide] = useState(false);
+
+  useEffect(() => {
+    function check() { setIsWide(window.innerWidth >= 640); }
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const panelStyle: React.CSSProperties = isWide
+    ? {
+        position: "fixed",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: "auto",
+        width: 380,
+        maxWidth: 380,
+        maxHeight: "100vh",
+        zIndex: 50,
+        display: "flex",
+        flexDirection: "column",
+        background: "#fff",
+        borderLeft: "1px solid #e5e7eb",
+        boxShadow: "-4px 0 24px rgba(0,0,0,0.15)",
+        boxSizing: "border-box",
+        overflowX: "hidden",
+      }
+    : {
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        width: "100%",
+        maxWidth: "100vw",
+        maxHeight: "88vh",
+        zIndex: 50,
+        display: "flex",
+        flexDirection: "column",
+        background: "#fff",
+        borderTop: "1px solid #e5e7eb",
+        borderRadius: "16px 16px 0 0",
+        boxShadow: "0 -4px 24px rgba(0,0,0,0.18)",
+        boxSizing: "border-box",
+        overflowX: "hidden",
+      };
+
+  return (
+    <>
+      {/* Backdrop */}
+      {!isWide && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 49, background: "rgba(0,0,0,0.4)" }}
+          onClick={onClose}
+        />
+      )}
+
+      <div style={panelStyle}>
+        {/* Drag handle — mobile only */}
+        {!isWide && (
+          <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 4px", flexShrink: 0 }}>
+            <div style={{ width: 40, height: 4, borderRadius: 9999, background: "#d1d5db" }} />
+          </div>
+        )}
+
+        {/* Blue header */}
+        <div className="bg-blue-600 px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-white text-base">📋</div>
+            <span className="text-sm font-bold text-white">Property Report</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-xl p-2 hover:bg-blue-500 active:bg-blue-400 transition text-blue-200 hover:text-white"
+            title="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Scrollable body
+            - overflow-x: hidden  → clips any child that bleeds past the panel edge
+            - min-width: 0        → prevents flex children from stretching the container
+            - box-sizing included via inline style so nothing escapes the panel width  */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            overflowX: "hidden",
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
+            padding: "16px",
+            boxSizing: "border-box",
+            minWidth: 0,
+            width: "100%",
+          } as React.CSSProperties}
+        >
+          {/* ── ReportBuilder containment wrapper ──────────────────────────
+              Uses a scoped className + injected <style> to force EVERY
+              descendant element (inputs, buttons, flex rows, score cards,
+              dot indicators) to respect the panel width.
+              This works even when we don't have access to ReportBuilder's src.
+          ─────────────────────────────────────────────────────────────── */}
+          <style>{`
+            .rb-contain {
+              width: 100%;
+              max-width: 100%;
+              min-width: 0;
+              box-sizing: border-box;
+              overflow-x: hidden;
+            }
+            /* Every direct and nested child must not exceed the container */
+            .rb-contain *,
+            .rb-contain *::before,
+            .rb-contain *::after {
+              max-width: 100%;
+              min-width: 0;
+              box-sizing: border-box;
+            }
+            /* Flex rows must shrink, not push past the boundary */
+            .rb-contain > * { min-width: 0; }
+            /* Inputs and buttons that have intrinsic min-width */
+            .rb-contain input,
+            .rb-contain textarea,
+            .rb-contain select {
+              width: 100%;
+              min-width: 0;
+              max-width: 100%;
+            }
+            /* Images should never overflow */
+            .rb-contain img,
+            .rb-contain svg {
+              max-width: 100%;
+              height: auto;
+            }
+            /* Text should wrap rather than overflow */
+            .rb-contain p,
+            .rb-contain span,
+            .rb-contain div,
+            .rb-contain li,
+            .rb-contain h1,
+            .rb-contain h2,
+            .rb-contain h3,
+            .rb-contain h4,
+            .rb-contain label {
+              word-break: break-word;
+              overflow-wrap: break-word;
+            }
+            /* Flex children — the #1 cause of overflow */
+            .rb-contain [class*="flex"] {
+              min-width: 0;
+            }
+            .rb-contain [class*="flex"] > * {
+              min-width: 0;
+              flex-shrink: 1;
+            }
+          `}</style>
+          <div className="rb-contain">
+            <ReportBuilder
+              selectedLocation={selectedLocation}
+              selectedRow={selectedRow}
+              geoLabel={geoLabel}
+              poiLoading={poiLoading}
+              poiData={poiData}
+              poiRadiusKm={poiRadiusKm}
+              onChangePoiRadius={onChangePoiRadius}
+              idealBusinessText={idealBusinessText}
+              setIdealBusinessText={setIdealBusinessText}
+              areaDescription={areaDescription}
+              mapContainerId="map-container"
+            />
+          </div>
+          {/* Safe-area spacer for phones with home indicator */}
+          <div style={{ height: 24, flexShrink: 0 }} />
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Design-only helper: price tier badge ───────────────────────────────────
 function getPriceTier(p: number) {
   if (p > 100_000) return { label: "Prime",      bg: "bg-amber-100",   text: "text-amber-800",   dot: "bg-amber-400"   };
@@ -1045,7 +1252,7 @@ export default function Home() {
   const isDev = process.env.NODE_ENV === "development";
 
   // ─────────────────────────────────────────────────────────
-  // RENDER — only classNames differ from the original
+  // RENDER
   // ─────────────────────────────────────────────────────────
   return (
     <main className="h-screen w-screen overflow-hidden bg-slate-100 text-gray-900">
@@ -1068,19 +1275,24 @@ export default function Home() {
         />
       </div>
 
-      {/* ── Brand pill ── */}
-      <div className="absolute top-4 left-16 sm:left-1/3 z-30">
+      {/* ── Brand pill ─────────────────────────────────────────────────────
+          On mobile the toggle button is 44px + drawer border ≈ 45px.
+          We push the pill to left-[48px] so it clears the toggle.
+          On sm+ (drawer is 400px) we keep left-1/3 as before.
+      ─────────────────────────────────────────────────────────────────── */}
+      <div className="absolute top-4 left-[48px] sm:left-1/3 z-30 max-w-[calc(100vw-9rem)] sm:max-w-none">
         <Link
           href="/welcome"
           title="Go to Home"
-          className="rounded-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-lg px-3 py-2 flex items-center gap-3 hover:shadow-xl transition cursor-pointer"
+          className="rounded-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-lg px-3 py-2 flex items-center gap-2 hover:shadow-xl transition cursor-pointer"
         >
           <Image
             src="/pictures/FilipinoHomes.png"
             alt="Filipino Homes"
             width={160}
             height={36}
-            className="h-8 sm:h-10 w-auto"
+            /* FIX: slightly smaller logo on very small phones */
+            className="h-7 xs:h-8 sm:h-10 w-auto"
             priority
           />
           <div className="hidden md:block text-xs text-gray-500 border-l pl-3">
@@ -1115,12 +1327,19 @@ export default function Home() {
 
       {/* ════════════════════════════════════════
           LEFT DRAWER
+          The outer flex row is: [drawer panel] [toggle button].
+          On mobile the toggle is 44px wide, so the panel must be
+          calc(100vw - 44px) to avoid the button being pushed off-screen.
       ════════════════════════════════════════ */}
       <div className="absolute top-0 left-0 z-40 h-full flex">
         <div
           className={[
             "h-full bg-white border-r border-gray-200 shadow-2xl transition-all duration-300 flex flex-col",
-            leftOpen ? "w-full sm:w-[400px]" : "w-0 overflow-hidden",
+            // Mobile: leave room for the 44px toggle button → calc(100vw-44px)
+            // xs+: fixed 360px, sm+: 400px
+            leftOpen
+              ? "w-[calc(100vw-44px)] xs:w-[360px] sm:w-[400px]"
+              : "w-0 overflow-hidden",
           ].join(" ")}
         >
           {/* ── Blue header ── */}
@@ -1241,7 +1460,7 @@ export default function Home() {
                           searchZonal({ page: 1 });
                           await pinpointFilterLocation(m.city, "", m.province);
                           setShowRegionPicker(false);
-                          setShowFilters(true); // auto-open so users can drill down
+                          setShowFilters(true);
                         }}
                       >
                         <div className="font-semibold text-gray-900 text-xs">
@@ -1494,176 +1713,181 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Drawer toggle */}
+        {/* Drawer toggle — fixed 44px wide so it never overflows the viewport */}
         <button
           onClick={() => setLeftOpen((v) => !v)}
-          className="h-14 mt-6 rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-xl px-3 flex items-center justify-center hover:bg-white transition z-50"
+          className="w-[44px] shrink-0 h-14 mt-6 rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-xl flex items-center justify-center hover:bg-white active:bg-gray-100 transition z-50"
           title={leftOpen ? "Collapse panel" : "Expand panel"}
         >
-          {leftOpen ? <ChevronLeft /> : <ChevronRight />}
+          {leftOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
         </button>
       </div>
 
       {/* ════════════════════════════════════════
           RIGHT REPORT DRAWER
+          FIX: Full-screen on mobile; slide from the bottom on xs;
+               on sm+ it is a right-side panel as before.
       ════════════════════════════════════════ */}
-      <div className={["absolute top-0 right-0 z-40 h-full transition-all duration-300", rightOpen ? "w-[360px] sm:w-[420px]" : "w-0 overflow-hidden"].join(" ")}>
-        {rightOpen && (
-          <div className="h-full bg-white border-l border-gray-200 shadow-2xl flex flex-col">
-            <div className="bg-blue-600 px-4 py-3 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-white text-base">📋</div>
-                <div className="text-sm font-bold text-white">Property Report</div>
-              </div>
-              <button onClick={() => setRightOpen(false)} className="rounded-xl p-1.5 hover:bg-blue-500 transition text-blue-200 hover:text-white" title="Close">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-auto p-4 space-y-3">
-              <ReportBuilder
-                selectedLocation={selectedLocation}
-                selectedRow={selectedRow}
-                geoLabel={geoLabel}
-                poiLoading={poiLoading}
-                poiData={poiData}
-                poiRadiusKm={poiRadiusKm}
-                onChangePoiRadius={onChangePoiRadius}
-                idealBusinessText={idealBusinessText}
-                setIdealBusinessText={setIdealBusinessText}
-                areaDescription={areaDescription}
-                mapContainerId="map-container"
-              />
-            </div>
-          </div>
-        )}
-      </div>
+      {rightOpen && (
+        <ReportPanel
+          onClose={() => setRightOpen(false)}
+          selectedLocation={selectedLocation}
+          selectedRow={selectedRow}
+          geoLabel={geoLabel}
+          poiLoading={poiLoading}
+          poiData={poiData}
+          poiRadiusKm={poiRadiusKm}
+          onChangePoiRadius={onChangePoiRadius}
+          idealBusinessText={idealBusinessText}
+          setIdealBusinessText={setIdealBusinessText}
+          areaDescription={areaDescription}
+        />
+      )}
 
       {/* ════════════════════════════════════════
           BOTTOM SHEET
+          FIX: Respect the right-panel being open on mobile
+               by shrinking/hiding when rightOpen.
+               Also clamp width so it never overflows the screen.
       ════════════════════════════════════════ */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[92vw] sm:w-[560px]">
+      {!rightOpen && (
         <div
           className={[
-            "rounded-3xl border-2 border-gray-200 bg-white/98 backdrop-blur shadow-2xl overflow-hidden transition-all duration-300",
-            bottomOpen ? "max-h-[38vh]" : "max-h-[52px]",
+            "absolute bottom-4 z-30 transition-all duration-300",
+            // On mobile: always centre across full viewport width (drawer closes on row select)
+            // On sm+: offset right of the 400px drawer when it's open
+            leftOpen
+              ? "left-1/2 -translate-x-1/2 w-[calc(100vw-44px)] sm:left-[416px] sm:translate-x-0 sm:w-[calc(100vw-416px-4rem)] sm:max-w-[520px]"
+              : "left-1/2 -translate-x-1/2 w-[92vw] sm:w-[520px]",
           ].join(" ")}
         >
-          <button onClick={() => setBottomOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition border-b border-gray-100">
-            <div className="min-w-0 text-left">
-              <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">📌 Selected Property</div>
-              <div className="text-sm font-bold text-gray-900 truncate">{selectedTitle}</div>
-            </div>
-            <div className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg">{bottomOpen ? "▼" : "▶"}</div>
-          </button>
+          <div
+            className={[
+              "rounded-3xl border-2 border-gray-200 bg-white/98 backdrop-blur shadow-2xl overflow-hidden transition-all duration-300",
+              bottomOpen ? "max-h-[40vh] sm:max-h-[38vh]" : "max-h-[52px]",
+            ].join(" ")}
+          >
+            <button
+              onClick={() => setBottomOpen((v) => !v)}
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition border-b border-gray-100"
+            >
+              <div className="min-w-0 text-left">
+                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">📌 Selected Property</div>
+                <div className="text-sm font-bold text-gray-900 truncate">{selectedTitle}</div>
+              </div>
+              <div className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg shrink-0 ml-2">
+                {bottomOpen ? "▼" : "▶"}
+              </div>
+            </button>
 
-          {bottomOpen && (
-            <div className="px-4 pb-3 overflow-auto max-h-[calc(38vh-52px)]">
-              {!selectedRow ? (
-                <div className="pt-3 text-sm text-gray-600">
-                  <div className="flex items-center gap-2">
-                    <MapPin size={15} className="text-blue-600 shrink-0" />
-                    {geoLoading ? "Finding location..." : "Select a region, city, barangay, or click on a street from the list"}
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* ── Zonal value card ── */}
-                  <div className="mt-3 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 flex items-center justify-between">
-                      <div>
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200 mb-1">💰 Zonal Value</div>
-                        <div className="text-3xl font-black text-white leading-none drop-shadow-sm">
-                          {parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])
-                            ? fmtPesoNumber(parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])!)
-                            : "Not Appraised"}
-                        </div>
-                        <div className="text-[11px] text-blue-200 font-semibold mt-1">per square meter</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-lg text-white">{String(selectedRow["City-"] ?? "")}</div>
-                        <div className="text-xs text-blue-100 font-semibold">{String(selectedRow["Barangay-"] ?? "")}</div>
-                        <div className="truncate max-w-[200px] text-xs text-blue-200 font-medium mt-0.5">{String(selectedRow["Street/Subdivision-"] ?? "")}</div>
-                      </div>
+            {bottomOpen && (
+              <div className="px-4 pb-3 overflow-auto max-h-[calc(40vh-52px)] sm:max-h-[calc(38vh-52px)]">
+                {!selectedRow ? (
+                  <div className="pt-3 text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <MapPin size={15} className="text-blue-600 shrink-0" />
+                      {geoLoading ? "Finding location..." : "Select a region, city, barangay, or click on a street from the list"}
                     </div>
-                    {String(selectedRow["Classification-"] ?? "").trim() && (
-                      <div className="bg-blue-50 border-t border-blue-100 px-4 py-1.5 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                        <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wide">
-                          {String(selectedRow["Classification-"] ?? "")}
-                        </span>
-                      </div>
-                    )}
                   </div>
-
-                  {/* ── Action buttons ── */}
-                  <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
-                    <button
-                      onClick={async () => {
-                        if (!selectedRow) return;
-                        setDetailsErr("");
-                        if (showStreetHighlight) {
-                          setShowStreetHighlight(false);
-                          setStreetGeo(null);
-                          return;
-                        }
-                        const data = await fetchStreetGeometryFromSelectedRow(selectedRow);
-                        if (
-                          data &&
-                          data.geojson &&
-                          Array.isArray((data.geojson as any).features) &&
-                          (data.geojson as any).features.length > 0
-                        ) {
-                          setStreetGeo(data.geojson);
-                          setShowStreetHighlight(true);
-                        } else {
-                          setStreetGeo(null);
-                          setShowStreetHighlight(false);
-                          setDetailsErr("Street line not found near this pin.");
-                        }
-                      }}
-                      disabled={streetGeoLoading}
-                      className={[
-                        "shrink-0 rounded-full border px-4 py-2 text-xs font-bold transition disabled:opacity-50",
-                        showStreetHighlight
-                          ? "border-blue-300 bg-blue-50 text-blue-700"
-                          : "border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
-                      ].join(" ")}
-                    >
-                      {streetGeoLoading ? "Finding…" : showStreetHighlight ? "Hide Street" : "Highlight Street"}
-                    </button>
-
-                    <button
-                      onClick={() => setRightOpen(true)}
-                      className="shrink-0 rounded-full bg-blue-600 text-white px-4 py-2 text-xs font-bold hover:bg-blue-700 transition"
-                    >
-                      Open Report
-                    </button>
-                  </div>
-
-                  {/* ── Status ── */}
-                  <div className="mt-3 space-y-2">
-                    {geoLoading && (
-                      <div className="text-xs text-gray-500 flex items-center gap-1.5">
-                        <span className="animate-spin">⟳</span> Pinpointing…
+                ) : (
+                  <>
+                    {/* ── Zonal value card ── */}
+                    <div className="mt-3 rounded-2xl overflow-hidden shadow-sm">
+                      <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-3 sm:p-4 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200 mb-1">💰 Zonal Value</div>
+                          <div className="text-2xl sm:text-3xl font-black text-white leading-none drop-shadow-sm">
+                            {parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])
+                              ? fmtPesoNumber(parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])!)
+                              : "Not Appraised"}
+                          </div>
+                          <div className="text-[11px] text-blue-200 font-semibold mt-1">per square meter</div>
+                        </div>
+                        <div className="text-right shrink-0 max-w-[45%]">
+                          <div className="font-bold text-base sm:text-lg text-white truncate">{String(selectedRow["City-"] ?? "")}</div>
+                          <div className="text-xs text-blue-100 font-semibold truncate">{String(selectedRow["Barangay-"] ?? "")}</div>
+                          <div className="truncate max-w-full text-xs text-blue-200 font-medium mt-0.5">{String(selectedRow["Street/Subdivision-"] ?? "")}</div>
+                        </div>
                       </div>
-                    )}
-                    {matchStatus && (
-                      <div className="text-xs text-green-800 bg-green-50 border border-green-200 rounded-2xl px-3 py-1.5 flex items-center gap-2">
-                        <MapPin size={11} />
-                        {matchStatus}
-                      </div>
-                    )}
-                    {detailsErr && (
-                      <div className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-2xl px-3 py-1.5">{detailsErr}</div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+                      {String(selectedRow["Classification-"] ?? "").trim() && (
+                        <div className="bg-blue-50 border-t border-blue-100 px-4 py-1.5 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                          <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wide">
+                            {String(selectedRow["Classification-"] ?? "")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── Action buttons ── */}
+                    <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+                      <button
+                        onClick={async () => {
+                          if (!selectedRow) return;
+                          setDetailsErr("");
+                          if (showStreetHighlight) {
+                            setShowStreetHighlight(false);
+                            setStreetGeo(null);
+                            return;
+                          }
+                          const data = await fetchStreetGeometryFromSelectedRow(selectedRow);
+                          if (
+                            data &&
+                            data.geojson &&
+                            Array.isArray((data.geojson as any).features) &&
+                            (data.geojson as any).features.length > 0
+                          ) {
+                            setStreetGeo(data.geojson);
+                            setShowStreetHighlight(true);
+                          } else {
+                            setStreetGeo(null);
+                            setShowStreetHighlight(false);
+                            setDetailsErr("Street line not found near this pin.");
+                          }
+                        }}
+                        disabled={streetGeoLoading}
+                        className={[
+                          "shrink-0 rounded-full border px-4 py-2 text-xs font-bold transition disabled:opacity-50",
+                          showStreetHighlight
+                            ? "border-blue-300 bg-blue-50 text-blue-700"
+                            : "border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
+                        ].join(" ")}
+                      >
+                        {streetGeoLoading ? "Finding…" : showStreetHighlight ? "Hide Street" : "Highlight Street"}
+                      </button>
+
+                      <button
+                        onClick={() => setRightOpen(true)}
+                        className="shrink-0 rounded-full bg-blue-600 text-white px-4 py-2 text-xs font-bold hover:bg-blue-700 transition"
+                      >
+                        Open Report
+                      </button>
+                    </div>
+
+                    {/* ── Status ── */}
+                    <div className="mt-3 space-y-2">
+                      {geoLoading && (
+                        <div className="text-xs text-gray-500 flex items-center gap-1.5">
+                          <span className="animate-spin">⟳</span> Pinpointing…
+                        </div>
+                      )}
+                      {matchStatus && (
+                        <div className="text-xs text-green-800 bg-green-50 border border-green-200 rounded-2xl px-3 py-1.5 flex items-center gap-2">
+                          <MapPin size={11} />
+                          {matchStatus}
+                        </div>
+                      )}
+                      {detailsErr && (
+                        <div className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-2xl px-3 py-1.5">{detailsErr}</div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </main>
   );
 }
