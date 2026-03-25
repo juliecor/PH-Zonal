@@ -25,6 +25,7 @@ import { isBadStreet, normalizePH, suggestBusinesses } from "./lib/zonal-util";
 import ReportBuilder from "./components/ReportBuilder";
 import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
 
+
 const MapComponent = dynamic(
   async () => {
     if (typeof window !== "undefined" && (process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as any)) {
@@ -51,6 +52,8 @@ function getPriceTier(p: number) {
 
 export default function Home() {
   // ─── All original state — untouched ─────────────────────────────────────
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [regionSearch, setRegionSearch] = useState("");
   const [matches, setMatches] = useState<RegionMatch[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
