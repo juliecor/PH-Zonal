@@ -15,7 +15,7 @@
  *   propertyData:  {
  *     street, barangay, city, province, classification,
  *     zonalValue, areaDescription, idealBusinessText,
- *     poiCounts: Record<string,number> | null
+ *     poiCounts: Record<string,number | null
  *   }
  * }
  *
@@ -25,6 +25,7 @@
  * Recommended for Vercel / cloud : Resend     (npm install resend)
  * Recommended for self-hosted    : Nodemailer (npm install nodemailer)
  * ────────────────────────────────────────────────────────────────────────────
+ HEAD
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -267,11 +268,10 @@ export async function POST(req: NextRequest) {
     const html    = buildHtml({ receiverName, message, propertyTitle, propertyData });
     const subject = `Property Report: ${propertyTitle}`;
 
-    // ══════════════════════════════════════════════════════════════════════════
     // OPTION A — Resend  (recommended for Vercel / cloud)
     // npm install resend
     // Env vars: RESEND_API_KEY   RESEND_FROM (e.g. noreply@yourdomain.com)
-    // ══════════════════════════════════════════════════════════════════════════
+    // 
     /*
     const { Resend } = await import("resend");
     const resend = new Resend(process.env.RESEND_API_KEY!);
@@ -283,11 +283,9 @@ export async function POST(req: NextRequest) {
     });
     */
 
-    // ══════════════════════════════════════════════════════════════════════════
     // OPTION B — Nodemailer  (recommended for self-hosted / VPS)
     // npm install nodemailer   &&   npm install -D @types/nodemailer
     // Env vars: SMTP_HOST  SMTP_PORT  SMTP_SECURE  SMTP_USER  SMTP_PASS  SMTP_FROM
-    // ══════════════════════════════════════════════════════════════════════════
     /*
     const nodemailer = (await import("nodemailer")).default;
     const transporter = nodemailer.createTransport({
@@ -304,11 +302,9 @@ export async function POST(req: NextRequest) {
     });
     */
 
-    // ══════════════════════════════════════════════════════════════════════════
     // OPTION C — SendGrid
     // npm install @sendgrid/mail
     // Env vars: SENDGRID_API_KEY   SENDGRID_FROM
-    // ══════════════════════════════════════════════════════════════════════════
     /*
     const sgMail = (await import("@sendgrid/mail")).default;
     sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
@@ -320,9 +316,7 @@ export async function POST(req: NextRequest) {
     });
     */
 
-    // ══════════════════════════════════════════════════════════════════════════
     // DEV PLACEHOLDER — remove this block once you uncomment a real provider
-    // ══════════════════════════════════════════════════════════════════════════
     console.log("[send-email] ── DEV MODE ─────────────────────────────────────");
     console.log(`  To:      ${receiverName} <${receiverEmail}>`);
     console.log(`  Subject: ${subject}`);
