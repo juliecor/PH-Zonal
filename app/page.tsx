@@ -25,7 +25,6 @@ import { isBadStreet, normalizePH, suggestBusinesses } from "./lib/zonal-util";
 import ReportBuilder from "./components/ReportBuilder";
 import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
 
-
 const MapComponent = dynamic(
   async () => {
     if (typeof window !== "undefined" && (process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as any)) {
@@ -42,7 +41,6 @@ const MapComponent = dynamic(
 
 type CompsResp = { ok: true; stats: { min: number | null; median: number | null; max: number | null; count: number }; rows: any[] } | null;
 
-// ─── Design-only helper: price tier badge ───────────────────────────────────
 function getPriceTier(p: number) {
   if (p > 100_000) return { label: "Prime",      bg: "bg-amber-100",   text: "text-amber-800",   dot: "bg-amber-400"   };
   if (p > 50_000)  return { label: "High-value", bg: "bg-violet-100",  text: "text-violet-800",  dot: "bg-violet-400"  };
@@ -51,9 +49,6 @@ function getPriceTier(p: number) {
 }
 
 export default function Home() {
-  // ─── All original state — untouched ─────────────────────────────────────
-  const [emailOpen, setEmailOpen] = useState(false);
-  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [regionSearch, setRegionSearch] = useState("");
   const [matches, setMatches] = useState<RegionMatch[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -110,7 +105,6 @@ export default function Home() {
 
   const [comps, setComps] = useState<CompsResp>(null);
 
-  // ─── All original refs — untouched ──────────────────────────────────────
   const reqIdRef = useRef(0);
   const zonalAbortRef = useRef<AbortController | null>(null);
   const centerCacheRef = useRef<Map<string, { lat: number; lon: number; label: string; boundary?: Boundary | null }>>(new Map());
@@ -120,7 +114,6 @@ export default function Home() {
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const citiesReqGenerationRef = useRef(0);
 
-  // ─── All original constants — untouched ─────────────────────────────────
   const GEO_LS_KEY = "geoCacheV1";
   const POI_LS_KEY = "poiCacheV1";
   const ZONAL_LS_KEY = "zonalCacheV1";
@@ -155,7 +148,6 @@ export default function Home() {
     }
   }, []);
 
-  // Allow overriding domain/province via URL query
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -191,6 +183,16 @@ export default function Home() {
   const [bottomOpen, setBottomOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(false);
   const [showRegionPicker, setShowRegionPicker] = useState(true);
+
+  // ── Track mobile breakpoint ───────────────────────────────────────────────
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   function normalizeCityHint(city: string, province?: string) {
     const c = String(city || "").toUpperCase().trim();
@@ -288,13 +290,8 @@ export default function Home() {
     const lines: string[] = [];
     
     lines.push(`📍 ${where}`);
-    if (cls) {
-      lines.push(`📋 ${cls}`);
-    }
-
-    if (zv && zv > 0) {
-      lines.push(`💰 ₱${zv.toLocaleString()}/sqm (BIR Assessed)`);
-    }
+    if (cls) lines.push(`📋 ${cls}`);
+    if (zv && zv > 0) lines.push(`💰 ₱${zv.toLocaleString()}/sqm (BIR Assessed)`);
 
     if (counts) {
       const healthcare = (counts.hospitals || 0) + (counts.clinics || 0);
@@ -308,17 +305,13 @@ export default function Home() {
       if (education > 0) infraItems.push(`${education} schools`);
       if (security > 0) infraItems.push(`${security} security`);
       if (services > 0) infraItems.push(`${services} services`);
-
-      if (infraItems.length > 0) {
-        lines.push(`🏢 Nearby: ${infraItems.join(", ")}`);
-      }
+      if (infraItems.length > 0) lines.push(`🏢 Nearby: ${infraItems.join(", ")}`);
 
       let grade = "Limited";
       if (totalServices >= 20) grade = "Excellent";
       else if (totalServices >= 13) grade = "Strong";
       else if (totalServices >= 8) grade = "Moderate";
       else if (totalServices > 0) grade = "Emerging";
-
       lines.push(`⭐ Investment Grade: ${grade}`);
     }
 
@@ -941,22 +934,18 @@ export default function Home() {
 
     const rowCity = String(r["City-"] ?? "");
     const rowBarangay = String(r["Barangay-"] ?? "");
-    if (rowCity && rowCity !== city) {
-      setCity(rowCity);
-    }
-    if (rowBarangay && rowBarangay !== barangay) {
-      setBarangay(rowBarangay);
-    }
+    if (rowCity && rowCity !== city) setCity(rowCity);
+    if (rowBarangay && rowBarangay !== barangay) setBarangay(rowBarangay);
     if (rowCity && (!facetBarangays.length || rowCity !== city)) {
       loadBarangays(domain, rowCity);
     }
 
+    // ── Mobile: collapse left drawer, ensure bottom sheet is visible ───────
     if (typeof window !== "undefined" && window.innerWidth < 640) {
       setLeftOpen(false);
-      setBottomOpen(true);
-    } else {
-      setBottomOpen(true);
+      setRightOpen(false);
     }
+    setBottomOpen(true);
 
     setGeoLoading(true);
     try {
@@ -1013,10 +1002,14 @@ export default function Home() {
     setComps(null);
     setAreaDescription("");
     setAreaDescErr("");
-
     setShowStreetHighlight(false);
     setStreetGeo(null);
 
+    // ── Mobile: close open side panels when map is tapped ──────────────────
+    if (typeof window !== "undefined" && window.innerWidth < 640) {
+      setLeftOpen(false);
+      setRightOpen(false);
+    }
     setBottomOpen(true);
 
     try {
@@ -1047,14 +1040,30 @@ export default function Home() {
 
   const isDev = process.env.NODE_ENV === "development";
 
-  // ─────────────────────────────────────────────────────────
-  // RENDER — only classNames differ from the original
-  // ─────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // SHARED ReportBuilder JSX (avoids duplication between mobile/desktop panels)
+  // ─────────────────────────────────────────────────────────────────────────
+  const reportPanel = (
+    <ReportBuilder
+      selectedLocation={selectedLocation}
+      selectedRow={selectedRow}
+      geoLabel={geoLabel}
+      poiLoading={poiLoading}
+      poiData={poiData}
+      poiRadiusKm={poiRadiusKm}
+      onChangePoiRadius={onChangePoiRadius}
+      idealBusinessText={idealBusinessText}
+      setIdealBusinessText={setIdealBusinessText}
+      areaDescription={areaDescription}
+      mapContainerId="map-container"
+    />
+  );
+
   return (
     <main className="h-screen w-screen overflow-hidden bg-slate-100 text-gray-900">
       <ZonalSearchIndicator visible={loading} />
 
-      {/* Fullscreen Map */}
+      {/* ── Fullscreen Map ── */}
       <div className="absolute inset-0">
         <MapComponent
           selected={selectedLocation}
@@ -1071,8 +1080,23 @@ export default function Home() {
         />
       </div>
 
-      {/* ── Brand pill ── */}
-      <div className="absolute top-4 left-16 sm:left-1/3 z-30">
+      {/* ── Brand pill ──────────────────────────────────────────────────────
+          On mobile: hidden while the left drawer is open (its header takes
+          over), visible (at left-14) while the drawer is closed.
+          On desktop: slides right as the 400px drawer opens.
+      ── */}
+      <div
+        className={[
+          "absolute top-4 z-30 transition-all duration-300",
+          isMobile
+            ? leftOpen
+              ? "opacity-0 pointer-events-none left-14"
+              : "opacity-100 left-14"
+            : leftOpen
+            ? "left-[416px]"
+            : "left-16",
+        ].join(" ")}
+      >
         <Link
           href="/welcome"
           title="Go to Home"
@@ -1118,17 +1142,31 @@ export default function Home() {
 
       {/* ════════════════════════════════════════
           LEFT DRAWER
+          Mobile: full-screen overlay with an X button in the header.
+          Desktop: 400px side panel with the chevron toggle.
       ════════════════════════════════════════ */}
       <div className="absolute top-0 left-0 z-40 h-full flex">
         <div
           className={[
             "h-full bg-white border-r border-gray-200 shadow-2xl transition-all duration-300 flex flex-col",
-            leftOpen ? "w-full sm:w-[400px]" : "w-0 overflow-hidden",
+            leftOpen ? "w-screen sm:w-[400px]" : "w-0 overflow-hidden",
           ].join(" ")}
         >
           {/* ── Blue header ── */}
           <div className="bg-blue-600 px-4 pt-4 pb-3 shrink-0">
-            <h2 className="text-sm font-bold text-white mb-3">🏘️ Property Search</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-white">🏘️ Property Search</h2>
+              {/* X close button — visible on mobile only */}
+              {isMobile && (
+                <button
+                  onClick={() => setLeftOpen(false)}
+                  className="rounded-xl p-1.5 hover:bg-blue-500 transition text-blue-200 hover:text-white"
+                  title="Close"
+                >
+                  <X size={18} />
+                </button>
+              )}
+            </div>
 
             {/* Search input */}
             <div className="relative">
@@ -1185,7 +1223,11 @@ export default function Home() {
               )}
 
               <button
-                onClick={() => setRightOpen((v) => !v)}
+                onClick={() => {
+                  setRightOpen((v) => !v);
+                  // On mobile opening the report panel closes the left drawer
+                  if (isMobile) setLeftOpen(false);
+                }}
                 className={[
                   "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ml-auto",
                   rightOpen ? "bg-white text-blue-700" : "bg-blue-500/50 text-white hover:bg-blue-500/70",
@@ -1244,7 +1286,7 @@ export default function Home() {
                           searchZonal({ page: 1 });
                           await pinpointFilterLocation(m.city, "", m.province);
                           setShowRegionPicker(false);
-                          setShowFilters(true); // auto-open so users can drill down
+                          setShowFilters(true);
                         }}
                       >
                         <div className="font-semibold text-gray-900 text-xs">
@@ -1404,9 +1446,7 @@ export default function Home() {
           <div className="px-4 py-2.5 sticky top-0 bg-gray-50 border-b border-gray-100 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wide">Results</span>
-              {loading && (
-                <Zap size={12} className="animate-spin text-orange-500" />
-              )}
+              {loading && <Zap size={12} className="animate-spin text-orange-500" />}
             </div>
             <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
               {totalRows ? (
@@ -1497,10 +1537,13 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Drawer toggle */}
+        {/* Drawer chevron toggle — hidden on mobile when drawer is open (X in header handles it) */}
         <button
           onClick={() => setLeftOpen((v) => !v)}
-          className="h-14 mt-6 rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-xl px-3 flex items-center justify-center hover:bg-white transition z-50"
+          className={[
+            "h-14 mt-6 rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-xl px-3 flex items-center justify-center hover:bg-white transition z-50",
+            isMobile && leftOpen ? "hidden" : "",
+          ].join(" ")}
           title={leftOpen ? "Collapse panel" : "Expand panel"}
         >
           {leftOpen ? <ChevronLeft /> : <ChevronRight />}
@@ -1508,85 +1551,149 @@ export default function Home() {
       </div>
 
       {/* ════════════════════════════════════════
-          RIGHT REPORT DRAWER
+          RIGHT REPORT PANEL
+          Mobile  → bottom-anchored slide-up sheet (full width, 90vh max)
+          Desktop → right side drawer (420px)
       ════════════════════════════════════════ */}
-      <div className={["absolute top-0 right-0 z-40 h-full transition-all duration-300", rightOpen ? "w-[360px] sm:w-[420px]" : "w-0 overflow-hidden"].join(" ")}>
-        {rightOpen && (
-          <div className="h-full bg-white border-l border-gray-200 shadow-2xl flex flex-col">
-            <div className="bg-blue-600 px-4 py-3 flex items-center justify-between shrink-0">
+      {isMobile ? (
+        <>
+          {/* Backdrop */}
+          {rightOpen && (
+            <div
+              className="fixed inset-0 z-40 bg-black/40"
+              onClick={() => setRightOpen(false)}
+            />
+          )}
+          {/* Slide-up panel */}
+          <div
+            className={[
+              "fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl flex flex-col transition-transform duration-300",
+              rightOpen ? "translate-y-0" : "translate-y-full",
+            ].join(" ")}
+            style={{ maxHeight: "90dvh" }}
+          >
+            {/* Header */}
+            <div className="bg-blue-600 rounded-t-3xl px-4 py-3 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-white text-base">📋</div>
                 <div className="text-sm font-bold text-white">Property Report</div>
               </div>
-              <button onClick={() => setRightOpen(false)} className="rounded-xl p-1.5 hover:bg-blue-500 transition text-blue-200 hover:text-white" title="Close">
+              <button
+                onClick={() => setRightOpen(false)}
+                className="rounded-xl p-1.5 hover:bg-blue-500 transition text-blue-200 hover:text-white"
+                title="Close"
+              >
                 <X size={16} />
               </button>
             </div>
-
+            {/* Drag-handle hint */}
+            <div className="flex justify-center py-1 shrink-0">
+              <div className="w-10 h-1 rounded-full bg-gray-200" />
+            </div>
             <div className="flex-1 overflow-auto p-4 space-y-3">
-              <ReportBuilder
-                selectedLocation={selectedLocation}
-                selectedRow={selectedRow}
-                geoLabel={geoLabel}
-                poiLoading={poiLoading}
-                poiData={poiData}
-                poiRadiusKm={poiRadiusKm}
-                onChangePoiRadius={onChangePoiRadius}
-                idealBusinessText={idealBusinessText}
-                setIdealBusinessText={setIdealBusinessText}
-                areaDescription={areaDescription}
-                mapContainerId="map-container"
-              />
+              {reportPanel}
             </div>
           </div>
-        )}
-      </div>
+        </>
+      ) : (
+        <div
+          className={[
+            "absolute top-0 right-0 z-40 h-full transition-all duration-300",
+            rightOpen ? "w-[360px] sm:w-[420px]" : "w-0 overflow-hidden",
+          ].join(" ")}
+        >
+          {rightOpen && (
+            <div className="h-full bg-white border-l border-gray-200 shadow-2xl flex flex-col">
+              <div className="bg-blue-600 px-4 py-3 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-white text-base">📋</div>
+                  <div className="text-sm font-bold text-white">Property Report</div>
+                </div>
+                <button
+                  onClick={() => setRightOpen(false)}
+                  className="rounded-xl p-1.5 hover:bg-blue-500 transition text-blue-200 hover:text-white"
+                  title="Close"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-auto p-4 space-y-3">
+                {reportPanel}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ════════════════════════════════════════
           BOTTOM SHEET
+          Mobile  → always centred on the full viewport width.
+          Desktop → shifts rightward when the 400px left drawer is open,
+                    so it stays centred in the visible map area.
       ════════════════════════════════════════ */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[92vw] sm:w-[560px]">
+      <div
+        className="absolute bottom-4 z-30 w-[92vw] sm:w-[520px] transition-all duration-300"
+        style={
+          !isMobile && leftOpen
+            ? { left: "calc(400px + (100vw - 400px) / 2)", transform: "translateX(-50%)" }
+            : { left: "50%", transform: "translateX(-50%)" }
+        }
+      >
         <div
           className={[
             "rounded-3xl border-2 border-gray-200 bg-white/98 backdrop-blur shadow-2xl overflow-hidden transition-all duration-300",
-            bottomOpen ? "max-h-[38vh]" : "max-h-[52px]",
+            // More height on mobile so the zonal value card isn't cut off
+            bottomOpen ? "max-h-[52vh] sm:max-h-[38vh]" : "max-h-[52px]",
           ].join(" ")}
         >
-          <button onClick={() => setBottomOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition border-b border-gray-100">
+          <button
+            onClick={() => setBottomOpen((v) => !v)}
+            className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition border-b border-gray-100"
+          >
             <div className="min-w-0 text-left">
               <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">📌 Selected Property</div>
               <div className="text-sm font-bold text-gray-900 truncate">{selectedTitle}</div>
             </div>
-            <div className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg">{bottomOpen ? "▼" : "▶"}</div>
+            <div className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg ml-2 shrink-0">
+              {bottomOpen ? "▼" : "▶"}
+            </div>
           </button>
 
           {bottomOpen && (
-            <div className="px-4 pb-3 overflow-auto max-h-[calc(38vh-52px)]">
+            <div className="px-4 pb-3 overflow-auto max-h-[calc(52vh-52px)] sm:max-h-[calc(38vh-52px)]">
               {!selectedRow ? (
                 <div className="pt-3 text-sm text-gray-600">
                   <div className="flex items-center gap-2">
                     <MapPin size={15} className="text-blue-600 shrink-0" />
-                    {geoLoading ? "Finding location..." : "Select a region, city, barangay, or click on a street from the list"}
+                    {geoLoading
+                      ? "Finding location..."
+                      : "Select a region, city, barangay, or click on a street from the list"}
                   </div>
                 </div>
               ) : (
                 <>
                   {/* ── Zonal value card ── */}
                   <div className="mt-3 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 flex items-center justify-between">
-                      <div>
+                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-3 sm:p-4 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
                         <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200 mb-1">💰 Zonal Value</div>
-                        <div className="text-3xl font-black text-white leading-none drop-shadow-sm">
+                        <div className="text-2xl sm:text-3xl font-black text-white leading-none drop-shadow-sm">
                           {parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])
                             ? fmtPesoNumber(parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])!)
                             : "Not Appraised"}
                         </div>
                         <div className="text-[11px] text-blue-200 font-semibold mt-1">per square meter</div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold text-lg text-white">{String(selectedRow["City-"] ?? "")}</div>
-                        <div className="text-xs text-blue-100 font-semibold">{String(selectedRow["Barangay-"] ?? "")}</div>
-                        <div className="truncate max-w-[200px] text-xs text-blue-200 font-medium mt-0.5">{String(selectedRow["Street/Subdivision-"] ?? "")}</div>
+                      <div className="text-right min-w-0 shrink-0 max-w-[45%]">
+                        <div className="font-bold text-base sm:text-lg text-white truncate">
+                          {String(selectedRow["City-"] ?? "")}
+                        </div>
+                        <div className="text-xs text-blue-100 font-semibold truncate">
+                          {String(selectedRow["Barangay-"] ?? "")}
+                        </div>
+                        <div className="truncate text-xs text-blue-200 font-medium mt-0.5">
+                          {String(selectedRow["Street/Subdivision-"] ?? "")}
+                        </div>
                       </div>
                     </div>
                     {String(selectedRow["Classification-"] ?? "").trim() && (
@@ -1637,14 +1744,32 @@ export default function Home() {
                     </button>
 
                     <button
-                      onClick={() => setRightOpen(true)}
+                      onClick={() => {
+                        setRightOpen(true);
+                        // On mobile collapse the bottom sheet so the report panel has room
+                        if (isMobile) setBottomOpen(false);
+                      }}
                       className="shrink-0 rounded-full bg-blue-600 text-white px-4 py-2 text-xs font-bold hover:bg-blue-700 transition"
                     >
                       Open Report
                     </button>
+
+                    {/* Mobile-only: quick access back to the search list */}
+                    {isMobile && (
+                      <button
+                        onClick={() => {
+                          setLeftOpen(true);
+                          setBottomOpen(false);
+                        }}
+                        className="shrink-0 rounded-full border border-gray-200 bg-white text-gray-800 px-4 py-2 text-xs font-bold hover:bg-gray-50 transition flex items-center gap-1.5"
+                      >
+                        <List size={13} />
+                        List
+                      </button>
+                    )}
                   </div>
 
-                  {/* ── Status ── */}
+                  {/* ── Status badges ── */}
                   <div className="mt-3 space-y-2">
                     {geoLoading && (
                       <div className="text-xs text-gray-500 flex items-center gap-1.5">
@@ -1658,7 +1783,9 @@ export default function Home() {
                       </div>
                     )}
                     {detailsErr && (
-                      <div className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-2xl px-3 py-1.5">{detailsErr}</div>
+                      <div className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-2xl px-3 py-1.5">
+                        {detailsErr}
+                      </div>
                     )}
                   </div>
                 </>

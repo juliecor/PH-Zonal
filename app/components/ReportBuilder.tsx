@@ -687,13 +687,12 @@ export default function ReportBuilder(props: {
       />
 
       {/* ══════════════════════════════════════════════════════
-          SIDEBAR
+          SIDEBAR – fully responsive, fills parent container
       ══════════════════════════════════════════════════════ */}
-      <aside className="w-96 border-l border-gray-200 bg-white p-5 overflow-auto">
-        <h3 className="text-lg font-bold text-gray-900 mb-5">Real Estate Assessment</h3>
+      <aside className="h-full overflow-auto p-4 sm:p-5">
+        <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-5">Real Estate Assessment</h3>
 
-        <div className="space-y-4">
-
+        <div className="space-y-4 sm:space-y-5">
           {/* Business & Market Opportunity */}
           <div>
             <label className="block text-sm font-bold uppercase tracking-wide text-gray-900 mb-3 flex items-center gap-2">
@@ -704,7 +703,7 @@ export default function ReportBuilder(props: {
                 expandedAnalysis ? "" : "max-h-[120px] overflow-hidden"
               }`}
             >
-              <p className="text-sm font-medium whitespace-pre-line">
+              <p className="text-sm font-medium whitespace-pre-line break-words">
                 {areaDescription || (
                   <span className="text-gray-500 italic">Select a property to generate real estate assessment…</span>
                 )}
@@ -733,8 +732,8 @@ export default function ReportBuilder(props: {
               rows={expandedBusinessUses ? 8 : 5}
             />
 
-            {/* Add new business use */}
-            <div className="flex gap-2 mt-3">
+            {/* Add new business use – stack on mobile */}
+            <div className="flex flex-col sm:flex-row gap-2 mt-3">
               <input
                 type="text"
                 value={newBusinessUse}
@@ -776,7 +775,7 @@ export default function ReportBuilder(props: {
             </button>
           </div>
 
-          {/* ── Preview PDF Report (single button — email is inside the preview) ── */}
+          {/* Preview PDF Report button */}
           <button
             onClick={generatePdfPreview}
             disabled={pdfLoading || !selectedLocation}
@@ -786,11 +785,10 @@ export default function ReportBuilder(props: {
           </button>
 
           {pdfErr && (
-            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{pdfErr}</div>
+            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3 break-words">{pdfErr}</div>
           )}
 
           <div className="border-t border-gray-200 pt-4 mt-4">
-
             {/* Investment Viability Score */}
             {poiData && !poiLoading && (
               <div className="mb-5 p-4 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 shadow-sm">
@@ -807,7 +805,7 @@ export default function ReportBuilder(props: {
                     <div className="space-y-2">
                       <div className="flex items-end justify-between">
                         <div>
-                          <p className="text-2xl font-black text-gray-900">{totalScore}</p>
+                          <p className="text-2xl sm:text-3xl font-black text-gray-900">{totalScore}</p>
                           <p className={`text-xs font-bold ${totalScore >= 75 ? "text-green-700" : totalScore >= 60 ? "text-blue-700" : totalScore >= 45 ? "text-yellow-700" : "text-red-700"}`}>
                             {viability}
                           </p>
@@ -843,12 +841,12 @@ export default function ReportBuilder(props: {
             )}
 
             {/* Facilities Header */}
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
               <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                 <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs">📍</span>
                 Nearby Facilities ({poiRadiusKm}km)
               </h4>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg self-start sm:self-auto">
                 <label className="text-[11px] font-semibold text-gray-600">Radius:</label>
                 <select
                   className="rounded-md border border-gray-300 text-xs px-2 py-0.5 bg-white font-semibold"
@@ -980,7 +978,7 @@ export default function ReportBuilder(props: {
                                         ? <img src={x.photoUrl} alt={x.name} className="w-full h-full object-cover" loading="lazy" />
                                         : <img src={catData.icon} alt="icon" className="w-full h-full object-contain p-2 opacity-70" />}
                                     </div>
-                                    <div className="min-w-0">
+                                    <div className="min-w-0 flex-1">
                                       <p className="text-[12px] font-semibold text-gray-900 truncate">{x.name || "(unnamed)"}</p>
                                       <div className="text-[11px] text-gray-600 flex flex-wrap gap-3">
                                         {d != null && (
@@ -990,7 +988,7 @@ export default function ReportBuilder(props: {
                                           </span>
                                         )}
                                         {x.phone   && <span>☎ {x.phone}</span>}
-                                        {x.website && <a href={x.website} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Website</a>}
+                                        {x.website && <a href={x.website} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline break-all">Website</a>}
                                       </div>
                                     </div>
                                   </li>
