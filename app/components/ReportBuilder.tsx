@@ -60,8 +60,12 @@ function toPdfAscii(text: string): string {
     "\u201D": '"',
     "\u2019": "'",
     "‒": "-",
+ HEAD
     "\u202F": " ",
     "\u00A0": " ",
+    " ": " ", // narrow no-break space
+    " ": " ", // nbsp
+ d3a21fb (update email)
   };
   let s = String(text || "");
   s = s.replace(

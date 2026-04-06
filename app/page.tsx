@@ -1552,7 +1552,10 @@ export default function Home() {
                 setIdealBusinessText={setIdealBusinessText}
                 areaDescription={areaDescription}
                 mapContainerId="map-container"
+<<<<<<< HEAD
                 autoPreview={autoPreview}
+=======
+>>>>>>> d3a21fb (update email)
               />
             </div>
           </div>
