@@ -6,6 +6,7 @@ import type { LatLng, PoiData, PoiItem, Row } from "../lib/types";
 import PdfPreviewModal from "./PdfPreviewModal";
 import PoiLoadingSpinner from "./PoiLoadingSpinner";
 import { waitForZonalMapIdle } from "../lib/zonal-util";
+import { apiCreateReport } from "../lib/authClient";
 
 function toTitleSafe(s: string) {
   return String(s ?? "").trim();
@@ -104,6 +105,8 @@ export default function ReportBuilder(props: {
 
   /** Optional – kept for backwards-compat with page.tsx but no longer used here */
   onOpenEmailModal?: () => void;
+  /** If true, automatically open Preview PDF once ready */
+  autoPreview?: boolean;
 }) {
   const {
     selectedLocation,
@@ -118,6 +121,7 @@ export default function ReportBuilder(props: {
     poiRadiusKm = 1.5,
     onChangePoiRadius,
   } = props;
+  const autoPreview = props.autoPreview ?? false;
 
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfErr, setPdfErr] = useState("");
@@ -608,6 +612,20 @@ export default function ReportBuilder(props: {
       const url = URL.createObjectURL(blob);
       setPdfPreviewUrl(url);
       setPdfPreviewOpen(true);
+
+      // Log this report generation (best-effort; ignore failures)
+      try {
+        const payload = {
+          street: String(selectedRow?.["Street/Subdivision-"] ?? ""),
+          barangay: String(selectedRow?.["Barangay-"] ?? ""),
+          city: String(selectedRow?.["City-"] ?? ""),
+          province: String(selectedRow?.["Province-"] ?? ""),
+          zonal_value: String(selectedRow?.["ZonalValuepersqm.-"] ?? ""),
+          sqm: null as any,
+          meta: { lat: selectedLocation?.lat, lon: selectedLocation?.lon, geoLabel },
+        };
+        await apiCreateReport(payload);
+      } catch {}
     } catch (e: any) {
       setPdfErr(e?.message ?? "Failed to generate PDF preview");
     } finally {
@@ -615,6 +633,16 @@ export default function ReportBuilder(props: {
       setTimeout(() => { setPdfStage(""); setPdfStep(0); }, 300);
     }
   }
+
+  // Auto preview when requested
+  const autoDidRef = useRef(false);
+  useEffect(() => {
+    if (autoPreview && !autoDidRef.current && selectedLocation && !pdfLoading) {
+      autoDidRef.current = true;
+      generatePdfPreview();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPreview, selectedLocation]);
 
   // ── Build propertyData payload for PdfPreviewModal → EmailModal ──────────
   const emailPropertyData = {

@@ -57,9 +57,10 @@ async function fetchFromDbBackend(args: {
   classification?: string;
   q?: string;
   itemsPerPage: number;
+  token?: string | null;
 }) {
   if (!BACKEND_URL) throw new Error("BACKEND_URL not configured");
-  const { province, page, city = "", barangay = "", classification = "", q = "", itemsPerPage } = args;
+  const { province, page, city = "", barangay = "", classification = "", q = "", itemsPerPage, token } = args;
 
   const params = new URLSearchParams();
   params.set("province", province);
@@ -72,7 +73,9 @@ async function fetchFromDbBackend(args: {
   params.set("per_page", String(itemsPerPage));
 
   const url = `${BACKEND_URL.replace(/\/$/, "")}/api/zonal-values?${params.toString()}`;
-  const res = await fetch(url, { headers: { "Accept": "application/json" } });
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(url, { headers });
   if (!res.ok) {
     const t = await res.text().catch(() => "");
     throw new Error(`Backend failed: ${res.status}${t ? ` — ${t}` : ""}`);
@@ -316,6 +319,9 @@ async function getMultiplePagesParallel(domain: string, pageNums: number[]) {
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
+    const cookieHeader = req.headers.get("cookie") || "";
+    const tokenMatch = cookieHeader.match(/(?:^|;\s*)authToken=([^;]+)/);
+    const authToken = tokenMatch ? decodeURIComponent(tokenMatch[1]) : "";
 
     const domain = String(searchParams.get("domain") ?? "").trim();
     const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
@@ -337,13 +343,13 @@ export async function GET(req: Request) {
     if (province && BACKEND_URL) {
       const hasFilters = Boolean(city || barangay || classification || q);
       if (!hasFilters) {
-        const payload = await fetchFromDbBackend({ province, page, city, barangay, classification, q, itemsPerPage });
+        const payload = await fetchFromDbBackend({ province, page, city, barangay, classification, q, itemsPerPage, token: authToken });
         return NextResponse.json(payload, { headers: { "Cache-Control": "public, max-age=20, stale-while-revalidate=60" } });
       }
 
       // Collect DB rows sufficient to cover requested page
       const need = page * itemsPerPage + itemsPerPage * 2; // some headroom
-      const dbRows = await collectDbRows({ province, city, barangay, classification, q, want: need });
+      const dbRows = await collectDbRows({ province, city, barangay, classification, q, want: need, token: authToken });
 
       // Collect spreadsheet rows that match filters (just enough pages)
       const desired = page * itemsPerPage + itemsPerPage * 2;
@@ -503,6 +509,7 @@ async function collectDbRows(args: {
   classification?: string;
   q?: string;
   want: number; // number of rows desired
+  token?: string | null;
 }): Promise<AnyRow[]> {
   const per = 100;
   let page = 1;
@@ -516,6 +523,7 @@ async function collectDbRows(args: {
       classification: args.classification,
       q: args.q,
       itemsPerPage: per,
+      token: args.token ?? null,
     });
     rows.push(...(payload.rows || []));
     if (!payload.hasNext) break;

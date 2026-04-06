@@ -30,18 +30,26 @@ interface GMapProps {
 function loadGoogleScript(apiKey: string) {
   return new Promise<void>((resolve, reject) => {
     if (typeof window === "undefined") return resolve();
-    if ((window as any).google) return resolve();
+    if ((window as any).google?.maps) return resolve();
     const id = "gmaps-js";
-    if (document.getElementById(id)) {
-      (document.getElementById(id) as any).addEventListener?.("load", () => resolve());
-      return resolve();
+    const finish = () => {
+      // wait until the global is truly ready
+      if ((window as any).google?.maps) resolve();
+      else setTimeout(finish, 50);
+    };
+    let s = document.getElementById(id) as HTMLScriptElement | null;
+    if (s) {
+      s.addEventListener("load", finish);
+      // if already loaded by the time we attach
+      setTimeout(finish, 0);
+      return;
     }
-    const s = document.createElement("script");
+    s = document.createElement("script");
     s.id = id;
     s.async = true;
     s.defer = true;
     s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
-    s.onload = () => resolve();
+    s.onload = finish;
     s.onerror = () => reject(new Error("Google Maps failed to load"));
     document.head.appendChild(s);
   });

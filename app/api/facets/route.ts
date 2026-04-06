@@ -158,6 +158,9 @@ async function getAllDomainRows(domain: string) {
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
+    const cookieHeader = req.headers.get("cookie") || "";
+    const tokenMatch = cookieHeader.match(/(?:^|;\s*)authToken=([^;]+)/);
+    const authToken = tokenMatch ? decodeURIComponent(tokenMatch[1]) : "";
 
     const domain = norm(searchParams.get("domain"));
     const mode = norm(searchParams.get("mode") ?? "cities");
@@ -175,7 +178,9 @@ export async function GET(req: Request) {
       const base = BACKEND_URL.replace(/\/$/, "");
       if (mode === "cities") {
         const url = `${base}/api/facets/cities?province=${encodeURIComponent(province)}`;
-        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        const headers: Record<string,string> = { Accept: "application/json" };
+        if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+        const res = await fetch(url, { headers });
         const j = await res.json().catch(() => null);
         if (!res.ok || !j) return NextResponse.json({ error: j?.error || "Backend facets failed" }, { status: 502 });
 
@@ -198,7 +203,9 @@ export async function GET(req: Request) {
       if (mode === "barangays") {
         if (!city) return NextResponse.json({ error: "city is required" }, { status: 400 });
         const url = `${base}/api/facets/barangays?province=${encodeURIComponent(province)}&city=${encodeURIComponent(city)}`;
-        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        const headers: Record<string,string> = { Accept: "application/json" };
+        if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+        const res = await fetch(url, { headers });
         const j = await res.json().catch(() => null);
         if (!res.ok || !j) return NextResponse.json({ error: j?.error || "Backend facets failed" }, { status: 502 });
 
@@ -221,7 +228,9 @@ export async function GET(req: Request) {
       }
       if (mode === "classifications") {
         const url = `${base}/api/facets/classifications?province=${encodeURIComponent(province)}${city ? `&city=${encodeURIComponent(city)}` : ""}${barangay ? `&barangay=${encodeURIComponent(barangay)}` : ""}`;
-        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        const headers: Record<string,string> = { Accept: "application/json" };
+        if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+        const res = await fetch(url, { headers });
         const j = await res.json().catch(() => null);
         if (!res.ok || !j) return NextResponse.json({ error: j?.error || "Backend facets failed" }, { status: 502 });
 

@@ -2,21 +2,45 @@
 
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { MapPin, Zap, Compass, ShieldCheck, Sparkles, TrendingUp, Landmark, Building2, Home } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Disclaimer from "../components/Disclaimer";
+import { apiLogout, apiMe } from "../lib/authClient";
+import LowBalanceNotice from "../components/LowBalanceNotice";
 
 export default function WelcomePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [name, setName] = useState<string>("");
+  const [role, setRole] = useState<string>("");
+
+  useEffect(() => {
+    apiMe()
+      .then((me) => {
+        if (me) {
+          setBalance(typeof me.token_balance === "number" ? me.token_balance : null);
+          setName(me.name || "");
+          setRole((me.role || "").toString());
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const isAdmin = (role || name)?.toLowerCase().includes("admin");
+  const canExplore = (balance ?? 0) > 0 || isAdmin;
+  const dashHref = isAdmin ? "/admin/users" : "/dashboard/profile";
 
   function enterApp() {
+    if (!canExplore) return;
     setLoading(true);
     setTimeout(() => router.push("/?skip=1"), 50);
   }
 
   return (
     <main className="relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-sky-200 via-sky-100 to-emerald-100 text-gray-800">
+      <LowBalanceNotice threshold={3} remindAfterHours={24} />
       {/* Ambient sunbursts + color wash */}
       <div
         aria-hidden
@@ -35,7 +59,26 @@ export default function WelcomePage() {
           <Image src="/pictures/FilipinoHomes.png" alt="Filipino Homes" width={220} height={60} priority />
           <span className="text-sm text-gray-600 hidden sm:block">Zonal Value Explorer</span>
         </div>
-        <div className="flex items-center gap-2" />
+        <div className="flex items-center gap-3 text-sm">
+          <Link href={dashHref} className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm hover:bg-white">Dashboard</Link>
+          { isAdmin && (
+            <Link href="/admin" className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm hover:bg-white">Admin</Link>
+          ) }
+          {balance !== null && !isAdmin && (
+            <span className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm">
+              Tokens: <span className="font-semibold">{balance}</span>
+            </span>
+          )}
+          <button
+            onClick={async () => {
+              await apiLogout();
+              router.replace("/login");
+            }}
+            className="rounded-full bg-rose-600 text-white px-4 py-1.5 hover:bg-rose-700 shadow"
+          >
+            Logout
+          </button>
+        </div>
       </header>
 
       {/* Hero */}
@@ -63,7 +106,9 @@ export default function WelcomePage() {
           <div className="mt-8 flex items-center gap-3">
             <button
               onClick={enterApp}
-              className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 text-white px-6 py-3 text-sm font-bold hover:bg-blue-700 transition shadow"
+              disabled={!canExplore}
+              className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-bold transition shadow disabled:opacity-60 disabled:cursor-not-allowed bg-blue-600 text-white hover:bg-blue-700"
+              title={!canExplore ? "No tokens left. Request more to continue." : "Start exploring"}
             >
               {loading ? (
                 <>

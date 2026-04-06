@@ -170,6 +170,21 @@ export default function Home() {
       if (p) {
         setSelectedProvince(p);
       }
+      // Deep link: open the Report Builder (and optionally auto-preview)
+      if (sp.has("openBuilder")) {
+        const lat = Number(sp.get("lat") || "");
+        const lon = Number(sp.get("lon") || "");
+        const label = sp.get("label") || "Selected location";
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          setSelectedLocation({ lat, lon });
+          setAnchorLocation({ lat, lon });
+          setGeoLabel(label!);
+        } else if (sp.get("q")) {
+          setQ(sp.get("q") || "");
+        }
+        setRightOpen(true);
+        setAutoPreview(sp.get("autopreview") === "1" || sp.get("autopreview") === "true");
+      }
     } catch {}
   }, []);
 
@@ -190,6 +205,7 @@ export default function Home() {
   const [showFilters, setShowFilters] = useState(false);
   const [bottomOpen, setBottomOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(false);
+  const [autoPreview, setAutoPreview] = useState(false);
   const [showRegionPicker, setShowRegionPicker] = useState(true);
 
   function normalizeCityHint(city: string, province?: string) {
@@ -1536,6 +1552,7 @@ export default function Home() {
                 setIdealBusinessText={setIdealBusinessText}
                 areaDescription={areaDescription}
                 mapContainerId="map-container"
+                autoPreview={autoPreview}
               />
             </div>
           </div>
