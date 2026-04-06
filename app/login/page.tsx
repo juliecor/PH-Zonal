@@ -332,7 +332,7 @@ export default function LoginPage() {
 
           <div className="left-stats">
             <div>
-              <div className="stat-num">12K+</div>
+              {/* <div className="stat-num">12K+</div>
               <div className="stat-label">Zones indexed</div>
             </div>
             <div>
@@ -341,7 +341,7 @@ export default function LoginPage() {
             </div>
             <div>
               <div className="stat-num">Live</div>
-              <div className="stat-label">Updates</div>
+              <div className="stat-label">Updates</div> */}
             </div>
           </div>
         </div>

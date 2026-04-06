@@ -14,7 +14,6 @@ type R = {
   province?: string | null;
   zonal_value?: string | null;
   created_at: string;
-  file_path?: string | null;
 };
 
 export default function AdminReportsPage() {
@@ -606,7 +605,6 @@ export default function AdminReportsPage() {
                     <th>Province</th>
                     <th>Zonal / sqm</th>
                     <th className="align-right">Created</th>
-                    <th className="align-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -640,25 +638,11 @@ export default function AdminReportsPage() {
                           </span>
                         </span>
                       </td>
-                      <td className="align-right">
-                        {r.file_path ? (
-                          <a
-                            href={`${backendBase}/storage/${r.file_path}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn-export"
-                          >
-                            View PDF
-                          </a>
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
-                      </td>
                     </tr>
                   ))}
                   {rows.length === 0 && (
                     <tr>
-                      <td colSpan={9}>
+                      <td colSpan={8}>
                         <div className="rpt-empty">
                           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0f1f38" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                           <span className="rpt-empty-text">No reports found for the current filters.</span>
