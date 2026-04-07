@@ -3,21 +3,13 @@
 /**
  * PdfPreviewModal
  *
-<<<<<<< HEAD
- * PDF preview with action bar:  Download  |  📧 Email  |  🖨 Print
+ * PDF preview with action bar: Download | Email | Print
  * The Email button lives between Download and Print.
  * Clicking it opens EmailModal — fully managed here, no prop-drilling needed.
  */
 
 import { useState } from "react";
 import { Download, Mail, Printer, X } from "lucide-react";
- * PDF preview with Email button in the top bar next to close.
- * Download and Print are available inside the PDF viewer's own toolbar.
- * The bottom action bar has been removed since those buttons are redundant.
- */
-
-import { useState } from "react";
-import { Mail, X } from "lucide-react";
 import EmailModal, { type EmailPropertyData } from "./EmailModal";
 
 interface PdfPreviewModalProps {
@@ -64,17 +56,12 @@ export default function PdfPreviewModal({
 
         {/* Shell */}
         <div className="relative flex flex-col w-full max-w-3xl h-[92vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
-
-      HEAD
           {/* Top bar */}
-          {/* ── Top bar ── */}
-        (update email)
           <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-gray-50 shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-base">📄</span>
               <span className="text-sm font-bold text-gray-800">PDF Preview</span>
             </div>
-   HEAD
             <button
               onClick={onClose}
               className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition"
@@ -84,32 +71,7 @@ export default function PdfPreviewModal({
             </button>
           </div>
 
-          {/* PDF iframe */}
-
-            {/* ── Email button — in top bar, next to close ── */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setEmailOpen(true)}
-                className="inline-flex items-center gap-2 rounded-xl border-2 border-blue-400 bg-white text-blue-700 px-4 py-1.5 text-sm font-bold hover:bg-blue-50 active:scale-95 transition"
-                title="Email this report"
-              >
-                <Mail size={15} />
-                Email
-              </button>
-
-              <button
-                onClick={onClose}
-                className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition"
-                title="Close"
-              >
-                <X size={18} />
-              </button>
-            </div>
-          </div>
-
-          {/* ── PDF iframe — fills remaining space ── */}
-          {/* Download and Print buttons are inside the PDF viewer's own toolbar */}
-    (update email)
+          {/* PDF iframe — fills remaining space */}
           <div className="flex-1 overflow-hidden bg-gray-200">
             <iframe
               id="pdf-preview-iframe"
@@ -119,10 +81,8 @@ export default function PdfPreviewModal({
             />
           </div>
 
-       HEAD
           {/* ── Action bar ── */}
           <div className="shrink-0 flex items-center justify-center gap-3 px-5 py-3 border-t border-gray-200 bg-gray-50">
-
             {/* Download */}
             <button
               onClick={onDownload}
@@ -133,7 +93,7 @@ export default function PdfPreviewModal({
               Download PDF
             </button>
 
-            {/* ── Email — centered between Download and Print ── */}
+            {/* Email — centered between Download and Print */}
             <button
               onClick={() => setEmailOpen(true)}
               className="inline-flex items-center gap-2 rounded-xl border-2 border-blue-400 bg-white text-blue-700 px-5 py-2.5 text-sm font-bold hover:bg-blue-50 active:scale-95 transition"
@@ -152,10 +112,10 @@ export default function PdfPreviewModal({
               <Printer size={16} />
               Print
             </button>
-
           </div>
         </div>
       </div>
+
       {/* ── Email Modal — self-contained, z-index above the preview ── */}
       <EmailModal
         isOpen={emailOpen}

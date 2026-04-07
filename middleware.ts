@@ -25,11 +25,11 @@ export function middleware(req: NextRequest) {
   }
 
   // Redirect homepage and any other app routes to login when not authenticated
-  // if (!token && (pathname === "/" || !pathname.includes("."))) {
-  //   const url = req.nextUrl.clone();
-  //   url.pathname = "/login";
-  //   return NextResponse.redirect(url);
-  // }
+  if (!token && (pathname === "/" || !pathname.includes("."))) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
 
   return NextResponse.next();
 }

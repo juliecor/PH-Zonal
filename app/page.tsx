@@ -18,6 +18,9 @@ import {
   PanelRightClose,
   Zap,
   MapPin,
+  User,
+  Bell,  // Make sure Bell is imported
+  Edit2,
 } from "lucide-react";
 
 import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "./lib/types";
@@ -207,6 +210,8 @@ export default function Home() {
   const [rightOpen, setRightOpen] = useState(false);
   const [autoPreview, setAutoPreview] = useState(false);
   const [showRegionPicker, setShowRegionPicker] = useState(true);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
 
   function normalizeCityHint(city: string, province?: string) {
     const c = String(city || "").toUpperCase().trim();
@@ -1142,9 +1147,23 @@ export default function Home() {
             leftOpen ? "w-full sm:w-[400px]" : "w-0 overflow-hidden",
           ].join(" ")}
         >
-          {/* ── Blue header ── */}
-          <div className="bg-blue-600 px-4 pt-4 pb-3 shrink-0">
-            <h2 className="text-sm font-bold text-white mb-3">🏘️ Property Search</h2>
+          {/* ── Blue header with Profile Icon and Edit Pin ── */}
+            <div className="bg-blue-600 px-4 pt-4 pb-3 shrink-0">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <User size={16} className="text-white" />
+                  Property Search
+                </h2>
+                <button
+                  onClick={() => setShowProfileModal(true)}
+                  className="text-white/80 hover:text-white transition"
+                  title="Edit Profile"
+                >
+                  <Edit2 size={14} />
+                </button>
+              </div>
+              {/* Rest of the search input and toolbar remains the same */}
+            </div>
 
             {/* Search input */}
             <div className="relative">
@@ -1513,15 +1532,15 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Drawer toggle */}
-        <button
-          onClick={() => setLeftOpen((v) => !v)}
-          className="h-14 mt-6 rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-xl px-3 flex items-center justify-center hover:bg-white transition z-50"
-          title={leftOpen ? "Collapse panel" : "Expand panel"}
-        >
-          {leftOpen ? <ChevronLeft /> : <ChevronRight />}
-        </button>
-      </div>
+                  {/* Drawer toggle */}
+          <button
+            onClick={() => setLeftOpen((v) => !v)}
+            className="h-14 mt-6 rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-xl px-3 flex items-center justify-center hover:bg-white transition z-50"
+            title={leftOpen ? "Collapse panel" : "Expand panel"}
+          >
+            {leftOpen ? <ChevronLeft /> : <ChevronRight />}
+          </button>
+        {/* This closes the flex div - ONLY ONE closing tag here */}
 
       {/* ════════════════════════════════════════
           RIGHT REPORT DRAWER
@@ -1552,10 +1571,7 @@ export default function Home() {
                 setIdealBusinessText={setIdealBusinessText}
                 areaDescription={areaDescription}
                 mapContainerId="map-container"
-<<<<<<< HEAD
                 autoPreview={autoPreview}
-=======
->>>>>>> d3a21fb (update email)
               />
             </div>
           </div>
@@ -1686,7 +1702,68 @@ export default function Home() {
             </div>
           )}
         </div>
-      </div>
+              {/* ── Profile Edit Modal ── */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="relative w-full max-w-md mx-4">
+            <button
+              onClick={() => setShowProfileModal(false)}
+              className="absolute -top-10 right-0 text-white hover:text-gray-200 transition"
+            >
+              <X size={24} />
+            </button>
+            <ClientProfilePage />
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+           {/* ── Notification Modal ── */}
+      {showNotificationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="relative w-full max-w-sm mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-red-50 px-5 py-4 border-b border-red-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bell size={18} className="text-red-600" />
+                <h3 className="font-bold text-red-800">Notifications</h3>
+              </div>
+              <button 
+                onClick={() => setShowNotificationModal(false)} 
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-amber-600 text-lg">⚠️</span>
+                </div>
+                <div>
+                  <div className="font-semibold text-gray-800 text-sm mb-1">Token Balance Low</div>
+                  <div className="text-sm text-gray-600">
+                    Your token balance is running low. Please subscribe to purchase additional tokens to continue using our services.
+                  </div>
+                  <button 
+                    onClick={() => setShowNotificationModal(false)}
+                    className="mt-3 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition"
+                  >
+                    Subscribe Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+         </div>
     </main>
   );
 }
