@@ -1,30 +1,48 @@
+"use client";
+
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { MapPin, Zap, Compass, ShieldCheck, Sparkles, TrendingUp, Landmark, Building2, Home } from "lucide-react";
-import Disclaimer from "./components/Disclaimer";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Map as MapIcon,
+  Satellite as SatelliteIcon,
+  Mountain as TerrainIcon,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Search,
+  SlidersHorizontal,
+  List,
+  PanelRightOpen,
+  PanelRightClose,
+  Zap,
+  MapPin,
+} from "lucide-react";
 
-<<<<<<< Updated upstream
-import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "./lib/types";
-import { isBadStreet, normalizePH, suggestBusinesses } from "./lib/zonal-util";
-import ReportBuilder from "./components/ReportBuilder";
-import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
+import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "../lib/types";
+import { isBadStreet, normalizePH, suggestBusinesses } from "../lib/zonal-util";
+import ReportBuilder from "../components/ReportBuilder";
+import ZonalSearchIndicator from "../components/ZonalSearchIndicator";
+
 
 const MapComponent = dynamic(
   async () => {
     if (typeof window !== "undefined" && (process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as any)) {
       try {
-        return (await import("./components/GMap")).default;
+        return (await import("../components/GMap")).default;
       } catch {
-        return (await import("./components/ZonalMap")).default;
+        return (await import("../components/ZonalMap")).default;
       }
     }
-    return (await import("./components/ZonalMap")).default;
+    return (await import("../components/ZonalMap")).default;
   },
   { ssr: false }
 );
 
 type CompsResp = { ok: true; stats: { min: number | null; median: number | null; max: number | null; count: number }; rows: any[] } | null;
 
+// ─── Design-only helper: price tier badge ───────────────────────────────────
 function getPriceTier(p: number) {
   if (p > 100_000) return { label: "Prime",      bg: "bg-amber-100",   text: "text-amber-800",   dot: "bg-amber-400"   };
   if (p > 50_000)  return { label: "High-value", bg: "bg-violet-100",  text: "text-violet-800",  dot: "bg-violet-400"  };
@@ -33,6 +51,9 @@ function getPriceTier(p: number) {
 }
 
 export default function Home() {
+  // ─── All original state — untouched ─────────────────────────────────────
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [regionSearch, setRegionSearch] = useState("");
   const [matches, setMatches] = useState<RegionMatch[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -89,6 +110,7 @@ export default function Home() {
 
   const [comps, setComps] = useState<CompsResp>(null);
 
+  // ─── All original refs — untouched ──────────────────────────────────────
   const reqIdRef = useRef(0);
   const zonalAbortRef = useRef<AbortController | null>(null);
   const centerCacheRef = useRef<Map<string, { lat: number; lon: number; label: string; boundary?: Boundary | null }>>(new Map());
@@ -98,11 +120,21 @@ export default function Home() {
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const citiesReqGenerationRef = useRef(0);
 
+  // ─── All original constants — untouched ─────────────────────────────────
   const GEO_LS_KEY = "geoCacheV1";
   const POI_LS_KEY = "poiCacheV1";
   const ZONAL_LS_KEY = "zonalCacheV1";
   const GEO_TTL_MS = 1000 * 60 * 60 * 24 * 14;
   const POI_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+
+  // ─── ADDED: auth state for Dashboard button ─────────────────────────────
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    // Check for authToken cookie on client side
+    const hasToken = document.cookie.split(';').some(cookie => cookie.trim().startsWith('authToken='));
+    setIsLoggedIn(hasToken);
+  }, []);
 
   function lsLoad<T = any>(key: string, fallback: T): T {
     if (typeof window === "undefined") return fallback;
@@ -132,6 +164,7 @@ export default function Home() {
     }
   }, []);
 
+  // Allow overriding domain/province via URL query
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -145,6 +178,21 @@ export default function Home() {
       }
       if (p) {
         setSelectedProvince(p);
+      }
+      // Deep link: open the Report Builder (and optionally auto-preview)
+      if (sp.has("openBuilder")) {
+        const lat = Number(sp.get("lat") || "");
+        const lon = Number(sp.get("lon") || "");
+        const label = sp.get("label") || "Selected location";
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          setSelectedLocation({ lat, lon });
+          setAnchorLocation({ lat, lon });
+          setGeoLabel(label!);
+        } else if (sp.get("q")) {
+          setQ(sp.get("q") || "");
+        }
+        setRightOpen(true);
+        setAutoPreview(sp.get("autopreview") === "1" || sp.get("autopreview") === "true");
       }
     } catch {}
   }, []);
@@ -166,17 +214,8 @@ export default function Home() {
   const [showFilters, setShowFilters] = useState(false);
   const [bottomOpen, setBottomOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(false);
+  const [autoPreview, setAutoPreview] = useState(false);
   const [showRegionPicker, setShowRegionPicker] = useState(true);
-
-  // ── Track mobile breakpoint ───────────────────────────────────────────────
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 639px)");
-    setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
 
   function normalizeCityHint(city: string, province?: string) {
     const c = String(city || "").toUpperCase().trim();
@@ -274,8 +313,13 @@ export default function Home() {
     const lines: string[] = [];
     
     lines.push(`📍 ${where}`);
-    if (cls) lines.push(`📋 ${cls}`);
-    if (zv && zv > 0) lines.push(`💰 ₱${zv.toLocaleString()}/sqm (BIR Assessed)`);
+    if (cls) {
+      lines.push(`📋 ${cls}`);
+    }
+
+    if (zv && zv > 0) {
+      lines.push(`💰 ₱${zv.toLocaleString()}/sqm (BIR Assessed)`);
+    }
 
     if (counts) {
       const healthcare = (counts.hospitals || 0) + (counts.clinics || 0);
@@ -289,13 +333,17 @@ export default function Home() {
       if (education > 0) infraItems.push(`${education} schools`);
       if (security > 0) infraItems.push(`${security} security`);
       if (services > 0) infraItems.push(`${services} services`);
-      if (infraItems.length > 0) lines.push(`🏢 Nearby: ${infraItems.join(", ")}`);
+
+      if (infraItems.length > 0) {
+        lines.push(`🏢 Nearby: ${infraItems.join(", ")}`);
+      }
 
       let grade = "Limited";
       if (totalServices >= 20) grade = "Excellent";
       else if (totalServices >= 13) grade = "Strong";
       else if (totalServices >= 8) grade = "Moderate";
       else if (totalServices > 0) grade = "Emerging";
+
       lines.push(`⭐ Investment Grade: ${grade}`);
     }
 
@@ -918,18 +966,22 @@ export default function Home() {
 
     const rowCity = String(r["City-"] ?? "");
     const rowBarangay = String(r["Barangay-"] ?? "");
-    if (rowCity && rowCity !== city) setCity(rowCity);
-    if (rowBarangay && rowBarangay !== barangay) setBarangay(rowBarangay);
+    if (rowCity && rowCity !== city) {
+      setCity(rowCity);
+    }
+    if (rowBarangay && rowBarangay !== barangay) {
+      setBarangay(rowBarangay);
+    }
     if (rowCity && (!facetBarangays.length || rowCity !== city)) {
       loadBarangays(domain, rowCity);
     }
 
-    // ── Mobile: collapse left drawer, ensure bottom sheet is visible ───────
     if (typeof window !== "undefined" && window.innerWidth < 640) {
       setLeftOpen(false);
-      setRightOpen(false);
+      setBottomOpen(true);
+    } else {
+      setBottomOpen(true);
     }
-    setBottomOpen(true);
 
     setGeoLoading(true);
     try {
@@ -986,14 +1038,10 @@ export default function Home() {
     setComps(null);
     setAreaDescription("");
     setAreaDescErr("");
+
     setShowStreetHighlight(false);
     setStreetGeo(null);
 
-    // ── Mobile: close open side panels when map is tapped ──────────────────
-    if (typeof window !== "undefined" && window.innerWidth < 640) {
-      setLeftOpen(false);
-      setRightOpen(false);
-    }
     setBottomOpen(true);
 
     try {
@@ -1024,45 +1072,14 @@ export default function Home() {
 
   const isDev = process.env.NODE_ENV === "development";
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // SHARED ReportBuilder JSX (avoids duplication between mobile/desktop panels)
-  // ─────────────────────────────────────────────────────────────────────────
-  const reportPanel = (
-    <ReportBuilder
-      selectedLocation={selectedLocation}
-      selectedRow={selectedRow}
-      geoLabel={geoLabel}
-      poiLoading={poiLoading}
-      poiData={poiData}
-      poiRadiusKm={poiRadiusKm}
-      onChangePoiRadius={onChangePoiRadius}
-      idealBusinessText={idealBusinessText}
-      setIdealBusinessText={setIdealBusinessText}
-      areaDescription={areaDescription}
-      mapContainerId="map-container"
-    />
-  );
-
-=======
-export default function WelcomePage() {
->>>>>>> Stashed changes
+  // ─────────────────────────────────────────────────────────
+  // RENDER — with Dashboard button added inside blue header
+  // ─────────────────────────────────────────────────────────
   return (
-    <main className="relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-sky-200 via-sky-100 to-emerald-100 text-gray-800">
-      {/* Ambient sunbursts + color wash */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 opacity-80"
-        style={{
-          backgroundImage:
-            "radial-gradient(600px 400px at 12% 8%, rgba(248, 215, 105, 0.25), transparent 60%), radial-gradient(500px 320px at 88% 12%, rgba(125,211,252,0.35), transparent 60%), radial-gradient(520px 360px at 75% 75%, rgba(167,243,208,0.32), transparent 60%)",
-        }}
-      />
-      {/* Soft decorative blobs */}
-      <div className="pointer-events-none absolute -top-24 -left-24 h-[420px] w-[420px] rounded-full bg-gradient-to-br from-sky-300 via-blue-200 to-indigo-200 blur-3xl opacity-40" />
-      <div className="pointer-events-none absolute -bottom-28 -right-28 h-[420px] w-[420px] rounded-full bg-gradient-to-tr from-amber-200 via-rose-200 to-pink-200 blur-3xl opacity-40" />
+    <main className="h-screen w-screen overflow-hidden bg-slate-100 text-gray-900">
+      <ZonalSearchIndicator visible={loading} />
 
-<<<<<<< Updated upstream
-      {/* ── Fullscreen Map ── */}
+      {/* Fullscreen Map */}
       <div className="absolute inset-0">
         <MapComponent
           selected={selectedLocation}
@@ -1079,123 +1096,75 @@ export default function WelcomePage() {
         />
       </div>
 
-      {/* ── Brand pill ──────────────────────────────────────────────────────
-          On mobile: hidden while the left drawer is open (its header takes
-          over), visible (at left-14) while the drawer is closed.
-          On desktop: slides right as the 400px drawer opens.
-      ── */}
-      <div
-        className={[
-          "absolute top-4 z-30 transition-all duration-300",
-          isMobile
-            ? leftOpen
-              ? "opacity-0 pointer-events-none left-14"
-              : "opacity-100 left-14"
-            : leftOpen
-            ? "left-[416px]"
-            : "left-16",
-        ].join(" ")}
-      >
+      {/* ── Brand pill ── */}
+      <div className="absolute top-4 left-16 sm:left-1/3 z-30">
         <Link
           href="/welcome"
           title="Go to Home"
           className="rounded-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-lg px-3 py-2 flex items-center gap-3 hover:shadow-xl transition cursor-pointer"
         >
-=======
-      <header className="relative max-w-7xl mx-auto px-6 py-4 flex items-center justify-between z-10">
-        <div className="flex items-center gap-3">
-          <Image src="/pictures/FilipinoHomes.png" alt="Filipino Homes" width={220} height={60} priority />
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <Link
-            href="/login"
-            className="rounded-full bg-blue-600 text-white px-5 py-2 shadow hover:bg-blue-700 transition"
-          >
-            Log in
-          </Link>
-          <Link
-            href="/register"
-            className="rounded-full bg-white border border-gray-300 text-gray-800 px-5 py-2 shadow-sm hover:bg-gray-50 transition"
-          >
-            Register
-          </Link>
-        </div>
-      </header>
-
-      {/* Hero */}
-      <section className="relative max-w-7xl mx-auto px-6 pt-10 pb-16 grid lg:grid-cols-2 gap-10 items-center z-10">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold px-3 py-1 border border-blue-100 shadow-sm">
-            <Sparkles size={12} /> New • Filipino Homes Smart Pin
-          </div>
-          <h1 className="mt-4 text-4xl sm:text-5xl xl:text-6xl font-black tracking-tight leading-tight text-slate-900">
-            Find Zonal Values
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-sky-700 via-blue-600 to-indigo-700">
-              Fast & Precisely
-            </span>
-          </h1>
-          <p className="mt-4 text-gray-800 text-base sm:text-lg leading-relaxed max-w-xl">
-            Developed for real estate professionals, the Zonal Finder of Filipino Homes provides accurate zonal values per square meter across streets and barangays. Users can evaluate property areas, analyze nearby establishments, and produce detailed reports for reliable property pricing.
-          </p>
-
-          {/* Feature bullets */}
-          <div className="mt-6 grid sm:grid-cols-2 gap-3 max-w-3xl">
-            <Feature icon={<Compass size={25} />} title="Smart Pinning" desc="Street‑level accuracy with Google + snap" />
-            <Feature icon={<ShieldCheck size={25} />} title="Reliable Filters" desc="Province, city, barangay in seconds" />
-            <Feature icon={<TrendingUp size={25} />} title="Instant Insights" desc="Nearby POIs and quick facts" />
-            <Feature icon={<Zap size={25} />} title="1‑Click Report" desc="Beautiful PDF with branded layout" />
-          </div>
-        </div>
-
-        {/* Hero map image (PH) with bouncing pointer overlay */}
-        <div className="relative h-[380px] sm:h-[460px] lg:h-[600px]">
->>>>>>> Stashed changes
           <Image
-            src="/pictures/phil3.png"
-            alt="Philippines map"
-            fill
-            sizes="(max-width: 1024px) 120vw, 50vw"
-            className="object-contain drop-shadow-2xl scale-110 lg:scale-125"
+            src="/pictures/FilipinoHomes.png"
+            alt="Filipino Homes"
+            width={160}
+            height={36}
+            className="h-8 sm:h-10 w-auto"
             priority
           />
-          <img
-            src="/pictures/filipinohomespointer.png"
-            alt="Pointer"
-            width={120}
-            height={120}
-            className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full animate-bounce drop-shadow-xl"
-          />
-        </div>
-      </section>
+          <div className="hidden md:block text-xs text-gray-500 border-l pl-3">
+            <div className="font-semibold text-gray-700 leading-tight">Zonal Value</div>
+            <div className="leading-tight">{domain}</div>
+          </div>
+        </Link>
+      </div>
 
-<<<<<<< Updated upstream
+      {/* ── Map type controls ── */}
+      <div className="absolute top-4 right-4 z-30">
+        <div className="bg-white/95 backdrop-blur rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col">
+          {(["street", "terrain", "satellite"] as MapType[]).map((type) => {
+            const Icon = type === "street" ? MapIcon : type === "terrain" ? TerrainIcon : SatelliteIcon;
+            const labels: Record<string, string> = { street: "Street", terrain: "Terrain", satellite: "Satellite" };
+            return (
+              <button
+                key={type}
+                onClick={() => setMapType(type)}
+                className={[
+                  "flex items-center gap-2 px-3 py-2.5 text-xs font-semibold transition border-b border-gray-100 last:border-b-0",
+                  mapType === type ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-50",
+                ].join(" ")}
+              >
+                <Icon size={14} />
+                <span className="hidden sm:inline">{labels[type]}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* ════════════════════════════════════════
           LEFT DRAWER
-          Mobile: full-screen overlay with an X button in the header.
-          Desktop: 400px side panel with the chevron toggle.
       ════════════════════════════════════════ */}
       <div className="absolute top-0 left-0 z-40 h-full flex">
         <div
           className={[
             "h-full bg-white border-r border-gray-200 shadow-2xl transition-all duration-300 flex flex-col",
-            leftOpen ? "w-screen sm:w-[400px]" : "w-0 overflow-hidden",
+            leftOpen ? "w-full sm:w-[400px]" : "w-0 overflow-hidden",
           ].join(" ")}
         >
           {/* ── Blue header ── */}
           <div className="bg-blue-600 px-4 pt-4 pb-3 shrink-0">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold text-white">🏘️ Property Search</h2>
-              {/* X close button — visible on mobile only */}
-              {isMobile && (
-                <button
-                  onClick={() => setLeftOpen(false)}
-                  className="rounded-xl p-1.5 hover:bg-blue-500 transition text-blue-200 hover:text-white"
-                  title="Close"
+            {/* 🔹 ADDED: Dashboard button (only when logged in) 🔹 */}
+            {isLoggedIn && (
+              <div className="flex justify-end mb-2">
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/20 backdrop-blur-sm px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/30 transition"
                 >
-                  <X size={18} />
-                </button>
-              )}
-            </div>
+                  <span>📊</span> Dashboard
+                </Link>
+              </div>
+            )}
+            <h2 className="text-sm font-bold text-white mb-3">🏘️ Property Search</h2>
 
             {/* Search input */}
             <div className="relative">
@@ -1252,11 +1221,7 @@ export default function WelcomePage() {
               )}
 
               <button
-                onClick={() => {
-                  setRightOpen((v) => !v);
-                  // On mobile opening the report panel closes the left drawer
-                  if (isMobile) setLeftOpen(false);
-                }}
+                onClick={() => setRightOpen((v) => !v)}
                 className={[
                   "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ml-auto",
                   rightOpen ? "bg-white text-blue-700" : "bg-blue-500/50 text-white hover:bg-blue-500/70",
@@ -1315,7 +1280,7 @@ export default function WelcomePage() {
                           searchZonal({ page: 1 });
                           await pinpointFilterLocation(m.city, "", m.province);
                           setShowRegionPicker(false);
-                          setShowFilters(true);
+                          setShowFilters(true); // auto-open so users can drill down
                         }}
                       >
                         <div className="font-semibold text-gray-900 text-xs">
@@ -1475,7 +1440,9 @@ export default function WelcomePage() {
           <div className="px-4 py-2.5 sticky top-0 bg-gray-50 border-b border-gray-100 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wide">Results</span>
-              {loading && <Zap size={12} className="animate-spin text-orange-500" />}
+              {loading && (
+                <Zap size={12} className="animate-spin text-orange-500" />
+              )}
             </div>
             <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
               {totalRows ? (
@@ -1564,25 +1531,12 @@ export default function WelcomePage() {
               </button>
             </div>
           </div>
-=======
-      {/* Stats bar */}
-      <section className="relative z-10 bg-transparent">
-        <div className="max-w-7xl mx-auto px-6 py-6 grid grid-cols-3 gap-2 sm:gap-4 text-center">
-          <Stat k="Provinces" v="80+" icon={<Landmark size={20} />} />
-          <Stat k="Cities" v="1,600+" icon={<Building2 size={20} />} />
-          <Stat k="Barangays" v="42,000+" icon={<Home size={20} />} />
->>>>>>> Stashed changes
         </div>
-      </section>
 
-<<<<<<< Updated upstream
-        {/* Drawer chevron toggle — hidden on mobile when drawer is open (X in header handles it) */}
+        {/* Drawer toggle */}
         <button
           onClick={() => setLeftOpen((v) => !v)}
-          className={[
-            "h-14 mt-6 rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-xl px-3 flex items-center justify-center hover:bg-white transition z-50",
-            isMobile && leftOpen ? "hidden" : "",
-          ].join(" ")}
+          className="h-14 mt-6 rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-xl px-3 flex items-center justify-center hover:bg-white transition z-50"
           title={leftOpen ? "Collapse panel" : "Expand panel"}
         >
           {leftOpen ? <ChevronLeft /> : <ChevronRight />}
@@ -1590,149 +1544,86 @@ export default function WelcomePage() {
       </div>
 
       {/* ════════════════════════════════════════
-          RIGHT REPORT PANEL
-          Mobile  → bottom-anchored slide-up sheet (full width, 90vh max)
-          Desktop → right side drawer (420px)
+          RIGHT REPORT DRAWER
       ════════════════════════════════════════ */}
-      {isMobile ? (
-        <>
-          {/* Backdrop */}
-          {rightOpen && (
-            <div
-              className="fixed inset-0 z-40 bg-black/40"
-              onClick={() => setRightOpen(false)}
-            />
-          )}
-          {/* Slide-up panel */}
-          <div
-            className={[
-              "fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl flex flex-col transition-transform duration-300",
-              rightOpen ? "translate-y-0" : "translate-y-full",
-            ].join(" ")}
-            style={{ maxHeight: "90dvh" }}
-          >
-            {/* Header */}
-            <div className="bg-blue-600 rounded-t-3xl px-4 py-3 flex items-center justify-between shrink-0">
+      <div className={["absolute top-0 right-0 z-40 h-full transition-all duration-300", rightOpen ? "w-[360px] sm:w-[420px]" : "w-0 overflow-hidden"].join(" ")}>
+        {rightOpen && (
+          <div className="h-full bg-white border-l border-gray-200 shadow-2xl flex flex-col">
+            <div className="bg-blue-600 px-4 py-3 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-white text-base">📋</div>
                 <div className="text-sm font-bold text-white">Property Report</div>
               </div>
-              <button
-                onClick={() => setRightOpen(false)}
-                className="rounded-xl p-1.5 hover:bg-blue-500 transition text-blue-200 hover:text-white"
-                title="Close"
-              >
+              <button onClick={() => setRightOpen(false)} className="rounded-xl p-1.5 hover:bg-blue-500 transition text-blue-200 hover:text-white" title="Close">
                 <X size={16} />
               </button>
             </div>
-            {/* Drag-handle hint */}
-            <div className="flex justify-center py-1 shrink-0">
-              <div className="w-10 h-1 rounded-full bg-gray-200" />
-            </div>
+
             <div className="flex-1 overflow-auto p-4 space-y-3">
-              {reportPanel}
+              <ReportBuilder
+                selectedLocation={selectedLocation}
+                selectedRow={selectedRow}
+                geoLabel={geoLabel}
+                poiLoading={poiLoading}
+                poiData={poiData}
+                poiRadiusKm={poiRadiusKm}
+                onChangePoiRadius={onChangePoiRadius}
+                idealBusinessText={idealBusinessText}
+                setIdealBusinessText={setIdealBusinessText}
+                areaDescription={areaDescription}
+                mapContainerId="map-container"
+                autoPreview={autoPreview}
+              />
             </div>
           </div>
-        </>
-      ) : (
-        <div
-          className={[
-            "absolute top-0 right-0 z-40 h-full transition-all duration-300",
-            rightOpen ? "w-[360px] sm:w-[420px]" : "w-0 overflow-hidden",
-          ].join(" ")}
-        >
-          {rightOpen && (
-            <div className="h-full bg-white border-l border-gray-200 shadow-2xl flex flex-col">
-              <div className="bg-blue-600 px-4 py-3 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-white text-base">📋</div>
-                  <div className="text-sm font-bold text-white">Property Report</div>
-                </div>
-                <button
-                  onClick={() => setRightOpen(false)}
-                  className="rounded-xl p-1.5 hover:bg-blue-500 transition text-blue-200 hover:text-white"
-                  title="Close"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-auto p-4 space-y-3">
-                {reportPanel}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ════════════════════════════════════════
           BOTTOM SHEET
-          Mobile  → always centred on the full viewport width.
-          Desktop → shifts rightward when the 400px left drawer is open,
-                    so it stays centred in the visible map area.
       ════════════════════════════════════════ */}
-      <div
-        className="absolute bottom-4 z-30 w-[92vw] sm:w-[520px] transition-all duration-300"
-        style={
-          !isMobile && leftOpen
-            ? { left: "calc(400px + (100vw - 400px) / 2)", transform: "translateX(-50%)" }
-            : { left: "50%", transform: "translateX(-50%)" }
-        }
-      >
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[92vw] sm:w-[560px]">
         <div
           className={[
             "rounded-3xl border-2 border-gray-200 bg-white/98 backdrop-blur shadow-2xl overflow-hidden transition-all duration-300",
-            // More height on mobile so the zonal value card isn't cut off
-            bottomOpen ? "max-h-[52vh] sm:max-h-[38vh]" : "max-h-[52px]",
+            bottomOpen ? "max-h-[38vh]" : "max-h-[52px]",
           ].join(" ")}
         >
-          <button
-            onClick={() => setBottomOpen((v) => !v)}
-            className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition border-b border-gray-100"
-          >
+          <button onClick={() => setBottomOpen((v) => !v)} className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition border-b border-gray-100">
             <div className="min-w-0 text-left">
               <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">📌 Selected Property</div>
               <div className="text-sm font-bold text-gray-900 truncate">{selectedTitle}</div>
             </div>
-            <div className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg ml-2 shrink-0">
-              {bottomOpen ? "▼" : "▶"}
-            </div>
+            <div className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg">{bottomOpen ? "▼" : "▶"}</div>
           </button>
 
           {bottomOpen && (
-            <div className="px-4 pb-3 overflow-auto max-h-[calc(52vh-52px)] sm:max-h-[calc(38vh-52px)]">
+            <div className="px-4 pb-3 overflow-auto max-h-[calc(38vh-52px)]">
               {!selectedRow ? (
                 <div className="pt-3 text-sm text-gray-600">
                   <div className="flex items-center gap-2">
                     <MapPin size={15} className="text-blue-600 shrink-0" />
-                    {geoLoading
-                      ? "Finding location..."
-                      : "Select a region, city, barangay, or click on a street from the list"}
+                    {geoLoading ? "Finding location..." : "Select a region, city, barangay, or click on a street from the list"}
                   </div>
                 </div>
               ) : (
                 <>
                   {/* ── Zonal value card ── */}
                   <div className="mt-3 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-3 sm:p-4 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
+                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 flex items-center justify-between">
+                      <div>
                         <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200 mb-1">💰 Zonal Value</div>
-                        <div className="text-2xl sm:text-3xl font-black text-white leading-none drop-shadow-sm">
+                        <div className="text-3xl font-black text-white leading-none drop-shadow-sm">
                           {parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])
                             ? fmtPesoNumber(parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])!)
                             : "Not Appraised"}
                         </div>
                         <div className="text-[11px] text-blue-200 font-semibold mt-1">per square meter</div>
                       </div>
-                      <div className="text-right min-w-0 shrink-0 max-w-[45%]">
-                        <div className="font-bold text-base sm:text-lg text-white truncate">
-                          {String(selectedRow["City-"] ?? "")}
-                        </div>
-                        <div className="text-xs text-blue-100 font-semibold truncate">
-                          {String(selectedRow["Barangay-"] ?? "")}
-                        </div>
-                        <div className="truncate text-xs text-blue-200 font-medium mt-0.5">
-                          {String(selectedRow["Street/Subdivision-"] ?? "")}
-                        </div>
+                      <div className="text-right">
+                        <div className="font-bold text-lg text-white">{String(selectedRow["City-"] ?? "")}</div>
+                        <div className="text-xs text-blue-100 font-semibold">{String(selectedRow["Barangay-"] ?? "")}</div>
+                        <div className="truncate max-w-[200px] text-xs text-blue-200 font-medium mt-0.5">{String(selectedRow["Street/Subdivision-"] ?? "")}</div>
                       </div>
                     </div>
                     {String(selectedRow["Classification-"] ?? "").trim() && (
@@ -1783,32 +1674,14 @@ export default function WelcomePage() {
                     </button>
 
                     <button
-                      onClick={() => {
-                        setRightOpen(true);
-                        // On mobile collapse the bottom sheet so the report panel has room
-                        if (isMobile) setBottomOpen(false);
-                      }}
+                      onClick={() => setRightOpen(true)}
                       className="shrink-0 rounded-full bg-blue-600 text-white px-4 py-2 text-xs font-bold hover:bg-blue-700 transition"
                     >
                       Open Report
                     </button>
-
-                    {/* Mobile-only: quick access back to the search list */}
-                    {isMobile && (
-                      <button
-                        onClick={() => {
-                          setLeftOpen(true);
-                          setBottomOpen(false);
-                        }}
-                        className="shrink-0 rounded-full border border-gray-200 bg-white text-gray-800 px-4 py-2 text-xs font-bold hover:bg-gray-50 transition flex items-center gap-1.5"
-                      >
-                        <List size={13} />
-                        List
-                      </button>
-                    )}
                   </div>
 
-                  {/* ── Status badges ── */}
+                  {/* ── Status ── */}
                   <div className="mt-3 space-y-2">
                     {geoLoading && (
                       <div className="text-xs text-gray-500 flex items-center gap-1.5">
@@ -1822,80 +1695,15 @@ export default function WelcomePage() {
                       </div>
                     )}
                     {detailsErr && (
-                      <div className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-2xl px-3 py-1.5">
-                        {detailsErr}
-                      </div>
+                      <div className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-2xl px-3 py-1.5">{detailsErr}</div>
                     )}
                   </div>
                 </>
               )}
             </div>
           )}
-=======
-      {/* How it works */}
-      <section id="how" className="relative z-10 max-w-7xl mx-auto px-6 py-14">
-        <h2 className="text-2xl sm:text-3xl font-black text-slate-900">How it works</h2>
-        <p className="text-gray-700 mt-2">Three quick steps to your zonal report.</p>
-        <div className="mt-6 grid md:grid-cols-3 gap-4">
-          <Step n={1} title="Pick a region" desc="Select province, city, barangay — or type a street." />
-          <Step n={2} title="Pinpoint & snap" desc="Google‑smart geocode refined to the street centerline." />
-          <Step n={3} title="Generate report" desc="Nearby POIs and a branded PDF in one click." />
->>>>>>> Stashed changes
         </div>
-      </section>
-
-      {/* Disclaimer */}
-      <section className="relative z-10 max-w-7xl mx-auto px-6">
-        <Disclaimer className="mb-6" />
-      </section>
-
-      <footer className="relative z-10 max-w-7xl mx-auto px-6 py-10 text-xs text-gray-600">
-        © {new Date().getFullYear()} Filipino Homes | Developers
-      </footer>
+      </div>
     </main>
-  );
-}
-
-function Feature({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
-  return (
-    <div className="rounded-2xl border border-white/70 bg-white/90 backdrop-blur p-3 flex items-start gap-3 shadow-sm">
-      <div className="shrink-0 w-8 h-8 rounded-full bg-sky-100 text-blue-700 flex items-center justify-center">{icon}</div>
-      <div>
-        <div className="text-sm font-bold text-slate-900">{title}</div>
-        <div className="text-[12px] text-gray-600">{desc}</div>
-      </div>
-    </div>
-  );
-}
-
-function Stat({ k, v, icon }: { k: string; v: string; icon?: React.ReactNode }) {
-  return (
-    <div className="rounded-xl bg-transparent border border-white/40 p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
-      {icon && (
-        <div className="hidden sm:grid shrink-0 w-9 h-9 rounded-full place-items-center bg-white/70 text-blue-700 shadow-sm animate-[pulse_3s_ease-in-out_infinite]">
-          {icon}
-        </div>
-      )}
-      <div className="text-left">
-        <div className="text-xl sm:text-2xl font-black text-slate-900 leading-none">{v}</div>
-        <div className="text-[11px] sm:text-[12px] text-gray-600 mt-0.5 sm:mt-1">{k}</div>
-      </div>
-    </div>
-  );
-}
-
-function Step({ n, title, desc }: { n: number; title: string; desc: string }) {
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className="shrink-0 w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
-          {n}
-        </div>
-        <div>
-          <div className="text-sm font-bold text-gray-900">{title}</div>
-          <div className="text-[12px] text-gray-600">{desc}</div>
-        </div>
-      </div>
-    </div>
   );
 }

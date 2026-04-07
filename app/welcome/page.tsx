@@ -1,8 +1,6 @@
-"use client";
-
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { MapPin, Zap, Compass, ShieldCheck, Sparkles, TrendingUp, Landmark, Building2, Home } from "lucide-react";
+<<<<<<< Updated upstream
 import { useState } from "react";
 import Disclaimer from "../components/Disclaimer";
 
@@ -15,6 +13,11 @@ export default function WelcomePage() {
     setTimeout(() => router.push("/?skip=1"), 50);
   }
 
+=======
+import Disclaimer from "../components/Disclaimer";
+
+export default function WelcomePage() {
+>>>>>>> Stashed changes
   return (
     <main className="relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-sky-200 via-sky-100 to-emerald-100 text-gray-800">
       {/* Ambient sunbursts + color wash */}
@@ -33,9 +36,25 @@ export default function WelcomePage() {
       <header className="relative max-w-7xl mx-auto px-6 py-4 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
           <Image src="/pictures/FilipinoHomes.png" alt="Filipino Homes" width={220} height={60} priority />
-          <span className="text-sm text-gray-600 hidden sm:block">Zonal Value Explorer</span>
         </div>
+<<<<<<< Updated upstream
         <div className="flex items-center gap-2" />
+=======
+        <div className="flex items-center gap-3 text-sm">
+          <Link
+            href="/login"
+            className="rounded-full bg-blue-600 text-white px-5 py-2 shadow hover:bg-blue-700 transition"
+          >
+            Log in
+          </Link>
+          <Link
+            href="/register"
+            className="rounded-full bg-white border border-gray-300 text-gray-800 px-5 py-2 shadow-sm hover:bg-gray-50 transition"
+          >
+            Register
+          </Link>
+        </div>
+>>>>>>> Stashed changes
       </header>
 
       {/* Hero */}
@@ -46,7 +65,9 @@ export default function WelcomePage() {
           </div>
           <h1 className="mt-4 text-4xl sm:text-5xl xl:text-6xl font-black tracking-tight leading-tight text-slate-900">
             Find Zonal Values
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-sky-700 via-blue-600 to-indigo-700">Fast & Precisely</span>
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-sky-700 via-blue-600 to-indigo-700">
+              Fast & Precisely
+            </span>
           </h1>
           <p className="mt-4 text-gray-800 text-base sm:text-lg leading-relaxed max-w-xl">
             Developed for real estate professionals, the Zonal Finder of Filipino Homes provides accurate zonal values per square meter across streets and barangays. Users can evaluate property areas, analyze nearby establishments, and produce detailed reports for reliable property pricing.
@@ -54,11 +75,12 @@ export default function WelcomePage() {
 
           {/* Feature bullets */}
           <div className="mt-6 grid sm:grid-cols-2 gap-3 max-w-3xl">
-            <Feature icon={<Compass size={25}  />} title="Smart Pinning" desc="Street‑level accuracy with Google + snap" />
+            <Feature icon={<Compass size={25} />} title="Smart Pinning" desc="Street‑level accuracy with Google + snap" />
             <Feature icon={<ShieldCheck size={25} />} title="Reliable Filters" desc="Province, city, barangay in seconds" />
             <Feature icon={<TrendingUp size={25} />} title="Instant Insights" desc="Nearby POIs and quick facts" />
             <Feature icon={<Zap size={25} />} title="1‑Click Report" desc="Beautiful PDF with branded layout" />
           </div>
+<<<<<<< Updated upstream
 
           <div className="mt-8 flex items-center gap-3">
             <button
@@ -76,6 +98,8 @@ export default function WelcomePage() {
               )}
             </button>
           </div>
+=======
+>>>>>>> Stashed changes
         </div>
 
         {/* Hero map image (PH) with bouncing pointer overlay */}
@@ -173,6 +197,3 @@ function Step({ n, title, desc }: { n: number; title: string; desc: string }) {
     </div>
   );
 }
-
-// Lightweight map just for the hero. No interactions; centers on the Philippines.
-// Removed interactive HeroMap in favor of a static image
