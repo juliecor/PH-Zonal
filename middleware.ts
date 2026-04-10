@@ -9,6 +9,7 @@ export function middleware(req: NextRequest) {
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
+    pathname.startsWith("/welcome") ||
     pathname.startsWith("/api") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
@@ -16,16 +17,23 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/fonts")
   ) {
     // If user is already logged in and hits /login or /register, send to /welcome
-    if (token && (pathname === "/login" || pathname === "/register")) {
-      const url = req.nextUrl.clone();
-      url.pathname = "/welcome";
-      return NextResponse.redirect(url);
-    }
+    // if (token && (pathname === "/login" || pathname === "/register")) {
+    //   const url = req.nextUrl.clone();
+    //   url.pathname = "/welcome";
+    //   return NextResponse.redirect(url);
+    // }
     return NextResponse.next();
   }
 
-  // Redirect homepage and any other app routes to login when not authenticated
-  // if (!token && (pathname === "/" || !pathname.includes("."))) {
+  // Redirect unauthenticated homepage to public welcome; protect app routes otherwise
+  // if (!token && pathname === "/") {
+  //   const url = req.nextUrl.clone();
+  //   url.pathname = "/welcome";
+  //   return NextResponse.redirect(url);
+  // }
+
+  // For other non-static routes (app) require authentication, excluding public welcome
+  // if (!token && !pathname.includes(".") && pathname !== "/welcome") {
   //   const url = req.nextUrl.clone();
   //   url.pathname = "/login";
   //   return NextResponse.redirect(url);

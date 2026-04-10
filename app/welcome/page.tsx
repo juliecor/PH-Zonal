@@ -6,7 +6,7 @@ import Link from "next/link";
 import { MapPin, Zap, Compass, ShieldCheck, Sparkles, TrendingUp, Landmark, Building2, Home } from "lucide-react";
 import { useEffect, useState } from "react";
 import Disclaimer from "../components/Disclaimer";
-import { apiLogout, apiMe } from "../lib/authClient";
+import { apiLogout, apiMe, getToken } from "../lib/authClient";
 import LowBalanceNotice from "../components/LowBalanceNotice";
 
 export default function WelcomePage() {
@@ -15,20 +15,50 @@ export default function WelcomePage() {
   const [balance, setBalance] = useState<number | null>(null);
   const [name, setName] = useState<string>("");
   const [role, setRole] = useState<string>("");
+  const [authed, setAuthed] = useState<boolean>(false);
 
   useEffect(() => {
+    // Instant hint: if a token cookie exists, treat as authed immediately
+    setAuthed(!!getToken());
+
+    // Use a very short-lived cache to avoid UI flicker while backend responds
+    try {
+      const raw = localStorage.getItem("me.cache.v1");
+      if (raw) {
+        const cached = JSON.parse(raw) as { ts: number; name?: string; role?: string; token_balance?: number };
+        if (cached && Date.now() - (cached.ts || 0) < 60_000) {
+          setName(cached.name || "");
+          setRole((cached.role || "").toString());
+          if (typeof cached.token_balance === "number") setBalance(cached.token_balance);
+          setAuthed(true);
+        }
+      }
+    } catch {}
+
     apiMe()
       .then((me) => {
         if (me) {
           setBalance(typeof me.token_balance === "number" ? me.token_balance : null);
           setName(me.name || "");
           setRole((me.role || "").toString());
+          setAuthed(true);
+          try {
+            localStorage.setItem(
+              "me.cache.v1",
+              JSON.stringify({ ts: Date.now(), name: me.name, role: me.role, token_balance: me.token_balance })
+            );
+          } catch {}
+        } else {
+          setAuthed(false);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        // keep whatever we showed from cache; don't hard-flip UI on transient errors
+      });
   }, []);
 
   const isAdmin = (role || name)?.toLowerCase().includes("admin");
+  const isAuthed = authed;
   const canExplore = (balance ?? 0) > 0 || isAdmin;
   const dashHref = isAdmin ? "/admin/users" : "/dashboard/profile";
 
@@ -60,24 +90,33 @@ export default function WelcomePage() {
           <span className="text-sm text-gray-600 hidden sm:block">Zonal Value Explorer</span>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <Link href={dashHref} className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm hover:bg-white">Dashboard</Link>
-          { isAdmin && (
-            <Link href="/admin" className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm hover:bg-white">Admin</Link>
-          ) }
-          {balance !== null && !isAdmin && (
-            <span className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm">
-              Tokens: <span className="font-semibold">{balance}</span>
-            </span>
+          {isAuthed ? (
+            <>
+              <Link href={dashHref} className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm hover:bg-white">Dashboard</Link>
+              {isAdmin && (
+                <Link href="/admin" className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm hover:bg-white">Admin</Link>
+              )}
+              {balance !== null && !isAdmin && (
+                <span className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm">
+                  Tokens: <span className="font-semibold">{balance}</span>
+                </span>
+              )}
+              <button
+                onClick={async () => {
+                  await apiLogout();
+                  router.replace("/login");
+                }}
+                className="rounded-full bg-rose-600 text-white px-4 py-1.5 hover:bg-rose-700 shadow"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <Link href="/register" className="rounded-full bg-white/90 border border-gray-200 px-3 py-1.5 shadow-sm hover:bg-white">Register</Link>
+              <Link href="/login" className="rounded-full bg-blue-600 text-white px-4 py-1.5 shadow hover:bg-blue-700">Log in</Link>
+            </>
           )}
-          <button
-            onClick={async () => {
-              await apiLogout();
-              router.replace("/login");
-            }}
-            className="rounded-full bg-rose-600 text-white px-4 py-1.5 hover:bg-rose-700 shadow"
-          >
-            Logout
-          </button>
         </div>
       </header>
 
@@ -152,16 +191,7 @@ export default function WelcomePage() {
         </div>
       </section>
 
-      {/* How it works */}
-      <section id="how" className="relative z-10 max-w-7xl mx-auto px-6 py-14">
-        <h2 className="text-2xl sm:text-3xl font-black text-slate-900">How it works</h2>
-        <p className="text-gray-700 mt-2">Three quick steps to your zonal report.</p>
-        <div className="mt-6 grid md:grid-cols-3 gap-4">
-          <Step n={1} title="Pick a region" desc="Select province, city, barangay — or type a street." />
-          <Step n={2} title="Pinpoint & snap" desc="Google‑smart geocode refined to the street centerline." />
-          <Step n={3} title="Generate report" desc="Nearby POIs and a branded PDF in one click." />
-        </div>
-      </section>
+      {/* How it works section removed to keep page compact and non-scrollable */}
 
       {/* Disclaimer */}
       <section className="relative z-10 max-w-7xl mx-auto px-6">
