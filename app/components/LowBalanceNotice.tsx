@@ -61,7 +61,7 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
     const snoozed = now < snoozeUntil;
     const decreasedSinceLast = lastSeen >= 0 && balance < lastSeen;
     if (below && (!snoozed || decreasedSinceLast)) setOpen(true);
-    localStorage.setItem(STORAGE_KEY_LAST_SEEN, String(balance));
+    try { localStorage.setItem(STORAGE_KEY_LAST_SEEN, String(balance)); } catch {}
   }, [loading, balance, threshold, isAdmin]);
 
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
   const critical = !isAdmin && (balance ?? Number.POSITIVE_INFINITY) <= 1;
   const snooze = (hours: number) => {
     const until = Date.now() + hours * 60 * 60 * 1000;
-    localStorage.setItem(STORAGE_KEY_SNOOZE, String(until));
+    try { localStorage.setItem(STORAGE_KEY_SNOOZE, String(until)); } catch {}
     setOpen(false);
   };
 
