@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import Disclaimer from "../components/Disclaimer";
 import { apiLogout, apiMe, getToken } from "../lib/authClient";
 import LowBalanceNotice from "../components/LowBalanceNotice";
+import { Button, Chip } from "@mui/material";
 
 export default function WelcomePage() {
   const router = useRouter();
@@ -92,29 +93,38 @@ export default function WelcomePage() {
         <div className="flex items-center gap-3 text-sm">
           {isAuthed ? (
             <>
-              <Link href={dashHref} className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm hover:bg-white">Dashboard</Link>
+              <Button component={Link as any} href={dashHref} variant="outlined" size="small" sx={{ borderRadius: 999 }}>
+                Dashboard
+              </Button>
               {isAdmin && (
-                <Link href="/admin" className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm hover:bg-white">Admin</Link>
+                <Button component={Link as any} href="/admin" variant="outlined" size="small" sx={{ borderRadius: 999 }}>
+                  Admin
+                </Button>
               )}
               {balance !== null && !isAdmin && (
-                <span className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm">
-                  Tokens: <span className="font-semibold">{balance}</span>
-                </span>
+                <Chip label={`Tokens: ${balance}`} variant="outlined" sx={{ bgcolor: 'white', borderColor: 'rgba(0,0,0,0.08)' }} />
               )}
-              <button
+              <Button
                 onClick={async () => {
                   await apiLogout();
                   router.replace("/login");
                 }}
-                className="rounded-full bg-rose-600 text-white px-4 py-1.5 hover:bg-rose-700 shadow"
+                color="error"
+                variant="contained"
+                size="small"
+                sx={{ borderRadius: 999 }}
               >
                 Logout
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <Link href="/register" className="rounded-full bg-white/90 border border-gray-200 px-3 py-1.5 shadow-sm hover:bg-white">Register</Link>
-              <Link href="/login" className="rounded-full bg-blue-600 text-white px-4 py-1.5 shadow hover:bg-blue-700">Log in</Link>
+              <Button component={Link as any} href="/register" variant="outlined" size="small" sx={{ borderRadius: 999 }}>
+                Register
+              </Button>
+              <Button component={Link as any} href="/login" variant="contained" size="small" sx={{ borderRadius: 999 }}>
+                Log in
+              </Button>
             </>
           )}
         </div>
@@ -143,22 +153,17 @@ export default function WelcomePage() {
           </div>
 
           <div className="mt-8 flex items-center gap-3">
-            <button
+            <Button
               onClick={enterApp}
-              disabled={!canExplore}
-              className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-bold transition shadow disabled:opacity-60 disabled:cursor-not-allowed bg-blue-600 text-white hover:bg-blue-700"
+              disabled={!canExplore || loading}
+              variant="contained"
+              size="large"
+              startIcon={loading ? undefined : (<MapPin size={20} />)}
+              sx={{ borderRadius: 3, px: 3, py: 1.25, boxShadow: '0 8px 20px rgba(37, 99, 235, 0.3)', textTransform: 'none', fontWeight: 800 }}
               title={!canExplore ? "No tokens left. Request more to continue." : "Start exploring"}
             >
-              {loading ? (
-                <>
-                  <Zap size={20} className="animate-spin" /> Loading…
-                </>
-              ) : (
-                <>
-                  <MapPin size={20} /> Start Exploring
-                </>
-              )}
-            </button>
+              {loading ? 'Loading…' : 'Start Exploring'}
+            </Button>
           </div>
         </div>
 
@@ -191,7 +196,7 @@ export default function WelcomePage() {
         </div>
       </section>
 
-      {/* How it works section removed to keep page compact and non-scrollable */}
+      {/* How it works removed to keep page compact */}
 
       {/* Disclaimer */}
       <section className="relative z-10 max-w-7xl mx-auto px-6">
@@ -248,6 +253,3 @@ function Step({ n, title, desc }: { n: number; title: string; desc: string }) {
     </div>
   );
 }
-
-// Lightweight map just for the hero. No interactions; centers on the Philippines.
-// Removed interactive HeroMap in favor of a static image

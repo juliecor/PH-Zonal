@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import RouteProgress from "./components/RouteProgress";
 import "leaflet/dist/leaflet.css";
+import ThemeRegistry from "./mui/ThemeRegistry";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -29,9 +30,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${outfit.variable} antialiased`}>
-        <RouteProgress />
-        <Toaster richColors position="top-right" closeButton />
-        {children}
+        <ThemeRegistry>
+          <RouteProgress />
+          <Toaster richColors position="top-right" closeButton />
+          {children}
+        </ThemeRegistry>
       </body>
     </html>
   );
