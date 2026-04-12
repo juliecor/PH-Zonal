@@ -34,7 +34,6 @@ export async function apiRegister(payload: {
       j = await res.json();
     } catch {}
 
-    // ✅ SAFE extraction (no TS error)
     const firstError = j?.errors
       ? Object.values(j.errors)[0]?.[0]
       : undefined;
@@ -106,6 +105,22 @@ export function getToken(): string | null {
     return null;
   }
 }
+
+// ── Cached user profile ───────────────────────────────────────────────────────
+
+const USER_KEY = "zonalUser";
+
+export function getCachedUser(): Record<string, any> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function apiMe(): Promise<{
   id: number;

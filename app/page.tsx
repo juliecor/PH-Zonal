@@ -19,12 +19,48 @@ import {
   Zap,
   MapPin,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "./lib/types";
 import { isBadStreet, normalizePH, suggestBusinesses } from "./lib/zonal-util";
 import ReportBuilder from "./components/ReportBuilder";
 import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
 
+// ─── Golden house icon (navy bg + gold house) ────────────────────────────────
+function ZonalHouseIcon({ size = 30, onClick }: { size?: number; onClick?: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title="Go to Dashboard"
+      style={{
+        background: "none",
+        border: "none",
+        padding: 0,
+        cursor: onClick ? "pointer" : "default",
+        display: "flex",
+        alignItems: "center",
+        flexShrink: 0,
+      }}
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 40 40"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect width="40" height="40" rx="8" fill="#1a2744" />
+        <path
+          d="M20 9L8 19.5H11V31H17.5V24H22.5V31H29V19.5H32L20 9Z"
+          fill="#c9a84c"
+          stroke="#c9a84c"
+          strokeWidth="0.5"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
+  );
+}
 
 const MapComponent = dynamic(
   async () => {
@@ -42,16 +78,18 @@ const MapComponent = dynamic(
 
 type CompsResp = { ok: true; stats: { min: number | null; median: number | null; max: number | null; count: number }; rows: any[] } | null;
 
-// ─── Design-only helper: price tier badge ───────────────────────────────────
+// ─── Price tier badge ────────────────────────────────────────────────────────
 function getPriceTier(p: number) {
   if (p > 100_000) return { label: "Prime",      bg: "bg-amber-100",   text: "text-amber-800",   dot: "bg-amber-400"   };
   if (p > 50_000)  return { label: "High-value", bg: "bg-violet-100",  text: "text-violet-800",  dot: "bg-violet-400"  };
   if (p > 20_000)  return { label: "Mid-market", bg: "bg-emerald-100", text: "text-emerald-800", dot: "bg-emerald-400" };
-  return                  { label: "Value",      bg: "bg-sky-100",     text: "text-sky-800",     dot: "bg-sky-400"     };
+  return                  { label: "Value",      bg: "bg-[#c9a84c]/10", text: "text-[#9a7a20]",  dot: "bg-[#c9a84c]"  };
 }
 
-export default function Home() {
-  // ─── All original state — untouched ─────────────────────────────────────
+export function Home() {
+  const router = useRouter();
+
+  // ─── All original state ──────────────────────────────────────────────────
   const [emailOpen, setEmailOpen] = useState(false);
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [regionSearch, setRegionSearch] = useState("");
@@ -110,7 +148,7 @@ export default function Home() {
 
   const [comps, setComps] = useState<CompsResp>(null);
 
-  // ─── All original refs — untouched ──────────────────────────────────────
+  // ─── All original refs ───────────────────────────────────────────────────
   const reqIdRef = useRef(0);
   const zonalAbortRef = useRef<AbortController | null>(null);
   const centerCacheRef = useRef<Map<string, { lat: number; lon: number; label: string; boundary?: Boundary | null }>>(new Map());
@@ -120,7 +158,7 @@ export default function Home() {
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const citiesReqGenerationRef = useRef(0);
 
-  // ─── All original constants — untouched ─────────────────────────────────
+  // ─── All original constants ──────────────────────────────────────────────
   const GEO_LS_KEY = "geoCacheV1";
   const POI_LS_KEY = "poiCacheV1";
   const ZONAL_LS_KEY = "zonalCacheV1";
@@ -155,7 +193,6 @@ export default function Home() {
     }
   }, []);
 
-  // Allow overriding domain/province via URL query
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -170,7 +207,6 @@ export default function Home() {
       if (p) {
         setSelectedProvince(p);
       }
-      // Deep link: open the Report Builder (and optionally auto-preview)
       if (sp.has("openBuilder")) {
         const lat = Number(sp.get("lat") || "");
         const lon = Number(sp.get("lon") || "");
@@ -236,22 +272,22 @@ export default function Home() {
     if (sub.includes("cagayan-batanes")) return "CAGAYAN";
     if (sub.includes("abra")) return "ABRA";
     if (sub.includes("misamisoriental-camiguin")) return "CAMIGUIN-MISAMISORIENTAL";
-    if(sub.includes("agusandelsur")) return "AGUSAN DEL SUR";
-    if(sub.includes("kalinga-apayao")) return "KALINGA";
-    if(sub.includes("aklan")) return "AKLAN";
+    if (sub.includes("agusandelsur")) return "AGUSAN DEL SUR";
+    if (sub.includes("kalinga-apayao")) return "KALINGA";
+    if (sub.includes("aklan")) return "AKLAN";
     if (sub.includes("aurora")) return "AURORA";
-    if(sub.includes("laguna")) return "LAGUNA";
+    if (sub.includes("laguna")) return "LAGUNA";
     if (sub.includes("lanaodelsur")) return "LANAO DEL SUR";
     if (sub.includes("leyte-bilaran")) return "LEYTE";
-    if(sub.includes("mtprovince")) return "MOUNTAIN PROVINCE";
-    if(sub.includes("northernsamar")) return "NORTHERN SAMAR";
-    if(sub.includes("nuevavizcaya")) return "NUEVA VIZCAYA";
-    if(sub.includes("quirino")) return "QUIRINO";
-    if(sub.includes("southcotabato")) return "SOUTH COTABATO";
-    if(sub.includes("tawitawi")) return "TAWI-TAWI";
-    if(sub.includes("zamboangadelnorte")) return "ZAMBOANGA DEL NORTE";
-    if(sub.includes("zamboangasibugay")) return "ZAMBOANGA SIBUGAY";
-    if(sub.includes("zamboangadelsur")) return "ZAMBOANGA DEL SUR";
+    if (sub.includes("mtprovince")) return "MOUNTAIN PROVINCE";
+    if (sub.includes("northernsamar")) return "NORTHERN SAMAR";
+    if (sub.includes("nuevavizcaya")) return "NUEVA VIZCAYA";
+    if (sub.includes("quirino")) return "QUIRINO";
+    if (sub.includes("southcotabato")) return "SOUTH COTABATO";
+    if (sub.includes("tawitawi")) return "TAWI-TAWI";
+    if (sub.includes("zamboangadelnorte")) return "ZAMBOANGA DEL NORTE";
+    if (sub.includes("zamboangasibugay")) return "ZAMBOANGA SIBUGAY";
+    if (sub.includes("zamboangadelsur")) return "ZAMBOANGA DEL SUR";
     return null;
   }
 
@@ -299,18 +335,12 @@ export default function Home() {
     const zv = parseZonalValueToNumber(zvStr);
 
     const where = [brgyx, cityx, provx].filter(Boolean).join(", ") || payload.label || "Selected location";
-
     const counts = payload.poi?.counts;
     const lines: string[] = [];
-    
-    lines.push(`📍 ${where}`);
-    if (cls) {
-      lines.push(`📋 ${cls}`);
-    }
 
-    if (zv && zv > 0) {
-      lines.push(`💰 ₱${zv.toLocaleString()}/sqm (BIR Assessed)`);
-    }
+    lines.push(`📍 ${where}`);
+    if (cls) lines.push(`📋 ${cls}`);
+    if (zv && zv > 0) lines.push(`💰 ₱${zv.toLocaleString()}/sqm (BIR Assessed)`);
 
     if (counts) {
       const healthcare = (counts.hospitals || 0) + (counts.clinics || 0);
@@ -324,17 +354,13 @@ export default function Home() {
       if (education > 0) infraItems.push(`${education} schools`);
       if (security > 0) infraItems.push(`${security} security`);
       if (services > 0) infraItems.push(`${services} services`);
-
-      if (infraItems.length > 0) {
-        lines.push(`🏢 Nearby: ${infraItems.join(", ")}`);
-      }
+      if (infraItems.length > 0) lines.push(`🏢 Nearby: ${infraItems.join(", ")}`);
 
       let grade = "Limited";
       if (totalServices >= 20) grade = "Excellent";
       else if (totalServices >= 13) grade = "Strong";
       else if (totalServices >= 8) grade = "Moderate";
       else if (totalServices > 0) grade = "Emerging";
-
       lines.push(`⭐ Investment Grade: ${grade}`);
     }
 
@@ -417,7 +443,7 @@ export default function Home() {
     setFacetsLoading(true);
     setErr("");
     const generation = forGeneration ?? citiesReqGenerationRef.current;
-    
+
     try {
       const bag = noCacheRef.current ? {} as Record<string, { ts: number; cities: string[] }> : lsLoad<Record<string, { ts: number; cities: string[] }>>("facetCitiesCacheV1", {});
       const key = String(forDomain || "").toLowerCase();
@@ -434,11 +460,11 @@ export default function Home() {
       if (!res.ok) throw new Error(`Cities failed: ${res.status}`);
       const data = await res.json();
       const cities = Array.isArray(data?.cities) ? data.cities : [];
-      
+
       if (generation === citiesReqGenerationRef.current) {
         setFacetCities(cities);
       }
-      
+
       try {
         if (!noCacheRef.current) {
           (bag as any)[key] = { ts: Date.now(), cities };
@@ -1063,9 +1089,6 @@ export default function Home() {
 
   const isDev = process.env.NODE_ENV === "development";
 
-  // ─────────────────────────────────────────────────────────
-  // RENDER — only classNames differ from the original
-  // ─────────────────────────────────────────────────────────
   return (
     <main className="h-screen w-screen overflow-hidden bg-slate-100 text-gray-900">
       <ZonalSearchIndicator visible={loading} />
@@ -1121,7 +1144,7 @@ export default function Home() {
                 onClick={() => setMapType(type)}
                 className={[
                   "flex items-center gap-2 px-3 py-2.5 text-xs font-semibold transition border-b border-gray-100 last:border-b-0",
-                  mapType === type ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-50",
+                  mapType === type ? "bg-[#0f1f38] text-[#f5f0eb]" : "text-gray-600 hover:bg-gray-50",
                 ].join(" ")}
               >
                 <Icon size={14} />
@@ -1142,28 +1165,33 @@ export default function Home() {
             leftOpen ? "w-full sm:w-[400px]" : "w-0 overflow-hidden",
           ].join(" ")}
         >
-          {/* ── Blue header ── */}
-          <div className="bg-blue-600 px-4 pt-4 pb-3 shrink-0">
-            <h2 className="text-sm font-bold text-white mb-3">🏘️ Property Search</h2>
+          {/* ── Navy header ── */}
+          <div className="px-4 pt-4 pb-3 shrink-0" style={{ background: "#0f1f38" }}>
+            {/* Header row: golden house icon + title */}
+            <div className="flex items-center gap-2.5 mb-3">
+              <ZonalHouseIcon size={32} onClick={() => router.push("/dashboard")} />
+              <h2 className="text-sm font-bold text-[#f5f0eb]">Property Search</h2>
+            </div>
 
             {/* Search input */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-300 pointer-events-none" size={15} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" size={15} style={{ color: "#c9a84c" }} />
               <input
                 value={regionSearch}
                 onChange={(e) => setRegionSearch(e.target.value)}
                 placeholder="Search city or province…"
-                className="w-full rounded-xl border-0 bg-blue-500/60 pl-9 pr-8 py-2.5 text-sm text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-white/40 focus:bg-blue-500/80 transition"
+                className="w-full rounded-xl border-0 pl-9 pr-8 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 transition"
+                style={{ background: "rgba(255,255,255,0.10)" }}
               />
               {searchLoading && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin">
-                  <div className="h-4 w-4 border-2 border-blue-200 border-t-white rounded-full" />
+                  <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
                 </div>
               )}
               {regionSearch && !searchLoading && (
                 <button
                   onClick={() => setRegionSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-200 hover:text-white transition"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition"
                 >
                   <X size={15} />
                 </button>
@@ -1174,10 +1202,10 @@ export default function Home() {
             <div className="mt-2.5 flex items-center gap-2">
               <button
                 onClick={() => setShowFilters((v) => !v)}
-                className={[
-                  "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition",
-                  showFilters ? "bg-white text-blue-700" : "bg-blue-500/50 text-white hover:bg-blue-500/70",
-                ].join(" ")}
+                className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition"
+                style={showFilters
+                  ? { background: "#f5f0eb", color: "#0f1f38" }
+                  : { background: "rgba(255,255,255,0.10)", color: "#f5f0eb" }}
               >
                 <SlidersHorizontal size={13} />
                 Filters
@@ -1193,7 +1221,8 @@ export default function Home() {
                       loadCities(domain).catch(() => {});
                     }
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-500/50 text-white px-3 py-1.5 text-xs font-semibold hover:bg-blue-500/70 transition"
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition"
+                  style={{ background: "rgba(255,255,255,0.10)", color: "#f5f0eb" }}
                   title="Clear caches (dev only)"
                 >
                   🔄 Refresh
@@ -1202,10 +1231,10 @@ export default function Home() {
 
               <button
                 onClick={() => setRightOpen((v) => !v)}
-                className={[
-                  "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ml-auto",
-                  rightOpen ? "bg-white text-blue-700" : "bg-blue-500/50 text-white hover:bg-blue-500/70",
-                ].join(" ")}
+                className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ml-auto"
+                style={rightOpen
+                  ? { background: "#f5f0eb", color: "#0f1f38" }
+                  : { background: "rgba(255,255,255,0.10)", color: "#f5f0eb" }}
                 title="Open report panel"
               >
                 {rightOpen ? <PanelRightClose size={13} /> : <PanelRightOpen size={13} />}
@@ -1220,20 +1249,20 @@ export default function Home() {
               {searchLoading ? (
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-center">
                   <div className="flex items-center justify-center gap-2">
-                    <div className="h-4 w-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+                    <div className="h-4 w-4 border-2 border-[#c9a84c]/40 border-t-[#c9a84c] rounded-full animate-spin" />
                     <span className="text-sm text-gray-600">Searching...</span>
                   </div>
                 </div>
               ) : matches.length > 0 ? (
                 <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                  <div className="px-3 py-2 bg-blue-50 border-b border-blue-100 text-[11px] font-bold text-blue-600 uppercase tracking-wide">
+                  <div className="px-3 py-2 bg-[#f5f0eb] border-b border-[#e8e0d8] text-[11px] font-bold text-[#0f1f38] uppercase tracking-wide">
                     {searchMode === "city" ? "📍 Cities Found" : "🗺️ Provinces Found"} ({matches.length})
                   </div>
                   <div className="max-h-56 overflow-auto">
                     {matches.map((m, idx) => (
                       <button
                         key={idx}
-                        className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 border-b last:border-b-0 transition"
+                        className="w-full text-left px-3 py-2.5 text-sm hover:bg-[#f5f0eb] border-b last:border-b-0 transition"
                         onClick={async () => {
                           citiesReqGenerationRef.current++;
                           setDomain(m.domain);
@@ -1260,7 +1289,7 @@ export default function Home() {
                           searchZonal({ page: 1 });
                           await pinpointFilterLocation(m.city, "", m.province);
                           setShowRegionPicker(false);
-                          setShowFilters(true); // auto-open so users can drill down
+                          setShowFilters(true);
                         }}
                       >
                         <div className="font-semibold text-gray-900 text-xs">
@@ -1289,7 +1318,8 @@ export default function Home() {
                 <div>
                   <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1.5">City</label>
                   <select
-                    className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition disabled:opacity-50"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none transition disabled:opacity-50"
+                    style={{ "--tw-ring-color": "#c9a84c" } as any}
                     value={city}
                     onChange={(e) => {
                       const nextCity = e.target.value;
@@ -1316,7 +1346,7 @@ export default function Home() {
                 <div>
                   <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1.5">Barangay</label>
                   <select
-                    className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition disabled:opacity-50"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none transition disabled:opacity-50"
                     value={barangay}
                     onChange={(e) => {
                       const nextBrgy = e.target.value;
@@ -1342,7 +1372,7 @@ export default function Home() {
                 <div>
                   <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1.5">Classification</label>
                   <select
-                    className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none transition"
                     value={classification}
                     onChange={(e) => {
                       setClassification(e.target.value);
@@ -1367,7 +1397,7 @@ export default function Home() {
                 <div>
                   <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1.5">Street / Vicinity</label>
                   <input
-                    className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 placeholder-gray-400 focus:outline-none transition"
                     placeholder="Street / Vicinity…"
                     value={q}
                     onChange={(e) => {
@@ -1382,7 +1412,8 @@ export default function Home() {
                 <button
                   onClick={() => searchZonal({ page: 1 })}
                   disabled={loading}
-                  className="flex-1 rounded-xl bg-blue-600 text-white px-4 py-2 text-xs font-bold hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 rounded-xl px-4 py-2 text-xs font-bold transition disabled:opacity-50 flex items-center justify-center gap-2 text-[#f5f0eb]"
+                  style={{ background: "#0f1f38" }}
                 >
                   {loading ? (
                     <>
@@ -1421,10 +1452,13 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wide">Results</span>
               {loading && (
-                <Zap size={12} className="animate-spin text-orange-500" />
+                <Zap size={12} className="animate-spin text-[#c9a84c]" />
               )}
             </div>
-            <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+            <span
+              className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+              style={{ color: "#9a7a20", background: "rgba(201,168,76,0.12)" }}
+            >
               {totalRows ? (
                 <>#{showingFrom.toLocaleString()}–{showingTo.toLocaleString()} of {totalRows.toLocaleString()}</>
               ) : (
@@ -1449,9 +1483,24 @@ export default function Home() {
                     className={[
                       "w-full text-left rounded-2xl border-2 p-3 transition-all duration-150",
                       isActive
-                        ? "border-blue-500 bg-blue-50 shadow-md"
-                        : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/40",
+                        ? "shadow-md"
+                        : "border-gray-200 bg-white",
                     ].join(" ")}
+                    style={isActive
+                      ? { borderColor: "#c9a84c", background: "#f5f0eb" }
+                      : undefined}
+                    onMouseEnter={e => {
+                      if (!isActive) {
+                        (e.currentTarget as HTMLElement).style.borderColor = "rgba(201,168,76,0.4)";
+                        (e.currentTarget as HTMLElement).style.background = "rgba(245,240,235,0.4)";
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isActive) {
+                        (e.currentTarget as HTMLElement).style.borderColor = "";
+                        (e.currentTarget as HTMLElement).style.background = "";
+                      }
+                    }}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="min-w-0 flex-1">
@@ -1473,7 +1522,9 @@ export default function Home() {
                         {parsed != null ? (
                           <>
                             <span className="text-xs text-gray-500">₱</span>
-                            <span className="text-lg font-black text-blue-700">{pricePerSqm.toLocaleString("en-PH")}</span>
+                            <span className="text-lg font-black" style={{ color: "#0f1f38" }}>
+                              {pricePerSqm.toLocaleString("en-PH")}
+                            </span>
                             <span className="text-[10px] text-gray-500 font-semibold">per sqm</span>
                           </>
                         ) : (
@@ -1529,12 +1580,17 @@ export default function Home() {
       <div className={["absolute top-0 right-0 z-40 h-full transition-all duration-300", rightOpen ? "w-[360px] sm:w-[420px]" : "w-0 overflow-hidden"].join(" ")}>
         {rightOpen && (
           <div className="h-full bg-white border-l border-gray-200 shadow-2xl flex flex-col">
-            <div className="bg-blue-600 px-4 py-3 flex items-center justify-between shrink-0">
+            <div className="px-4 py-3 flex items-center justify-between shrink-0" style={{ background: "#0f1f38" }}>
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center text-white text-base">📋</div>
-                <div className="text-sm font-bold text-white">Property Report</div>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-base" style={{ background: "#182f52" }}>📋</div>
+                <div className="text-sm font-bold text-[#f5f0eb]">Property Report</div>
               </div>
-              <button onClick={() => setRightOpen(false)} className="rounded-xl p-1.5 hover:bg-blue-500 transition text-blue-200 hover:text-white" title="Close">
+              <button
+                onClick={() => setRightOpen(false)}
+                className="rounded-xl p-1.5 transition text-white/50 hover:text-white"
+                style={{ background: "rgba(255,255,255,0.08)" }}
+                title="Close"
+              >
                 <X size={16} />
               </button>
             </div>
@@ -1582,7 +1638,7 @@ export default function Home() {
               {!selectedRow ? (
                 <div className="pt-3 text-sm text-gray-600">
                   <div className="flex items-center gap-2">
-                    <MapPin size={15} className="text-blue-600 shrink-0" />
+                    <MapPin size={15} style={{ color: "#0f1f38" }} className="shrink-0" />
                     {geoLoading ? "Finding location..." : "Select a region, city, barangay, or click on a street from the list"}
                   </div>
                 </div>
@@ -1590,26 +1646,26 @@ export default function Home() {
                 <>
                   {/* ── Zonal value card ── */}
                   <div className="mt-3 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 flex items-center justify-between">
+                    <div className="p-4 flex items-center justify-between" style={{ background: "linear-gradient(to right, #0f1f38, #182f52)" }}>
                       <div>
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-blue-200 mb-1">💰 Zonal Value</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "#c9a84c" }}>💰 Zonal Value</div>
                         <div className="text-3xl font-black text-white leading-none drop-shadow-sm">
                           {parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])
                             ? fmtPesoNumber(parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])!)
                             : "Not Appraised"}
                         </div>
-                        <div className="text-[11px] text-blue-200 font-semibold mt-1">per square meter</div>
+                        <div className="text-[11px] font-semibold mt-1" style={{ color: "rgba(201,168,76,0.8)" }}>per square meter</div>
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-lg text-white">{String(selectedRow["City-"] ?? "")}</div>
-                        <div className="text-xs text-blue-100 font-semibold">{String(selectedRow["Barangay-"] ?? "")}</div>
-                        <div className="truncate max-w-[200px] text-xs text-blue-200 font-medium mt-0.5">{String(selectedRow["Street/Subdivision-"] ?? "")}</div>
+                        <div className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.7)" }}>{String(selectedRow["Barangay-"] ?? "")}</div>
+                        <div className="truncate max-w-[200px] text-xs font-medium mt-0.5" style={{ color: "rgba(201,168,76,0.7)" }}>{String(selectedRow["Street/Subdivision-"] ?? "")}</div>
                       </div>
                     </div>
                     {String(selectedRow["Classification-"] ?? "").trim() && (
-                      <div className="bg-blue-50 border-t border-blue-100 px-4 py-1.5 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                        <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wide">
+                      <div className="px-4 py-1.5 flex items-center gap-2" style={{ background: "#f5f0eb", borderTop: "1px solid #e8e0d8" }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#c9a84c" }} />
+                        <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: "#0f1f38" }}>
                           {String(selectedRow["Classification-"] ?? "")}
                         </span>
                       </div>
@@ -1643,19 +1699,18 @@ export default function Home() {
                         }
                       }}
                       disabled={streetGeoLoading}
-                      className={[
-                        "shrink-0 rounded-full border px-4 py-2 text-xs font-bold transition disabled:opacity-50",
-                        showStreetHighlight
-                          ? "border-blue-300 bg-blue-50 text-blue-700"
-                          : "border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
-                      ].join(" ")}
+                      className="shrink-0 rounded-full border px-4 py-2 text-xs font-bold transition disabled:opacity-50"
+                      style={showStreetHighlight
+                        ? { borderColor: "#c9a84c", background: "#f5f0eb", color: "#0f1f38" }
+                        : { borderColor: "#e2d9d0", background: "#fff", color: "#374151" }}
                     >
                       {streetGeoLoading ? "Finding…" : showStreetHighlight ? "Hide Street" : "Highlight Street"}
                     </button>
 
                     <button
                       onClick={() => setRightOpen(true)}
-                      className="shrink-0 rounded-full bg-blue-600 text-white px-4 py-2 text-xs font-bold hover:bg-blue-700 transition"
+                      className="shrink-0 rounded-full px-4 py-2 text-xs font-bold transition text-[#f5f0eb]"
+                      style={{ background: "#0f1f38" }}
                     >
                       Open Report
                     </button>
@@ -1687,3 +1742,25 @@ export default function Home() {
     </main>
   );
 }
+
+export function HomePage() {
+  const router = useRouter();
+
+  function handleHomeClick() {
+    router.push("/dashboard");
+  }
+
+  return (
+    <>
+      <div className="property-search-header">
+        <button onClick={handleHomeClick} className="home-icon-button">
+          <img src="/pictures/home-icon.png" alt="Home Icon" />
+        </button>
+        <h1>Property Search</h1>
+      </div>
+      <Home />
+    </>
+  );
+}
+
+export default HomePage;
