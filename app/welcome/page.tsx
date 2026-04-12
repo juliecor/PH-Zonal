@@ -3,96 +3,195 @@
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { MapPin, Zap, Compass, ShieldCheck, Sparkles, TrendingUp } from "lucide-react";
+import {
+  MapPin,
+  Zap,
+  Compass,
+  ShieldCheck,
+  Sparkles,
+  TrendingUp,
+  Landmark,
+  Building2,
+  Home,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import Disclaimer from "../components/Disclaimer";
-import { apiMe, getToken } from "../lib/authClient";
+import { apiMe, getToken, apiLogout } from "../lib/authClient";
 import LowBalanceNotice from "../components/LowBalanceNotice";
 import { Button, Chip } from "@mui/material";
 
-// ─── Navy + gold profile avatar ───────────────────────────────────────────────
-function ProfileAvatar({ name, balance, href }: { name: string; balance: number | null; href: string }) {
-  const initials = name.split(" ").slice(0, 2).map((w) => w[0] ?? "").join("").toUpperCase() || "?";
+// ─── Profile Avatar ─────────────────────────────
+function ProfileAvatar({
+  name,
+  balance,
+  href,
+}: {
+  name: string;
+  balance: number | null;
+  href: string;
+}) {
+  const initials =
+    name
+      .split(" ")
+      .slice(0, 2)
+      .map((w) => w[0] ?? "")
+      .join("")
+      .toUpperCase() || "?";
+
   return (
-    <Link href={href} title="Go to Dashboard">
-      <div style={{ width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)", border: "2px solid rgba(201,168,76,0.55)", display: "inline-flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer", boxShadow: "0 2px 12px rgba(30,58,138,0.22)", transition: "box-shadow 0.15s, border-color 0.15s" }}>
-        <span style={{ fontFamily: "'Cormorant Garamond', 'Georgia', serif", fontSize: "1.1rem", fontWeight: 700, color: "#c9a84c", letterSpacing: "0.04em", userSelect: "none" }}>{initials}</span>
-        <span style={{ position: "absolute", bottom: -6, right: -8, minWidth: 20, height: 20, borderRadius: 10, background: "#c9a84c", border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.65rem", fontWeight: 800, color: "#1e3a8a", padding: "0 4px", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }}>{balance ?? 0}</span>
+    <Link href={href}>
+      <div
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: 14,
+          background: "linear-gradient(135deg, #1e3a8a, #1e40af)",
+          border: "2px solid rgba(201,168,76,0.55)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+        }}
+      >
+        <span style={{ color: "#c9a84c", fontWeight: 700 }}>{initials}</span>
+
+        <span
+          style={{
+            position: "absolute",
+            bottom: -6,
+            right: -8,
+            background: "#c9a84c",
+            color: "#1e3a8a",
+            fontSize: "10px",
+            fontWeight: 800,
+            borderRadius: 10,
+            padding: "0 5px",
+          }}
+        >
+          {balance ?? 0}
+        </span>
       </div>
     </Link>
   );
 }
 
+// ─── Feature Card ─────────────────────────────
+function Feature({
+  icon,
+  title,
+  desc,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="rounded-2xl bg-white/90 border p-3 flex gap-3 shadow-sm">
+      <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-blue-700">
+        {icon}
+      </div>
+      <div>
+        <div className="text-sm font-bold">{title}</div>
+        <div className="text-xs text-gray-600">{desc}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Stat ─────────────────────────────
+function Stat({
+  k,
+  v,
+  icon,
+}: {
+  k: string;
+  v: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="text-center">
+      <div className="flex justify-center mb-1">{icon}</div>
+      <div className="font-bold">{v}</div>
+      <div className="text-xs text-gray-600">{k}</div>
+    </div>
+  );
+}
+
 export default function WelcomePage() {
   const router = useRouter();
+
   const [loading, setLoading] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
-  const [name, setName] = useState<string>("");
-  const [role, setRole] = useState<string>("");
-  const [authed, setAuthed] = useState<boolean>(false);
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [authed, setAuthed] = useState(false);
 
   useEffect(() => {
     setAuthed(!!getToken());
-    try {
-      const raw = localStorage.getItem("me.cache.v1");
-      if (raw) {
-        const cached = JSON.parse(raw) as { ts: number; name?: string; role?: string; token_balance?: number };
-        if (cached && Date.now() - (cached.ts || 0) < 60_000) {
-          setName(cached.name || ""); setRole((cached.role || "").toString());
-          if (typeof cached.token_balance === "number") setBalance(cached.token_balance);
-          setAuthed(true);
-        }
-      }
-    } catch {}
-    apiMe().then((me) => {
-      if (me) {
-        setBalance(typeof me.token_balance === "number" ? me.token_balance : null);
-        setName(me.name || ""); setRole((me.role || "").toString()); setAuthed(true);
-        try { localStorage.setItem("me.cache.v1", JSON.stringify({ ts: Date.now(), name: me.name, role: me.role, token_balance: me.token_balance })); } catch {}
-      } else { setAuthed(false); }
-    }).catch(() => {});
+
+    apiMe()
+      .then((me) => {
+        if (!me) return;
+
+        setBalance(me.token_balance ?? null);
+        setName(me.name || "");
+        setRole(me.role || "");
+        setAuthed(true);
+      })
+      .catch(() => {});
   }, []);
 
-  const isAdmin    = (role || name)?.toLowerCase().includes("admin");
-  const isAuthed   = authed;
+  const isAdmin = (role || name).toLowerCase().includes("admin");
   const canExplore = (balance ?? 0) > 0 || isAdmin;
-  const dashHref   = isAdmin ? "/admin/users" : "/dashboard/reports";
+  const dashHref = isAdmin ? "/admin/users" : "/dashboard/reports";
 
   function enterApp() {
     if (!canExplore) return;
     setLoading(true);
-    setTimeout(() => router.push("/?skip=1"), 50);
+    setTimeout(() => router.push("/?skip=1"), 100);
   }
 
   return (
-    <main className="relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-sky-200 via-sky-100 to-emerald-100 text-gray-800">
+    <main className="min-h-screen bg-gradient-to-b from-sky-200 via-sky-100 to-emerald-100">
       <LowBalanceNotice threshold={3} remindAfterHours={24} />
 
-      {/* Ambient sunbursts */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 opacity-80" style={{ backgroundImage: "radial-gradient(600px 400px at 12% 8%, rgba(248,215,105,0.25), transparent 60%), radial-gradient(500px 320px at 88% 12%, rgba(125,211,252,0.35), transparent 60%), radial-gradient(520px 360px at 75% 75%, rgba(167,243,208,0.32), transparent 60%)" }} />
-      <div className="pointer-events-none absolute -top-24 -left-24 h-[420px] w-[420px] rounded-full bg-gradient-to-br from-sky-300 via-blue-200 to-indigo-200 blur-3xl opacity-40" />
-      <div className="pointer-events-none absolute -bottom-28 -right-28 h-[420px] w-[420px] rounded-full bg-gradient-to-tr from-amber-200 via-rose-200 to-pink-200 blur-3xl opacity-40" />
+      {/* HEADER */}
+      <header className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+        <Image
+          src="/pictures/FilipinoHomes.png"
+          alt="Filipino Homes"
+          width={220}
+          height={60}
+          priority
+        />
 
-      {/* ── Header ── */}
-      <header className="relative max-w-7xl mx-auto px-6 py-4 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-          <Image src="/pictures/FilipinoHomes.png" alt="Filipino Homes" width={220} height={60} priority />
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          {isAuthed ? (
+          {authed ? (
             <>
-<<<<<<< Updated upstream
-              <Button component={Link as any} href={dashHref} variant="outlined" size="small" sx={{ borderRadius: 999 }}>
+              <Button
+                component={Link as any}
+                href={dashHref}
+                variant="outlined"
+                size="small"
+              >
                 Dashboard
               </Button>
+
               {isAdmin && (
-                <Button component={Link as any} href="/admin" variant="outlined" size="small" sx={{ borderRadius: 999 }}>
+                <Button
+                  component={Link as any}
+                  href="/admin"
+                  variant="outlined"
+                  size="small"
+                >
                   Admin
                 </Button>
               )}
+
               {balance !== null && !isAdmin && (
-                <Chip label={`Tokens: ${balance}`} variant="outlined" sx={{ bgcolor: 'white', borderColor: 'rgba(0,0,0,0.08)' }} />
+                <Chip label={`Tokens: ${balance}`} />
               )}
+
               <Button
                 onClick={async () => {
                   await apiLogout();
@@ -101,143 +200,89 @@ export default function WelcomePage() {
                 color="error"
                 variant="contained"
                 size="small"
-                sx={{ borderRadius: 999 }}
               >
                 Logout
               </Button>
+
+              <ProfileAvatar
+                name={name}
+                balance={balance}
+                href={dashHref}
+              />
             </>
           ) : (
             <>
-              <Button component={Link as any} href="/register" variant="outlined" size="small" sx={{ borderRadius: 999 }}>
+              <Button component={Link as any} href="/register">
                 Register
               </Button>
-              <Button component={Link as any} href="/login" variant="contained" size="small" sx={{ borderRadius: 999 }}>
+              <Button component={Link as any} href="/login" variant="contained">
                 Log in
               </Button>
             </>
           )}
-              <ProfileAvatar name={name} balance={balance} href={dashHref} />
-              {isAdmin && (
-                <Link href="/admin" className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm hover:bg-white text-sm">Admin</Link>
-              )}
-            </>
-          ) : null}
         </div>
       </header>
 
-      {/* ── Hero ── */}
-      <section className="relative max-w-7xl mx-auto px-6 pt-10 pb-16 grid lg:grid-cols-2 gap-10 items-center z-10">
+      {/* HERO */}
+      <section className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-10 py-12">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold px-3 py-1 border border-blue-100 shadow-sm">
-            <Sparkles size={12} /> New • Filipino Homes Smart Pin
+          <div className="inline-flex gap-2 bg-blue-50 px-3 py-1 rounded-full text-xs">
+            <Sparkles size={12} /> New Feature
           </div>
-          <h1 className="mt-4 text-4xl sm:text-5xl xl:text-6xl font-black tracking-tight leading-tight text-slate-900">
+
+          <h1 className="text-5xl font-black mt-4">
             Find Zonal Values
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-sky-700 via-blue-600 to-indigo-700">Fast & Precisely</span>
+            <span className="block text-blue-700">Fast & Precise</span>
           </h1>
-          <p className="mt-4 text-gray-800 text-base sm:text-lg leading-relaxed max-w-xl">
-            Developed for real estate professionals, the Zonal Finder of Filipino Homes provides accurate zonal values per square meter across streets and barangays. Users can evaluate property areas, analyze nearby establishments, and produce detailed reports for reliable property pricing.
+
+          <p className="mt-4 text-gray-700">
+            Accurate property zonal values and reports for real estate analysis.
           </p>
 
-          <div className="mt-6 grid sm:grid-cols-2 gap-3 max-w-3xl">
-            <Feature icon={<Compass size={25} />}     title="Smart Pinning"    desc="Street‑level accuracy with Google + snap" />
-            <Feature icon={<ShieldCheck size={25} />} title="Reliable Filters" desc="Province, city, barangay in seconds" />
-            <Feature icon={<TrendingUp size={25} />}  title="Instant Insights" desc="Nearby POIs and quick facts" />
-            <Feature icon={<Zap size={25} />}         title="1‑Click Report"   desc="Beautiful PDF with branded layout" />
+          <div className="grid sm:grid-cols-2 gap-3 mt-6">
+            <Feature icon={<Compass size={18} />} title="Smart Pinning" desc="Map accuracy" />
+            <Feature icon={<ShieldCheck size={18} />} title="Reliable Data" desc="Verified zones" />
+            <Feature icon={<TrendingUp size={18} />} title="Insights" desc="Nearby POIs" />
+            <Feature icon={<Zap size={18} />} title="Reports" desc="Instant PDF" />
           </div>
 
-          <div className="mt-8 flex items-center gap-3">
-       Updated upstream
+          <div className="mt-6">
             <Button
               onClick={enterApp}
               disabled={!canExplore || loading}
               variant="contained"
-              size="large"
-              startIcon={loading ? undefined : (<MapPin size={20} />)}
-              sx={{ borderRadius: 3, px: 3, py: 1.25, boxShadow: '0 8px 20px rgba(37, 99, 235, 0.3)', textTransform: 'none', fontWeight: 800 }}
-              title={!canExplore ? "No tokens left. Request more to continue." : "Start exploring"}
+              startIcon={<MapPin size={18} />}
             >
-              {loading ? 'Loading…' : 'Start Exploring'}
+              {loading ? "Loading..." : "Start Exploring"}
             </Button>
-            {/* ── Start Exploring — cobalt-blue linear gradient ── */}
-            <button
-              onClick={enterApp}
-              disabled={!canExplore}
-              className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-bold transition shadow disabled:opacity-60 disabled:cursor-not-allowed text-white"
-              style={{ background: canExplore ? "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)" : undefined }}
-              title={!canExplore ? "No tokens left. Request more to continue." : "Start exploring"}
-            >
-              {loading ? (
-                <><Zap size={20} className="animate-spin" /> Loading…</>
-              ) : (
-                <><MapPin size={20} /> Start Exploring</>
-              )}
-            </button>
->>>>>>> Stashed changes
           </div>
         </div>
 
-        {/* Hero map image */}
-        <div className="relative h-[380px] sm:h-[460px] lg:h-[600px]">
-          <Image src="/pictures/phil3.png" alt="Philippines map" fill sizes="(max-width: 1024px) 120vw, 50vw" className="object-contain drop-shadow-2xl scale-110 lg:scale-125" priority />
-          <img src="/pictures/filipinohomespointer.png" alt="Pointer" width={120} height={120} className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full animate-bounce drop-shadow-xl" />
+        {/* IMAGE */}
+        <div className="relative h-[400px]">
+          <Image
+            src="/pictures/phil3.png"
+            alt="Map"
+            fill
+            className="object-contain"
+          />
         </div>
       </section>
 
-Updated upstream
-      {/* Stats bar */}
-      <section className="relative z-10 bg-transparent">
-        <div className="max-w-7xl mx-auto px-6 py-6 grid grid-cols-3 gap-2 sm:gap-4 text-center">
-          <Stat k="Provinces" v="80+" icon={<Landmark size={20} />} />
-          <Stat k="Cities" v="1,600+" icon={<Building2 size={20} />} />
-          <Stat k="Barangays" v="42,000+" icon={<Home size={20} />} />
-        </div>
+      {/* STATS */}
+      <section className="max-w-7xl mx-auto px-6 grid grid-cols-3 py-6">
+        <Stat k="Provinces" v="80+" icon={<Landmark />} />
+        <Stat k="Cities" v="1,600+" icon={<Building2 />} />
+        <Stat k="Barangays" v="42,000+" icon={<Home />} />
       </section>
 
-      {/* How it works removed to keep page compact */}
-
-      {/* Disclaimer */}
-      <section className="relative z-10 max-w-7xl mx-auto px-6">
-        <Disclaimer className="mb-6" />
-      </section>
-
-      <footer className="relative z-10 max-w-7xl mx-auto px-6 py-10 text-xs text-gray-600">
-        © {new Date().getFullYear()} Filipino Homes | Developers
-      {/* ── Footer with Disclaimer above copyright ── */}
-      <footer className="relative z-10 max-w-7xl mx-auto px-6 pb-8">
-        {/* Disclaimer moved here, just above the copyright line */}
+      {/* FOOTER */}
+      <footer className="max-w-7xl mx-auto px-6 pb-8">
         <Disclaimer className="mb-4" />
-        <p className="text-xs text-gray-600">© {new Date().getFullYear()} Filipino Homes | Developers</p>
- Stashed changes
+        <p className="text-xs text-gray-600">
+          © {new Date().getFullYear()} Filipino Homes | Developers
+        </p>
       </footer>
     </main>
   );
 }
-
-function Feature({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
-  return (
-    <div className="rounded-2xl border border-white/70 bg-white/90 backdrop-blur p-3 flex items-start gap-3 shadow-sm">
-      <div className="shrink-0 w-8 h-8 rounded-full bg-sky-100 text-blue-700 flex items-center justify-center">{icon}</div>
-      <div>
-        <div className="text-sm font-bold text-slate-900">{title}</div>
-        <div className="text-[12px] text-gray-600">{desc}</div>
-      </div>
-    </div>
-  );
-}
-
-function Step({ n, title, desc }: { n: number; title: string; desc: string }) {
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className="shrink-0 w-8 h-8 rounded-full text-white flex items-center justify-center text-sm font-bold" style={{ background: "#1e3a8a" }}>{n}</div>
-        <div>
-          <div className="text-sm font-bold text-gray-900">{title}</div>
-          <div className="text-[12px] text-gray-600">{desc}</div>
-        </div>
-      </div>
-    </div>
-  );
- Updated upstream
-}
-
