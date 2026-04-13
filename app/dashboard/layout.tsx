@@ -2,16 +2,12 @@
 
 import DashboardSidebar from "../components/DashboardSidebar";
 import LowBalanceNotice from "../components/LowBalanceNotice";
-import ClientToaster from "@/components/ClientToaster";
 import { User, Coins, Home, Bell, X, PenLine, Search, LogOut, Menu } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { apiMe, apiLogout, getCachedUser, getToken } from "../lib/authClient";
-import { useRouter } from "next/navigation";
-
+import { apiMe, getCachedUser, getToken } from "../lib/authClient";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   const [userName, setUserName] = useState<string>("");
@@ -22,7 +18,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [editEmail, setEditEmail] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   async function fetchUserData() {
     const cached = getCachedUser();
@@ -56,11 +51,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     finally { setEditSaving(false); }
   }
 
-  async function handleLogout() {
-    setLoggingOut(true);
-    try { await apiLogout(); } finally { router.replace("/login"); }
-  }
-
   const displayName = me?.name || userName || "?";
   const initials = displayName.split(" ").slice(0, 2).map((w: string) => w[0] ?? "").join("").toUpperCase() || "?";
   const isLowBalance  = tokenBalance !== null && tokenBalance <= 3;
@@ -81,26 +71,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const displayedItems = notifTab === "unread" ? notifItems.filter(n => !n.read) : notifItems;
   const tokenPillBg    = isZeroBalance ? "#ef4444" : isLowBalance ? "#f59e0b" : "#10b981";
 
-  // ── Shared logout button ──
-  function LogoutButton() {
-    return (
-      <div className="sb-logout-row">
-        <button className="sb-logout-btn" onClick={handleLogout} disabled={loggingOut}>
-          <span className="sb-logout-icon">
-            {loggingOut
-              ? <span className="sb-logout-spinner" />
-              : <LogOut size={14} />}
-          </span>
-          {loggingOut ? "Signing out…" : "Log out"}
-        </button>
-      </div>
-    );
-  }
-
-  // ── Shared sidebar nav content ──
+  // Shared sidebar content — used in both desktop sidebar and mobile drawer
   function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
     return (
       <>
+        {/* Profile section */}
         <div className="sb-profile-section">
           <div className="sb-profile-av-btn" onClick={() => { openEdit(); onLinkClick?.(); }} title="Edit profile">
             {initials !== "?" ? initials : <User size={20} color="#c9a84c" />}
@@ -114,11 +89,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           </div>
         </div>
 
-        <div onClick={onLinkClick} style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <div onClick={onLinkClick}>
           <DashboardSidebar
             title=""
             links={[
-              { href: "/dashboard/reports", label: "Home", icon: <Home size={16} /> },
+              { href: "/dashboard/reports", label: "Report", icon: <Home size={16} /> },
               {
                 href: "/dashboard/request",
                 label: "Request Tokens",
@@ -133,6 +108,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             ]}
           />
         </div>
+
+        {/* Log out row */}
+        <div className="sb-logout-row">
+          <button className="sb-logout-btn" onClick={() => { try { localStorage.clear(); } catch {} window.location.href = "/login"; }}>
+            <LogOut size={15} />
+            <span>Log out</span>
+          </button>
+        </div>
       </>
     );
   }
@@ -144,12 +127,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
         .cl-root { height:100vh; display:flex; flex-direction:column; background:#f5f0eb; font-family:'DM Sans',sans-serif; overflow:hidden; }
 
+        /* ── Top bar ── */
         .cl-topbar { flex-shrink:0; background:#1e3a8a; z-index:50; display:flex; align-items:center; justify-content:space-between; padding:0 1.25rem; height:56px; box-shadow:0 2px 16px rgba(30,58,138,0.18); }
         .cl-topbar-left { display:flex; align-items:center; gap:0.65rem; }
         .cl-topbar-logo { display:flex; align-items:center; gap:0.55rem; text-decoration:none; }
         .cl-topbar-mark { width:30px; height:30px; border:1.5px solid #c9a84c; border-radius:7px; display:flex; align-items:center; justify-content:center; color:#c9a84c; }
         .cl-topbar-name { font-family:'Cormorant Garamond',serif; font-size:1.1rem; font-weight:600; color:#f5f0eb; letter-spacing:0.02em; }
 
+        /* Hamburger — mobile only */
         .cl-hamburger { background:rgba(255,255,255,0.1); border:none; border-radius:10px; padding:8px; cursor:pointer; display:none; align-items:center; justify-content:center; transition:background 0.15s; }
         .cl-hamburger:hover { background:rgba(255,255,255,0.2); }
         @media (max-width:860px) { .cl-hamburger { display:flex; } }
@@ -160,15 +145,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         .cl-bell-dot { position:absolute; top:-4px; right:-4px; width:12px; height:12px; background:#ef4444; border-radius:50%; border:2px solid #1e3a8a; animation:pulse 1.5s ease-in-out infinite; }
         @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.2);opacity:0.7} }
 
+        /* ── Body ── */
         .cl-body { flex:1; min-height:0; display:grid; grid-template-columns:260px 1fr; overflow:hidden; }
         @media (max-width:860px) { .cl-body { grid-template-columns:1fr; } }
 
+        /* ── Desktop Sidebar ── */
         .cl-sidebar-wrap { height:100%; overflow:hidden; padding:1.5rem 1rem 1.5rem 1.5rem; box-sizing:border-box; display:flex; flex-direction:column; }
         @media (max-width:860px) { .cl-sidebar-wrap { display:none; } }
-
-        /* ── Sidebar card: flex column so logout sticks to bottom ── */
         .cl-sidebar-card { background:#fff; border-radius:16px; border:1px solid #e8e0d8; box-shadow:0 2px 14px rgba(30,58,138,0.05); overflow:hidden; display:flex; flex-direction:column; flex:1; }
 
+        /* ── Mobile Drawer Overlay ── */
         .cl-mobile-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); backdrop-filter:blur(3px); z-index:300; display:flex; animation:mbFadeIn 0.2s ease; }
         @keyframes mbFadeIn { from{opacity:0} to{opacity:1} }
         .cl-mobile-drawer { width:300px; max-width:85vw; height:100%; background:#fff; display:flex; flex-direction:column; box-shadow:4px 0 32px rgba(30,58,138,0.2); animation:mbSlideIn 0.25s cubic-bezier(0.22,1,0.36,1); overflow:hidden; }
@@ -176,6 +162,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         .cl-mobile-drawer-close { position:absolute; top:14px; right:-48px; width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.15); border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; transition:background 0.15s; }
         .cl-mobile-drawer-close:hover { background:rgba(255,255,255,0.25); }
 
+        /* ── Profile section (shared) ── */
         .sb-profile-section { padding:1.25rem 1.25rem 1rem; border-bottom:1px solid rgba(255,255,255,0.06); background:linear-gradient(135deg,#1e3a8a 0%,#1e40af 100%); display:flex; align-items:center; gap:0.85rem; flex-shrink:0; }
         .sb-profile-av-btn { width:48px; height:48px; border-radius:14px; background:rgba(201,168,76,0.15); border:2px solid rgba(201,168,76,0.5); display:flex; align-items:center; justify-content:center; cursor:pointer; font-family:'Cormorant Garamond',serif; font-size:1.2rem; font-weight:700; color:#c9a84c; text-transform:uppercase; user-select:none; transition:border-color 0.16s,transform 0.13s; flex-shrink:0; position:relative; }
         .sb-profile-av-btn:hover { border-color:#c9a84c; transform:translateY(-1px); }
@@ -184,10 +171,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         .sb-profile-name { font-size:0.875rem; font-weight:600; color:#f5f0eb; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
         .sb-profile-role { font-size:0.68rem; color:rgba(201,168,76,0.85); text-transform:capitalize; margin-top:2px; letter-spacing:0.06em; }
 
+        /* ── Token pill ── */
         .sb-token-pill { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:20px; padding:0 6px; border-radius:20px; font-size:0.7rem; font-weight:700; letter-spacing:0.02em; line-height:1; color:#fff; flex-shrink:0; }
 
-        .cl-sidebar-card a, .cl-sidebar-card nav a,
-        .cl-mobile-nav a, .cl-mobile-nav nav a {
+        /* ── Sidebar nav hover/active ── */
+        .cl-sidebar-card a, .cl-sidebar-card [role="link"], .cl-sidebar-card nav a,
+        .cl-mobile-nav a, .cl-mobile-nav [role="link"], .cl-mobile-nav nav a {
           transition: background 0.15s, color 0.15s; border-radius: 10px;
         }
         .cl-sidebar-card a:hover, .cl-sidebar-card nav a:hover,
@@ -203,27 +192,26 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           background: #1e40af !important; color: #fff !important;
         }
 
-        /* ── Logout — always pinned to the very bottom ── */
+        /* ── Logout row ── */
         .sb-logout-row { padding:0.75rem 1rem; border-top:1px solid #f0ebe4; margin-top:auto; flex-shrink:0; }
-        .sb-logout-btn { width:100%; display:flex; align-items:center; gap:0.65rem; padding:0.62rem 0.75rem; border-radius:10px; border:1.5px solid #e8e0d8; background:transparent; font-family:'DM Sans',sans-serif; font-size:0.82rem; font-weight:500; color:#6b7585; cursor:pointer; transition:background 0.14s,border-color 0.14s,color 0.14s; }
-        .sb-logout-btn:hover:not(:disabled) { background:#fff3f3; border-color:#f5c6c6; color:#c0392b; }
-        .sb-logout-btn:disabled { opacity:0.5; cursor:not-allowed; }
-        .sb-logout-icon { width:28px; height:28px; border-radius:7px; background:#f5f0eb; display:flex; align-items:center; justify-content:center; color:#9aa3b0; flex-shrink:0; transition:background 0.14s,color 0.14s; }
-        .sb-logout-btn:hover .sb-logout-icon { background:rgba(192,57,43,0.08); color:#c0392b; }
-        .sb-logout-spinner { width:12px; height:12px; border:2px solid rgba(192,57,43,0.2); border-top-color:#c0392b; border-radius:50%; animation:spin 0.7s linear infinite; }
-        @keyframes spin { to{transform:rotate(360deg)} }
+        .sb-logout-btn { width:100%; display:flex; align-items:center; gap:0.65rem; padding:0.65rem 1rem; border-radius:10px; background:transparent; border:1.5px solid #e2d9d0; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:0.83rem; font-weight:500; color:#6b7585; transition:border-color 0.15s,background 0.15s,color 0.15s; }
+        .sb-logout-btn:hover { border-color:#1e40af; background:#dbeafe; color:#1e3a8a; }
 
+        /* ── Main content ── */
         .cl-main { height:100%; overflow-y:auto; padding:2rem 1.5rem 2rem 0.75rem; box-sizing:border-box; display:flex; flex-direction:column; gap:1.25rem; min-width:0; }
         @media (max-width:860px) { .cl-main { padding:1.25rem 1rem; } }
 
+        /* ── Hide Philippine map ── */
         .cl-main img[alt*="map"], .cl-main img[alt*="Map"], .cl-main img[alt*="philippines"], .cl-main img[alt*="Philippines"],
         .cl-main .ph-map, .cl-main .philippines-map, .cl-main [class*="map-hero"], .cl-main [class*="mapHero"], .cl-main [class*="hero-map"] { display:none !important; }
 
+        /* ── Start Exploring hover → light navy when zero tokens ── */
         ${isZeroBalance ? `
         .cl-main .start-exploring-btn:hover, .cl-main [class*="startExploring"]:hover, .cl-main [class*="exploreBtn"]:hover {
           background: #1e40af !important; border-color: #1e40af !important; color: #fff !important;
         }` : ""}
 
+        /* ── Edit Profile Modal ── */
         .ep-overlay { position:fixed; inset:0; background:rgba(30,58,138,0.4); backdrop-filter:blur(4px); z-index:400; display:flex; align-items:center; justify-content:center; padding:1rem; animation:epFadeIn 0.18s ease; }
         @keyframes epFadeIn { from{opacity:0} to{opacity:1} }
         .ep-modal { background:#fff; border-radius:18px; border:1px solid #e8e0d8; box-shadow:0 20px 60px rgba(30,58,138,0.2); width:100%; max-width:440px; overflow:hidden; animation:epSlideUp 0.2s ease; }
@@ -248,7 +236,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         .ep-btn-save:hover:not(:disabled) { background:#1e40af; transform:translateY(-1px); }
         .ep-btn-save:disabled { opacity:0.55; cursor:not-allowed; transform:none; }
         .ep-spinner { width:13px; height:13px; border:2px solid rgba(245,240,235,0.3); border-top-color:#f5f0eb; border-radius:50%; animation:spin 0.7s linear infinite; }
+        @keyframes spin { to{transform:rotate(360deg)} }
 
+        /* ── Notification Modal ── */
         .notif-overlay { position:fixed; inset:0; background:rgba(30,58,138,0.3); backdrop-filter:blur(3px); z-index:400; display:flex; align-items:flex-start; justify-content:flex-end; padding:4.5rem 1.75rem 1rem; animation:epFadeIn 0.15s ease; }
         .notif-panel { background:#fff; border-radius:20px; box-shadow:0 20px 60px rgba(30,58,138,0.18); width:100%; max-width:390px; overflow:hidden; animation:epSlideUp 0.18s ease; }
         @media (max-width:480px) { .notif-overlay { padding:4.5rem 0.75rem 1rem; } .notif-panel { max-width:100%; } }
@@ -278,8 +268,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       `}</style>
 
       <div className="cl-root">
+        {/* ── Top bar ── */}
         <header className="cl-topbar">
           <div className="cl-topbar-left">
+            {/* Hamburger — mobile only */}
             <button className="cl-hamburger" onClick={() => setMobileMenuOpen(true)} title="Menu">
               <Menu size={20} color="#fff" />
             </button>
@@ -290,6 +282,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               <span className="cl-topbar-name">Zonal Value</span>
             </div>
           </div>
+
           <div className="cl-topbar-actions">
             <button className="cl-bell-btn" onClick={() => setShowNotificationModal(true)} title="Notifications">
               <Bell size={20} color="#fff" />
@@ -305,8 +298,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           <aside className="cl-sidebar-wrap">
             <div className="cl-sidebar-card">
               <SidebarContent />
-              {/* ✅ Single logout — pinned to very bottom */}
-              <LogoutButton />
             </div>
           </aside>
 
@@ -316,15 +307,22 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
       {/* ── Mobile Drawer ── */}
       {mobileMenuOpen && (
-        <div className="cl-mobile-overlay" onClick={(e) => { if (e.target === e.currentTarget) setMobileMenuOpen(false); }}>
+        <div
+          className="cl-mobile-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) setMobileMenuOpen(false); }}
+        >
           <div className="cl-mobile-drawer" style={{ position: "relative" }}>
-            <button className="cl-mobile-drawer-close" onClick={() => setMobileMenuOpen(false)} title="Close menu">
+            {/* Close button */}
+            <button
+              className="cl-mobile-drawer-close"
+              onClick={() => setMobileMenuOpen(false)}
+              title="Close menu"
+            >
               <X size={16} />
             </button>
+
             <div className="cl-mobile-nav" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
               <SidebarContent onLinkClick={() => setMobileMenuOpen(false)} />
-              {/* ✅ Single logout — pinned to very bottom of mobile drawer */}
-              <LogoutButton />
             </div>
           </div>
         </div>
