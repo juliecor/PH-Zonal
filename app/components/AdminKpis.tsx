@@ -10,35 +10,30 @@ export default function AdminKpis({
   totalTokens: number;
 }) {
   const cards = [
-    {
-      label: "Users",
-      value: totalUsers.toLocaleString(),
-      note: "Total registered",
-      bg: "from-pink-400 to-rose-500",
-    },
-    {
-      label: "Pending Requests",
-      value: pendingRequests.toLocaleString(),
-      note: "Awaiting approval",
-      bg: "from-sky-400 to-blue-600",
-    },
-    {
-      label: "Issued Tokens",
-      value: totalTokens.toLocaleString(),
-      note: "Current balances",
-      bg: "from-emerald-400 to-teal-600",
-    },
+    { label: "Users",             value: totalUsers.toLocaleString(),      note: "Total registered" },
+    { label: "Pending Requests",  value: pendingRequests.toLocaleString(), note: "Awaiting approval" },
+    { label: "Issued Tokens",     value: totalTokens.toLocaleString(),     note: "Current balances" },
   ];
 
   return (
-    <div className="grid gap-4 sm:gap-5 md:grid-cols-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
       {cards.map((c) => (
-        <div key={c.label} className="rounded-xl p-[1px] bg-gradient-to-br from-black/10 to-black/0">
-          <div className={`rounded-xl p-5 text-white bg-gradient-to-br ${c.bg} shadow-md`}> 
-            <div className="text-sm/5 opacity-90">{c.label}</div>
-            <div className="mt-1 text-2xl font-semibold">{c.value}</div>
-            <div className="mt-2 text-xs/5 opacity-80">{c.note}</div>
+        <div
+          key={c.label}
+          className="rounded-xl bg-white border border-[#e8e0d8] shadow-sm p-4 flex items-start justify-between"
+        >
+          <div>
+            <div className="text-[0.72rem] font-semibold tracking-[0.14em] uppercase text-[#1e3a8a]">{c.label}</div>
+            <div className="mt-1 text-2xl font-semibold text-[#0f1f38]">{c.value}</div>
+            <div className="mt-1 text-xs text-[#6b7585]">{c.note}</div>
           </div>
+          <span
+            aria-hidden
+            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#e8e0d8] text-[0.65rem] font-bold text-[#c9a84c]"
+            title=""
+          >
+            •
+          </span>
         </div>
       ))}
     </div>

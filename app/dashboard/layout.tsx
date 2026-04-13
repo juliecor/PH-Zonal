@@ -5,7 +5,7 @@ import LowBalanceNotice from "../components/LowBalanceNotice";
 import { User, Coins, Home, Bell, X, Search, LogOut, Menu } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { apiMe, getCachedUser, getToken } from "../lib/authClient";
+import { apiMe, getCachedUser, getToken, apiLogout } from "../lib/authClient";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const [showNotificationModal, setShowNotificationModal] = useState(false);
@@ -90,7 +90,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
         {/* Log out row */}
         <div className="sb-logout-row">
-          <button className="sb-logout-btn" onClick={() => { try { localStorage.clear(); } catch {} window.location.href = "/login"; }}>
+          <button className="sb-logout-btn" onClick={async () => { try { await apiLogout(); } catch {} window.location.href = "/login"; }}>
             <LogOut size={15} />
             <span>Log out</span>
           </button>
