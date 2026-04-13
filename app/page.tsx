@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
+import * as GeoJSON from 'geojson';
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Map as MapIcon,

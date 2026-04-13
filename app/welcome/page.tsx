@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { MapPin, Zap, Compass, ShieldCheck, Sparkles, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
-import Disclaimer from "../components/Disclaimer";
 import { apiMe, getToken } from "../lib/authClient";
 import LowBalanceNotice from "../components/LowBalanceNotice";
 
@@ -37,7 +36,8 @@ export default function WelcomePage() {
       if (raw) {
         const cached = JSON.parse(raw) as { ts: number; name?: string; role?: string; token_balance?: number };
         if (cached && Date.now() - (cached.ts || 0) < 60_000) {
-          setName(cached.name || ""); setRole((cached.role || "").toString());
+          setName(cached.name || "");
+          setRole((cached.role || "").toString());
           if (typeof cached.token_balance === "number") setBalance(cached.token_balance);
           setAuthed(true);
         }
@@ -46,9 +46,15 @@ export default function WelcomePage() {
     apiMe().then((me) => {
       if (me) {
         setBalance(typeof me.token_balance === "number" ? me.token_balance : null);
-        setName(me.name || ""); setRole((me.role || "").toString()); setAuthed(true);
-        try { localStorage.setItem("me.cache.v1", JSON.stringify({ ts: Date.now(), name: me.name, role: me.role, token_balance: me.token_balance })); } catch {}
-      } else { setAuthed(false); }
+        setName(me.name || "");
+        setRole((me.role || "").toString());
+        setAuthed(true);
+        try {
+          localStorage.setItem("me.cache.v1", JSON.stringify({ ts: Date.now(), name: me.name, role: me.role, token_balance: me.token_balance }));
+        } catch {}
+      } else {
+        setAuthed(false);
+      }
     }).catch(() => {});
   }, []);
 
@@ -68,7 +74,11 @@ export default function WelcomePage() {
       <LowBalanceNotice threshold={3} remindAfterHours={24} />
 
       {/* Ambient sunbursts */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 opacity-80" style={{ backgroundImage: "radial-gradient(600px 400px at 12% 8%, rgba(248,215,105,0.25), transparent 60%), radial-gradient(500px 320px at 88% 12%, rgba(125,211,252,0.35), transparent 60%), radial-gradient(520px 360px at 75% 75%, rgba(167,243,208,0.32), transparent 60%)" }} />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 opacity-80"
+        style={{ backgroundImage: "radial-gradient(600px 400px at 12% 8%, rgba(248,215,105,0.25), transparent 60%), radial-gradient(500px 320px at 88% 12%, rgba(125,211,252,0.35), transparent 60%), radial-gradient(520px 360px at 75% 75%, rgba(167,243,208,0.32), transparent 60%)" }}
+      />
       <div className="pointer-events-none absolute -top-24 -left-24 h-[420px] w-[420px] rounded-full bg-gradient-to-br from-sky-300 via-blue-200 to-indigo-200 blur-3xl opacity-40" />
       <div className="pointer-events-none absolute -bottom-28 -right-28 h-[420px] w-[420px] rounded-full bg-gradient-to-tr from-amber-200 via-rose-200 to-pink-200 blur-3xl opacity-40" />
 
@@ -76,17 +86,18 @@ export default function WelcomePage() {
       <header className="relative max-w-7xl mx-auto px-6 py-4 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
           <Image src="/pictures/FilipinoHomes.png" alt="Filipino Homes" width={220} height={60} priority />
-          <span className="text-sm text-gray-600 hidden sm:block">Zonal Value Explorer</span>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          {isAuthed ? (
+          {isAuthed && (
             <>
               <ProfileAvatar name={name} balance={balance} href={dashHref} />
               {isAdmin && (
-                <Link href="/admin" className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm hover:bg-white text-sm">Admin</Link>
+                <Link href="/admin" className="rounded-full bg-white/90 border border-gray-200 px-3 py-1 shadow-sm hover:bg-white text-sm">
+                  Admin
+                </Link>
               )}
             </>
-          ) : null}
+          )}
         </div>
       </header>
 
@@ -96,10 +107,14 @@ export default function WelcomePage() {
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold px-3 py-1 border border-blue-100 shadow-sm">
             <Sparkles size={12} /> New • Filipino Homes Smart Pin
           </div>
+
           <h1 className="mt-4 text-4xl sm:text-5xl xl:text-6xl font-black tracking-tight leading-tight text-slate-900">
             Find Zonal Values
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-sky-700 via-blue-600 to-indigo-700">Fast & Precisely</span>
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-sky-700 via-blue-600 to-indigo-700">
+              Fast & Precisely
+            </span>
           </h1>
+
           <p className="mt-4 text-gray-800 text-base sm:text-lg leading-relaxed max-w-xl">
             Developed for real estate professionals, the Zonal Finder of Filipino Homes provides accurate zonal values per square meter across streets and barangays. Users can evaluate property areas, analyze nearby establishments, and produce detailed reports for reliable property pricing.
           </p>
@@ -112,12 +127,11 @@ export default function WelcomePage() {
           </div>
 
           <div className="mt-8 flex items-center gap-3">
-            {/* ── Start Exploring — cobalt-blue linear gradient ── */}
             <button
               onClick={enterApp}
               disabled={!canExplore}
               className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-bold transition shadow disabled:opacity-60 disabled:cursor-not-allowed text-white"
-              style={{ background: canExplore ? "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)" : undefined }}
+              style={{ background: canExplore ? "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)" : "#9ca3af" }}
               title={!canExplore ? "No tokens left. Request more to continue." : "Start exploring"}
             >
               {loading ? (
@@ -131,15 +145,26 @@ export default function WelcomePage() {
 
         {/* Hero map image */}
         <div className="relative h-[380px] sm:h-[460px] lg:h-[600px]">
-          <Image src="/pictures/phil3.png" alt="Philippines map" fill sizes="(max-width: 1024px) 120vw, 50vw" className="object-contain drop-shadow-2xl scale-110 lg:scale-125" priority />
-          <img src="/pictures/filipinohomespointer.png" alt="Pointer" width={120} height={120} className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full animate-bounce drop-shadow-xl" />
+          <Image
+            src="/pictures/phil3.png"
+            alt="Philippines map"
+            fill
+            sizes="(max-width: 1024px) 120vw, 50vw"
+            className="object-contain drop-shadow-2xl scale-110 lg:scale-125"
+            priority
+          />
+          <img
+            src="/pictures/filipinohomespointer.png"
+            alt="Pointer"
+            width={120}
+            height={120}
+            className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full animate-bounce drop-shadow-xl"
+          />
         </div>
       </section>
 
-      {/* ── Footer with Disclaimer above copyright ── */}
+      {/* ── Footer ── */}
       <footer className="relative z-10 max-w-7xl mx-auto px-6 pb-8">
-        {/* Disclaimer moved here, just above the copyright line */}
-        <Disclaimer className="mb-4" />
         <p className="text-xs text-gray-600">© {new Date().getFullYear()} Filipino Homes | Developers</p>
       </footer>
     </main>
@@ -153,20 +178,6 @@ function Feature({ icon, title, desc }: { icon: React.ReactNode; title: string; 
       <div>
         <div className="text-sm font-bold text-slate-900">{title}</div>
         <div className="text-[12px] text-gray-600">{desc}</div>
-      </div>
-    </div>
-  );
-}
-
-function Step({ n, title, desc }: { n: number; title: string; desc: string }) {
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className="shrink-0 w-8 h-8 rounded-full text-white flex items-center justify-center text-sm font-bold" style={{ background: "#1e3a8a" }}>{n}</div>
-        <div>
-          <div className="text-sm font-bold text-gray-900">{title}</div>
-          <div className="text-[12px] text-gray-600">{desc}</div>
-        </div>
       </div>
     </div>
   );
