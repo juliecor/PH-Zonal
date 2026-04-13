@@ -2,11 +2,13 @@
 
 import DashboardSidebar from "../components/DashboardSidebar";
 import LowBalanceNotice from "../components/LowBalanceNotice";
+import ClientToaster from "@/components/ClientToaster";
 import { User, Coins, Home, Bell, X, PenLine, Search, LogOut, Menu } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { apiMe, apiLogout, getCachedUser, getToken } from "../lib/authClient";
 import { useRouter } from "next/navigation";
+
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
