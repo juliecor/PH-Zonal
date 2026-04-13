@@ -16,7 +16,10 @@ export default function ThemeRegistry({ children }: { children: React.ReactNode 
   const prevInsert = React.useRef(cache.insert);
 
   React.useEffect(() => {
-    cache.insert = (...args: any[]) => prevInsert.current(...args);
+    cache.insert = ((...args: Parameters<typeof prevInsert.current>) => {
+      return prevInsert.current(...args);
+    }) as typeof cache.insert;
+
     return () => {
       cache.insert = prevInsert.current;
     };
@@ -25,8 +28,9 @@ export default function ThemeRegistry({ children }: { children: React.ReactNode 
   useServerInsertedHTML(() => (
     <style
       data-emotion={`${cache.key} ${Object.keys(cache.inserted).join(' ')}`}
-      // @ts-ignore
-      dangerouslySetInnerHTML={{ __html: Object.values(cache.inserted).join(' ') as string }}
+      dangerouslySetInnerHTML={{
+        __html: Object.values(cache.inserted).join(' '),
+      }}
     />
   ));
 
