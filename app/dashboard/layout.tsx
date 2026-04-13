@@ -2,7 +2,7 @@
 
 import DashboardSidebar from "../components/DashboardSidebar";
 import LowBalanceNotice from "../components/LowBalanceNotice";
-import { User, Coins, Home, Bell, X, PenLine, Search, LogOut, Menu } from "lucide-react";
+import { User, Coins, Home, Bell, X, Search, LogOut, Menu } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { apiMe, getCachedUser, getToken } from "../lib/authClient";
@@ -13,10 +13,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [userName, setUserName] = useState<string>("");
   const [me, setMe] = useState<any>(null);
   const [notifTab, setNotifTab] = useState<"all" | "unread">("all");
-  const [editOpen, setEditOpen] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [editEmail, setEditEmail] = useState("");
-  const [editSaving, setEditSaving] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   async function fetchUserData() {
@@ -38,19 +34,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => { fetchUserData(); }, []);
 
-  function openEdit() { setEditName(me?.name ?? userName ?? ""); setEditEmail(me?.email ?? ""); setEditOpen(true); }
-
-  async function saveEdit() {
-    setEditSaving(true);
-    try {
-      const updated = { ...me, name: editName, email: editEmail };
-      setMe(updated); setUserName(editName || editEmail || "User");
-      try { localStorage.setItem("zonalUser", JSON.stringify(updated)); } catch {}
-      toast.success("Profile updated"); setEditOpen(false);
-    } catch (e: any) { toast.error(e?.message || "Failed to update profile"); }
-    finally { setEditSaving(false); }
-  }
-
   const displayName = me?.name || userName || "?";
   const initials = displayName.split(" ").slice(0, 2).map((w: string) => w[0] ?? "").join("").toUpperCase() || "?";
   const isLowBalance  = tokenBalance !== null && tokenBalance <= 3;
@@ -71,17 +54,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const displayedItems = notifTab === "unread" ? notifItems.filter(n => !n.read) : notifItems;
   const tokenPillBg    = isZeroBalance ? "#ef4444" : isLowBalance ? "#f59e0b" : "#10b981";
 
-  // Shared sidebar content — used in both desktop sidebar and mobile drawer
   function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
     return (
       <>
-        {/* Profile section */}
+        {/* Profile section — display only, no edit */}
         <div className="sb-profile-section">
-          <div className="sb-profile-av-btn" onClick={() => { openEdit(); onLinkClick?.(); }} title="Edit profile">
+          <div className="sb-profile-av-btn">
             {initials !== "?" ? initials : <User size={20} color="#c9a84c" />}
-            <div className="sb-edit-icon" onClick={(e) => { e.stopPropagation(); openEdit(); onLinkClick?.(); }}>
-              <PenLine size={9} color="#1e3a8a" />
-            </div>
           </div>
           <div style={{ minWidth: 0 }}>
             <div className="sb-profile-name">{userName || (me?.email ?? "—")}</div>
@@ -93,7 +72,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           <DashboardSidebar
             title=""
             links={[
-              { href: "/dashboard/reports", label: "Report", icon: <Home size={16} /> },
+              { href: "/dashboard/reports", label: "Home", icon: <Home size={16} /> },
               {
                 href: "/dashboard/request",
                 label: "Request Tokens",
@@ -162,12 +141,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         .cl-mobile-drawer-close { position:absolute; top:14px; right:-48px; width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.15); border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; transition:background 0.15s; }
         .cl-mobile-drawer-close:hover { background:rgba(255,255,255,0.25); }
 
-        /* ── Profile section (shared) ── */
+        /* ── Profile section ── */
         .sb-profile-section { padding:1.25rem 1.25rem 1rem; border-bottom:1px solid rgba(255,255,255,0.06); background:linear-gradient(135deg,#1e3a8a 0%,#1e40af 100%); display:flex; align-items:center; gap:0.85rem; flex-shrink:0; }
-        .sb-profile-av-btn { width:48px; height:48px; border-radius:14px; background:rgba(201,168,76,0.15); border:2px solid rgba(201,168,76,0.5); display:flex; align-items:center; justify-content:center; cursor:pointer; font-family:'Cormorant Garamond',serif; font-size:1.2rem; font-weight:700; color:#c9a84c; text-transform:uppercase; user-select:none; transition:border-color 0.16s,transform 0.13s; flex-shrink:0; position:relative; }
-        .sb-profile-av-btn:hover { border-color:#c9a84c; transform:translateY(-1px); }
-        .sb-edit-icon { position:absolute; bottom:-3px; right:-6px; background:#c9a84c; border-radius:50%; padding:3px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s ease; border:1.5px solid #1e3a8a; box-shadow:0 2px 4px rgba(0,0,0,0.2); }
-        .sb-edit-icon:hover { background:#b8922e; transform:scale(1.1); }
+        .sb-profile-av-btn { width:48px; height:48px; border-radius:14px; background:rgba(201,168,76,0.15); border:2px solid rgba(201,168,76,0.5); display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-size:1.2rem; font-weight:700; color:#c9a84c; text-transform:uppercase; user-select:none; flex-shrink:0; }
         .sb-profile-name { font-size:0.875rem; font-weight:600; color:#f5f0eb; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
         .sb-profile-role { font-size:0.68rem; color:rgba(201,168,76,0.85); text-transform:capitalize; margin-top:2px; letter-spacing:0.06em; }
 
@@ -211,35 +187,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           background: #1e40af !important; border-color: #1e40af !important; color: #fff !important;
         }` : ""}
 
-        /* ── Edit Profile Modal ── */
-        .ep-overlay { position:fixed; inset:0; background:rgba(30,58,138,0.4); backdrop-filter:blur(4px); z-index:400; display:flex; align-items:center; justify-content:center; padding:1rem; animation:epFadeIn 0.18s ease; }
-        @keyframes epFadeIn { from{opacity:0} to{opacity:1} }
-        .ep-modal { background:#fff; border-radius:18px; border:1px solid #e8e0d8; box-shadow:0 20px 60px rgba(30,58,138,0.2); width:100%; max-width:440px; overflow:hidden; animation:epSlideUp 0.2s ease; }
-        @keyframes epSlideUp { from{opacity:0;transform:translateY(16px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
-        .ep-head { background:#1e3a8a; padding:1.4rem 1.5rem; display:flex; align-items:center; justify-content:space-between; position:relative; overflow:hidden; }
-        .ep-head::after { content:''; position:absolute; inset:0; background:repeating-linear-gradient(-55deg,transparent,transparent 32px,rgba(201,168,76,0.025) 32px,rgba(201,168,76,0.025) 33px); }
-        .ep-head-left { display:flex; align-items:center; gap:0.75rem; z-index:1; }
-        .ep-head-av { width:48px; height:48px; border-radius:14px; background:rgba(201,168,76,0.15); border:2px solid rgba(201,168,76,0.5); display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-size:1.2rem; font-weight:700; color:#c9a84c; }
-        .ep-head-title { font-family:'Cormorant Garamond',serif; font-size:1.2rem; font-weight:700; color:#f5f0eb; }
-        .ep-head-sub { font-size:0.72rem; color:rgba(245,240,235,0.5); margin-top:0.1rem; }
-        .ep-close { z-index:1; width:30px; height:30px; border-radius:8px; background:rgba(245,240,235,0.1); border:1px solid rgba(245,240,235,0.15); display:flex; align-items:center; justify-content:center; cursor:pointer; color:rgba(245,240,235,0.7); transition:background 0.15s,color 0.15s; }
-        .ep-close:hover { background:rgba(245,240,235,0.18); color:#f5f0eb; }
-        .ep-body { padding:1.5rem; display:flex; flex-direction:column; gap:1.1rem; }
-        .ep-field { display:flex; flex-direction:column; gap:0.4rem; }
-        .ep-label { font-size:0.68rem; font-weight:500; letter-spacing:0.1em; text-transform:uppercase; color:#6b7585; }
-        .ep-input { background:#f9f6f2; border:1.5px solid #e2d9d0; border-radius:9px; padding:0.72rem 0.9rem; font-size:0.875rem; font-family:'DM Sans',sans-serif; color:#1e3a8a; outline:none; transition:border-color 0.16s,box-shadow 0.16s; }
-        .ep-input:focus { border-color:#c9a84c; box-shadow:0 0 0 3px rgba(201,168,76,0.1); background:#fff; }
-        .ep-footer { padding:0.75rem 1.5rem 1.5rem; display:flex; align-items:center; justify-content:flex-end; gap:0.65rem; border-top:1px solid #f0ebe4; }
-        .ep-btn-cancel { padding:0.58rem 1.1rem; background:#f9f6f2; border:1.5px solid #e2d9d0; border-radius:9px; font-family:'DM Sans',sans-serif; font-size:0.83rem; font-weight:500; color:#6b7585; cursor:pointer; transition:border-color 0.15s; }
-        .ep-btn-cancel:hover { border-color:#1e40af; color:#1e3a8a; }
-        .ep-btn-save { display:flex; align-items:center; gap:0.4rem; padding:0.58rem 1.2rem; background:#1e3a8a; color:#f5f0eb; border:none; border-radius:9px; font-family:'DM Sans',sans-serif; font-size:0.83rem; font-weight:500; cursor:pointer; transition:background 0.18s,transform 0.13s; box-shadow:0 2px 10px rgba(30,58,138,0.18); }
-        .ep-btn-save:hover:not(:disabled) { background:#1e40af; transform:translateY(-1px); }
-        .ep-btn-save:disabled { opacity:0.55; cursor:not-allowed; transform:none; }
-        .ep-spinner { width:13px; height:13px; border:2px solid rgba(245,240,235,0.3); border-top-color:#f5f0eb; border-radius:50%; animation:spin 0.7s linear infinite; }
-        @keyframes spin { to{transform:rotate(360deg)} }
-
         /* ── Notification Modal ── */
         .notif-overlay { position:fixed; inset:0; background:rgba(30,58,138,0.3); backdrop-filter:blur(3px); z-index:400; display:flex; align-items:flex-start; justify-content:flex-end; padding:4.5rem 1.75rem 1rem; animation:epFadeIn 0.15s ease; }
+        @keyframes epFadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes epSlideUp { from{opacity:0;transform:translateY(16px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
         .notif-panel { background:#fff; border-radius:20px; box-shadow:0 20px 60px rgba(30,58,138,0.18); width:100%; max-width:390px; overflow:hidden; animation:epSlideUp 0.18s ease; }
         @media (max-width:480px) { .notif-overlay { padding:4.5rem 0.75rem 1rem; } .notif-panel { max-width:100%; } }
         .notif-head { padding:1.2rem 1.3rem 0; }
@@ -271,7 +222,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         {/* ── Top bar ── */}
         <header className="cl-topbar">
           <div className="cl-topbar-left">
-            {/* Hamburger — mobile only */}
             <button className="cl-hamburger" onClick={() => setMobileMenuOpen(true)} title="Menu">
               <Menu size={20} color="#fff" />
             </button>
@@ -312,7 +262,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           onClick={(e) => { if (e.target === e.currentTarget) setMobileMenuOpen(false); }}
         >
           <div className="cl-mobile-drawer" style={{ position: "relative" }}>
-            {/* Close button */}
             <button
               className="cl-mobile-drawer-close"
               onClick={() => setMobileMenuOpen(false)}
@@ -320,35 +269,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             >
               <X size={16} />
             </button>
-
             <div className="cl-mobile-nav" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
               <SidebarContent onLinkClick={() => setMobileMenuOpen(false)} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Edit Profile Modal ── */}
-      {editOpen && (
-        <div className="ep-overlay" onClick={e => { if (e.target === e.currentTarget) setEditOpen(false); }}>
-          <div className="ep-modal">
-            <div className="ep-head">
-              <div className="ep-head-left">
-                <div className="ep-head-av">{initials}</div>
-                <div><div className="ep-head-title">Edit Profile</div><div className="ep-head-sub">Update your account details</div></div>
-              </div>
-              <button className="ep-close" onClick={() => setEditOpen(false)}><X size={14} /></button>
-            </div>
-            <div className="ep-body">
-              <div className="ep-field"><label className="ep-label">Full Name</label><input className="ep-input" type="text" value={editName} onChange={e => setEditName(e.target.value)} placeholder="Your full name" /></div>
-              <div className="ep-field"><label className="ep-label">Email Address</label><input className="ep-input" type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="your@email.com" /></div>
-            </div>
-            <div className="ep-footer">
-              <button className="ep-btn-cancel" onClick={() => setEditOpen(false)}>Cancel</button>
-              <button className="ep-btn-save" disabled={editSaving} onClick={saveEdit}>
-                {editSaving ? <span className="ep-spinner" /> : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                {editSaving ? "Saving…" : "Save changes"}
-              </button>
             </div>
           </div>
         </div>
