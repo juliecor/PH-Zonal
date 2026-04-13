@@ -9,15 +9,15 @@ type NavLink = {
   href: string;
   label: string;
   icon: ReactNode;
-  badge?: ReactNode; // optional badge (e.g. token count pill)
+  badge?: ReactNode;
 };
 
 type Props = {
   title?: string;
-  links: NavLink[];
+  links?: NavLink[]; // 👈 make optional
 };
 
-export default function DashboardSidebar({ title, links }: Props) {
+export default function DashboardSidebar({ title, links = [] }: Props) {
   const pathname = usePathname();
 
   return (
@@ -84,11 +84,9 @@ export default function DashboardSidebar({ title, links }: Props) {
         .dsb-link-label { flex: 1; }
 
         .dsb-badge {
-          /* The badge (token pill) sits to the right of the label */
           flex-shrink: 0;
         }
 
-        /* ── Log out button at the bottom ── */
         .dsb-footer {
           padding: 0.75rem;
           border-top: 1px solid #f0ebe4;
@@ -121,7 +119,10 @@ export default function DashboardSidebar({ title, links }: Props) {
 
         <nav className="dsb-nav">
           {links.map(link => {
-            const isActive = pathname === link.href || pathname?.startsWith(link.href + "/");
+            const isActive =
+              pathname === link.href ||
+              pathname?.startsWith(link.href + "/");
+
             return (
               <Link
                 key={link.href}
@@ -140,7 +141,6 @@ export default function DashboardSidebar({ title, links }: Props) {
           })}
         </nav>
 
-        {/* Log out */}
         <div className="dsb-footer">
           <Link href="/logout" className="dsb-logout">
             <LogOut size={16} />
