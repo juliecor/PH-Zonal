@@ -88,7 +88,7 @@ export default function WelcomePage() {
           <Image src="/pictures/FilipinoHomes.png" alt="Filipino Homes" width={220} height={60} priority />
         </div>
         <div className="flex items-center gap-3 text-sm">
-          {isAuthed && (
+          {isAuthed ? (
             <>
               <ProfileAvatar name={name} balance={balance} href={dashHref} />
               {isAdmin && (
@@ -97,6 +97,8 @@ export default function WelcomePage() {
                 </Link>
               )}
             </>
+          ) : (
+            <Link href="/login" className="rounded-full bg-white/90 border border-gray-200 px-4 py-1.5 shadow-sm hover:bg-white text-sm font-semibold text-blue-700">Login</Link>
           )}
         </div>
       </header>
