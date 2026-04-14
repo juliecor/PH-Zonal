@@ -72,7 +72,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           <DashboardSidebar
             title=""
             links={[
-              { href: "/dashboard/reports", label: "Home", icon: <Home size={16} /> },
+              { href: "/dashboard/reports", label: "Reports", icon: <Home size={16} /> },
               {
                 href: "/dashboard/request",
                 label: "Request Tokens",
