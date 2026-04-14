@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export type SidebarLink = { href: string; label: string; disabled?: boolean; icon?: React.ReactNode; badge?: React.ReactNode };
+export type SidebarLink = {
+  href: string;
+  label: string;
+  disabled?: boolean;
+  icon?: React.ReactNode;
+  badge?: React.ReactNode;
+  title?: string;
+  onClick?: (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => void;
+};
 
 export default function DashboardSidebar({ title, links }: { title: string; links: SidebarLink[] }) {
   const pathname = usePathname();
@@ -101,6 +109,8 @@ export default function DashboardSidebar({ title, links }: { title: string; link
               <Link
                 key={l.href}
                 href={l.href}
+                onClick={l.onClick}
+                title={l.title}
                 className={`dsb-link${active ? " active" : ""}${l.disabled ? " disabled" : ""}`}
               >
                 <span className={`dsb-icon ${active ? "active" : "inactive"}`}>

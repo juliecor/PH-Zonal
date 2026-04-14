@@ -83,7 +83,25 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   </span>
                 ),
               },
-              { href: "/", label: "Zonal Value Finder", icon: <Search size={16} /> },
+              {
+                href: "/",
+                label: "Zonal Value Finder",
+                icon: <Search size={16} />,
+                title: tokenBalance === 0 ? "You have 0 tokens — request more to use the finder" : undefined,
+                onClick: (e) => {
+                  if (tokenBalance === 0) {
+                    e.preventDefault();
+                    try {
+                      toast.error("Your token balance is 0. Request tokens to continue.", {
+                        action: {
+                          label: "Request Tokens",
+                          onClick: () => { window.location.href = "/dashboard/request"; },
+                        },
+                      });
+                    } catch {}
+                  }
+                },
+              },
             ]}
           />
         </div>
