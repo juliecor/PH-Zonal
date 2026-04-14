@@ -26,6 +26,7 @@ import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "./lib
 import { normalizePH, suggestBusinesses } from "./lib/zonal-util";
 import ReportBuilder from "./components/ReportBuilder";
 import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
+import { apiMe } from "./lib/authClient";
 
 // ─── Golden house icon (cobalt bg + gold house) ───────────────────────────────
 function ZonalHouseIcon({ size = 30, onClick }: { size?: number; onClick?: () => void }) {
@@ -180,6 +181,24 @@ export function Home() {
   const [rightOpen, setRightOpen] = useState(false);
   const [autoPreview, setAutoPreview] = useState(false);
   const [showRegionPicker, setShowRegionPicker] = useState(true);
+
+  // Token balance (for header badge)
+  const [userBalance, setUserBalance] = useState<number | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    async function refreshBalance() {
+      try {
+        const me = await apiMe();
+        if (!mounted) return;
+        setUserBalance(typeof me?.token_balance === "number" ? me!.token_balance : null);
+        setUserRole(me?.role || null);
+      } catch {}
+    }
+    refreshBalance();
+    const id = setInterval(refreshBalance, 10000);
+    return () => { mounted = false; clearInterval(id); };
+  }, []);
 
   function normalizeCityHint(city: string, province?: string) {
     const c = String(city || "").toUpperCase().trim();
@@ -555,16 +574,7 @@ export function Home() {
         <MapComponent selected={selectedLocation} onPickOnMap={selectLocationFromMap} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} />
       </div>
 
-      {/* Brand pill */}
-      <div className="absolute top-4 left-16 sm:left-1/3 z-30">
-        <Link href="/welcome" title="Go to Home" className="rounded-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-lg px-3 py-2 flex items-center gap-3 hover:shadow-xl transition cursor-pointer">
-          <Image src="/pictures/FilipinoHomes.png" alt="Filipino Homes" width={160} height={36} className="h-8 sm:h-10 w-auto" priority />
-          <div className="hidden md:block text-xs text-gray-500 border-l pl-3">
-            <div className="font-semibold text-gray-700 leading-tight">Zonal Value</div>
-            <div className="leading-tight">{domain}</div>
-          </div>
-        </Link>
-      </div>
+      {/* Brand pill removed per request */}
 
       {/* Map type controls */}
       <div className="absolute top-4 right-4 z-30">
@@ -590,6 +600,18 @@ export function Home() {
             <div className="flex items-center gap-2.5 mb-3">
               <ZonalHouseIcon size={32} onClick={()=>router.push("/dashboard/reports")} />
               <h2 className="text-sm font-bold text-[#f5f0eb]">Property Search</h2>
+              <div className="ml-auto flex items-center gap-2">
+                {userRole !== 'admin' && userBalance !== null && (
+                  <Link
+                    href="/dashboard/request"
+                    className="rounded-xl px-2.5 py-1 text-[11px] font-bold"
+                    style={{ background: "#f5f0eb", color: "#1e3a8a" }}
+                    title="Tokens available"
+                  >
+                    Tokens: {userBalance}
+                  </Link>
+                )}
+              </div>
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" size={15} style={{color:"#c9a84c"}} />
