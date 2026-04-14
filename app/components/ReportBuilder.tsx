@@ -6,7 +6,7 @@ import type { LatLng, PoiData, PoiItem, Row } from "../lib/types";
 import PdfPreviewModal from "./PdfPreviewModal";
 import PoiLoadingSpinner from "./PoiLoadingSpinner";
 import { waitForZonalMapIdle } from "../lib/zonal-util";
-import { apiCreateReport } from "../lib/authClient";
+import { apiCreateReport, apiMe } from "../lib/authClient";
 
 function toTitleSafe(s: string) {
   return String(s ?? "").trim();
@@ -140,6 +140,21 @@ export default function ReportBuilder(props: {
   const [expandedAnalysis, setExpandedAnalysis] = useState(true);
   const [expandedBusinessUses, setExpandedBusinessUses] = useState(true);
   const [newBusinessUse, setNewBusinessUse] = useState("");
+
+  // Current user info for attribution in the PDF
+  const [creator, setCreator] = useState<{
+    name?: string | null;
+    first_name?: string | null;
+    middle_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try { const me = await apiMe(); setCreator(me as any); } catch {}
+    })();
+  }, []);
 
   // ── distance helpers ────────────────────────────────────────────────────
   function distMeters(aLat?: number, aLon?: number, bLat?: number, bLon?: number) {
@@ -375,6 +390,27 @@ export default function ReportBuilder(props: {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(11);
     pdf.text("CEO / Founder of Filipino Homes", sigX, sigBaseY + 24);
+
+    // Prepared by (creator) signature-styled block on the left side
+    const fullName = (creator?.name && String(creator.name).trim())
+      || [creator?.first_name, creator?.middle_name, creator?.last_name].filter(Boolean).join(" ")
+      || "—";
+    const userSigX = margin;
+    pdf.setDrawColor(60);
+    pdf.setLineWidth(1);
+    pdf.line(userSigX, sigBaseY, userSigX + 220, sigBaseY);
+    if (hasHurricane) {
+      pdf.setFont("Hurricane", "normal");
+      pdf.setFontSize(26);
+      pdf.text(String(fullName), userSigX, sigBaseY - 8);
+    } else {
+      pdf.setFont("times", "italic");
+      pdf.setFontSize(18);
+      pdf.text(String(fullName), userSigX, sigBaseY - 10);
+    }
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(11);
+    pdf.text("Prepared by", userSigX, sigBaseY + 24);
 
     const disclaimerText =
       "The Zonal Value information provided in this report is intended for informational purposes only. It is not an official appraisal report. The values presented are based on our data-driven analysis of Filipino homes and should not be used as the sole basis for property valuation, legal, or financial decisions. For official appraisal, please consult a licensed appraiser or the appropriate government authority (e.g., BIR).";
