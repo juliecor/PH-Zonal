@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { apiLogin, setToken } from "../lib/authClient";
+import { apiLogin, setToken, setCachedUser } from "../lib/authClient";
 
 // MUI imports
 import Box from "@mui/material/Box";
@@ -61,9 +61,11 @@ export default function LoginPage() {
     setErr("");
     setLoading(true);
     try {
-      const { token } = await apiLogin({ email, password });
+      const { token, user } = await apiLogin({ email, password });
       setToken(token);
-      router.replace("/welcome");
+      try { setCachedUser(user); } catch {}
+      const role = String(user?.role || "").toLowerCase();
+      router.replace(role === "admin" ? "/admin" : "/dashboard");
     } catch (e: any) {
       setErr(e?.message || "Login failed");
     } finally {

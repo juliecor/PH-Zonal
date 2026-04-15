@@ -1,14 +1,63 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiMe } from "../../lib/authClient";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { apiGetProfile, apiMe, apiUpdateProfile, apiUploadAvatar } from "../../lib/authClient";
 
 export default function AdminProfilePage() {
   const [me, setMe] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string>("");
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
 
   useEffect(() => {
-    apiMe().then(setMe).catch(() => setMe(null));
+    (async () => {
+      try { const u = await apiGetProfile(); setMe(u); }
+      catch { try { const u = await apiMe(); setMe(u); } catch {} }
+    })();
   }, []);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!me) return;
+    setSaving(true); setErr("");
+    try {
+      const payload: any = {
+        first_name: me.first_name ?? "",
+        middle_name: me.middle_name ?? "",
+        last_name: me.last_name ?? "",
+        phone: me.phone ?? "",
+        address: me.address ?? "",
+        company: me.company ?? "",
+        bio: me.bio ?? "",
+      };
+      const updated = await apiUpdateProfile(payload);
+      setMe(updated);
+      try { toast.success("Profile saved"); } catch {}
+    } catch (e: any) {
+      setErr(e?.message || "Update failed");
+      try { toast.error(e?.message || "Update failed"); } catch {}
+    } finally { setSaving(false); }
+  }
+
+  async function onPickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setPreviewUrl(URL.createObjectURL(f));
+    try { const j = await apiUploadAvatar(f); setMe(j.user); setPreviewUrl(""); try { toast.success("Profile photo updated"); } catch {} }
+    catch (e: any) { setErr(e?.message || "Upload failed"); try { toast.error(e?.message || "Upload failed"); } catch {} }
+  }
+
+  function avatarUrl() {
+    if (previewUrl) return previewUrl;
+    if (me?.avatar_path) {
+      const p = String(me.avatar_path);
+      if (p.startsWith("http")) return p;
+      return `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000"}/storage/${p.replace(/^storage\//,'')}`;
+    }
+    return "";
+  }
 
   return (
     <>
@@ -171,6 +220,16 @@ export default function AdminProfilePage() {
           border-radius: 6px;
         }
         @keyframes shimmer { to { background-position: -200% 0; } }
+
+        /* ── Form inputs (editable) ── */
+        .pf-form grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+        .pf-label { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#6b7280; margin-bottom:6px; }
+        .pf-input { width:100%; background:#fff; border:1px solid #e5e7eb; color:#0f1f38; border-radius:10px; padding:0.6rem 0.7rem; outline:none; transition:border-color .15s, box-shadow .15s; }
+        .pf-input::placeholder { color:#9aa3b0; }
+        .pf-input:focus { border-color:#1e3a8a; box-shadow:0 0 0 3px rgba(30,58,138,0.12); }
+        .pf-actions { display:flex; gap:10px; margin-top:14px; }
+        .pf-btn { border-radius:10px; padding:0.5rem 0.8rem; font-weight:700; cursor:pointer; }
+        .pf-btn-primary { background:#c9a84c; color:#0f1f38; border:1px solid #c9a84c; }
       `}</style>
 
       <div className="profile-wrap">
@@ -180,14 +239,19 @@ export default function AdminProfilePage() {
             <>
               {/* Header */}
               <div className="profile-header">
-                <div className="profile-avatar">
-                  <span className="profile-avatar-initials">
-                    {(me.name ?? me.email ?? "?")
-                      .split(" ")
-                      .slice(0, 2)
-                      .map((w: string) => w[0])
-                      .join("")}
-                  </span>
+                <div className="profile-avatar" style={{ overflow: 'hidden' }}>
+                  {avatarUrl() ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatarUrl()} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span className="profile-avatar-initials">
+                      {(me.name ?? me.email ?? "?")
+                        .split(" ")
+                        .slice(0, 2)
+                        .map((w: string) => w[0])
+                        .join("")}
+                    </span>
+                  )}
                 </div>
                 <div className="profile-header-text">
                   <div className="profile-header-name">{me.name ?? "—"}</div>
@@ -198,23 +262,18 @@ export default function AdminProfilePage() {
                     </div>
                   )}
                 </div>
+                <div style={{ marginLeft: 'auto', zIndex: 1 }}>
+                  <button type="button" onClick={() => fileRef.current?.click()} style={{ background: '#f5f0eb', color: '#0f1f38', border: '1px solid rgba(201,168,76,0.5)', padding: '0.4rem 0.7rem', borderRadius: 8, fontWeight: 600 }}>Change Photo</button>
+                  <input ref={fileRef} type="file" accept="image/*" onChange={onPickAvatar} style={{ display: 'none' }} />
+                </div>
               </div>
 
               {/* Body */}
-              <div className="profile-body">
+              <form className="profile-body" onSubmit={onSubmit}>
                 <div className="profile-section-label">Account details</div>
                 <div className="profile-grid">
 
-                  {me.name && (
-                    <div className="profile-field">
-                      <div className="profile-field-label">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        Full name
-                      </div>
-                      <div className="profile-field-value">{me.name}</div>
-                    </div>
-                  )}
-
+                  {/* Email (read-only) */}
                   {me.email && (
                     <div className="profile-field">
                       <div className="profile-field-label">
@@ -225,28 +284,32 @@ export default function AdminProfilePage() {
                     </div>
                   )}
 
-                  {me.role && (
-                    <div className="profile-field">
-                      <div className="profile-field-label">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a5 5 0 1 0 0 10A5 5 0 0 0 12 2zM4 20c0-2.67 2.67-4 8-4s8 1.33 8 4"/></svg>
-                        Role
-                      </div>
-                      <div className="profile-field-value">{me.role}</div>
+                  {/* Editable fields */}
+                  {[
+                    { key: 'first_name', label: 'First name' },
+                    { key: 'middle_name', label: 'Middle name' },
+                    { key: 'last_name', label: 'Last name' },
+                    { key: 'phone', label: 'Phone' },
+                    { key: 'company', label: 'Company' },
+                    { key: 'address', label: 'Address' },
+                  ].map((f: any) => (
+                    <div className="profile-field" key={f.key}>
+                      <div className="profile-field-label">{f.label}</div>
+                      <input className="pf-input" value={me?.[f.key] ?? ''} onChange={(e) => setMe({ ...me, [f.key]: e.target.value })} />
                     </div>
-                  )}
+                  ))}
 
-                  {me.phone && (
-                    <div className="profile-field">
-                      <div className="profile-field-label">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.54 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l1.28-1.28a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                        Phone
-                      </div>
-                      <div className="profile-field-value">{me.phone}</div>
-                    </div>
-                  )}
-
+                  {/* Bio */}
+                  <div className="profile-field" style={{ gridColumn: '1 / -1' }}>
+                    <div className="profile-field-label">Bio</div>
+                    <textarea className="pf-input" value={me?.bio ?? ''} onChange={(e) => setMe({ ...me, bio: e.target.value })} rows={4} style={{ resize: 'vertical' }} />
+                  </div>
                 </div>
-              </div>
+                {err && <div style={{ color: '#b91c1c', marginTop: 10 }}>{err}</div>}
+                <div className="pf-actions">
+                  <button disabled={saving} type="submit" className="pf-btn pf-btn-primary">{saving ? 'Saving…' : 'Save Changes'}</button>
+                </div>
+              </form>
             </>
           ) : (
             /* Skeleton */

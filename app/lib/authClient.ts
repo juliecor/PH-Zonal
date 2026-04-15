@@ -128,6 +128,14 @@ export async function apiMe(): Promise<{
   email: string;
   role?: string;
   token_balance?: number;
+  first_name?: string;
+  middle_name?: string;
+  last_name?: string;
+  phone?: string;
+  address?: string;
+  company?: string;
+  bio?: string;
+  avatar_path?: string;
 } | null> {
   const token = getToken();
   if (!token) return null;
@@ -179,6 +187,98 @@ export async function apiCreateTokenRequest(payload: {
     throw new Error(t || `Request failed (${res.status})`);
   }
 
+  return await res.json();
+}
+
+// --- Concerns (client) ---
+export async function apiCreateConcern(payload: {
+  category?: string;
+  subject: string;
+  message: string;
+  attachmentFile?: File | null;
+}) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  const hasFile = Boolean(payload.attachmentFile);
+  let res: Response;
+  if (hasFile) {
+    const fd = new FormData();
+    if (payload.category) fd.append("category", payload.category);
+    fd.append("subject", payload.subject);
+    fd.append("message", payload.message);
+    if (payload.attachmentFile) fd.append("attachment", payload.attachmentFile);
+    res = await fetch(`${backendBase}/api/concerns`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    });
+  } else {
+    res = await fetch(`${backendBase}/api/concerns`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ category: payload.category, subject: payload.subject, message: payload.message }),
+    });
+  }
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `Submit failed (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function apiMyConcerns(params?: { page?: number }) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  const qs = params?.page ? `?page=${params.page}` : "";
+  const res = await fetch(`${backendBase}/api/concerns/mine${qs}`, {
+    headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+  return await res.json();
+}
+
+// --- Concerns (admin) ---
+export async function apiAdminListConcerns(status?: string, page?: number) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  const qs = new URLSearchParams(
+    Object.fromEntries(
+      Object.entries({ status, page }).filter(([, v]) => v != null && v !== "") as any
+    )
+  ).toString();
+  const res = await fetch(`${backendBase}/api/admin/concerns${qs ? `?${qs}` : ""}`, {
+    headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+  return await res.json();
+}
+
+export async function apiAdminResolveConcern(id: number, resolutionFile?: File | null, note?: string) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  let res: Response;
+  if (resolutionFile) {
+    const fd = new FormData();
+    fd.append("resolution", resolutionFile);
+    if (note) fd.append("note", note);
+    res = await fetch(`${backendBase}/api/admin/concerns/${id}/resolve`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    });
+  } else {
+    res = await fetch(`${backendBase}/api/admin/concerns/${id}/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ note: note || "" }),
+    });
+  }
+  if (!res.ok) throw new Error(`Resolve failed (${res.status})`);
   return await res.json();
 }
 
@@ -302,4 +402,69 @@ export async function apiMyReports(params?: {
   if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
 
   return await res.json();
+}
+
+// --- Profile (client & admin) ---
+export function setCachedUser(user: any) {
+  try { localStorage.setItem(USER_KEY, JSON.stringify(user)); } catch {}
+}
+
+export async function apiGetProfile() {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  const res = await fetch(`${backendBase}/api/profile`, {
+    headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+  return await res.json();
+}
+
+export async function apiUpdateProfile(payload: Partial<{
+  first_name: string;
+  middle_name: string;
+  last_name: string;
+  phone: string;
+  address: string;
+  company: string;
+  bio: string;
+  name: string;
+}>) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  const res = await fetch(`${backendBase}/api/profile`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `Update failed (${res.status})`);
+  }
+  const j = await res.json();
+  setCachedUser(j);
+  return j;
+}
+
+export async function apiUploadAvatar(file: File) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+  const fd = new FormData();
+  fd.append("avatar", file);
+  const res = await fetch(`${backendBase}/api/profile/avatar`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `Upload failed (${res.status})`);
+  }
+  const j = await res.json();
+  setCachedUser(j.user);
+  return j;
 }

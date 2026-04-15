@@ -16,10 +16,10 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/pictures") ||
     pathname.startsWith("/fonts")
   ) {
-    // If user is already logged in and hits /login or /register, send to /welcome
+    // If user is already logged in and hits /login or /register, send to /dashboard
     if (token && (pathname === "/login" || pathname === "/register")) {
       const url = req.nextUrl.clone();
-      url.pathname = "/welcome";
+      url.pathname = "/dashboard";
       return NextResponse.redirect(url);
     }
     return NextResponse.next();

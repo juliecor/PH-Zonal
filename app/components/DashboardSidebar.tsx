@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { apiMe } from "../lib/authClient";
 
 export type SidebarLink = {
   href: string;
@@ -15,6 +17,20 @@ export type SidebarLink = {
 
 export default function DashboardSidebar({ title, links }: { title: string; links: SidebarLink[] }) {
   const pathname = usePathname();
+  const [me, setMe] = useState<any>(null);
+
+  useEffect(() => {
+    (async () => { try { const u = await apiMe(); setMe(u); } catch {} })();
+  }, []);
+
+  const avatarUrl = useMemo(() => {
+    if (me?.avatar_path) {
+      const p = String(me.avatar_path);
+      if (p.startsWith("http")) return p;
+      return `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000"}/storage/${p.replace(/^storage\//,'')}`;
+    }
+    return "";
+  }, [me]);
 
   return (
     <>
@@ -30,18 +46,17 @@ export default function DashboardSidebar({ title, links }: { title: string; link
           overflow: hidden;
         }
 
-        .dsb-header {
+        .dsb-user {
           flex-shrink: 0;
-          padding: 1.2rem 1.25rem 0.9rem;
-          border-bottom: 1px solid #f0ebe4;
+          padding: 1.1rem 1rem 1rem;
+          background: linear-gradient(160deg, #0f1f38 0%, #1e3a8a 80%);
+          border-bottom: 1px solid #0b1628;
+          display: flex; flex-direction: column; align-items: center; gap: 10px;
         }
-        .dsb-title {
-          font-size: 0.65rem;
-          font-weight: 500;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: #c9a84c;
-        }
+        .dsb-avatar { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; position: relative; box-shadow: 0 2px 10px rgba(0,0,0,0.25); }
+        .dsb-avatar::after { content:""; position:absolute; inset:-3px; border-radius:50%; border:3px solid #c9a84c; pointer-events:none; }
+        .dsb-name { font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#f5f0eb; font-size:15px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .dsb-email { color:rgba(245,240,235,0.85); font-size:12px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
         .dsb-nav {
           flex: 1;
@@ -94,12 +109,15 @@ export default function DashboardSidebar({ title, links }: { title: string; link
       `}</style>
 
       <div className="dsb-root">
-        {/* Header */}
-        {title ? (
-          <div className="dsb-header">
-            <div className="dsb-title">{title}</div>
+        {/* User block (replaces plain title) */}
+        <div className="dsb-user">
+          <div className="dsb-avatar" aria-hidden>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={avatarUrl || "/pictures/default-avatar.png"} alt="avatar" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} />
           </div>
-        ) : null}
+          <div className="dsb-name">{me?.name || 'Welcome'}</div>
+          <div className="dsb-email">{me?.email || ''}</div>
+        </div>
 
         {/* Nav links */}
         <nav className="dsb-nav">

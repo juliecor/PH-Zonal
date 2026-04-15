@@ -63,6 +63,22 @@ function getPriceTier(p: number) {
 export function Home() {
   const router = useRouter();
 
+  const [me, setMe] = useState<any>(null);
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const u = await apiMe();
+        setMe(u);
+        if (u && typeof u.token_balance !== "undefined") {
+          const b = Number(u.token_balance);
+          setTokenBalance(Number.isFinite(b) ? b : 0);
+        }
+      } catch {}
+    })();
+  }, []);
+
   const [emailOpen, setEmailOpen] = useState(false);
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [regionSearch, setRegionSearch] = useState("");
@@ -547,6 +563,7 @@ export function Home() {
   const showingTo     = totalRows ? Math.min(page*itemsPerPage,totalRows) : rows.length;
   const selectedTitle = selectedRow ? `${String(selectedRow["Barangay-"]??"")}, ${String(selectedRow["City-"]??"")}, ${String(selectedRow["Province-"]??"")}` : geoLabel||"Select a property";
   const isDev = process.env.NODE_ENV==="development";
+  const isAdmin = String(me?.role || "").toLowerCase() === "admin";
 
   return (
     <main className="h-screen w-screen overflow-hidden bg-slate-100 text-gray-900">
@@ -557,15 +574,7 @@ export function Home() {
       </div>
 
       {/* Brand pill */}
-      <div className="absolute top-4 left-16 sm:left-1/3 z-30">
-        <Link href="/welcome" title="Go to Home" className="rounded-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-lg px-3 py-2 flex items-center gap-3 hover:shadow-xl transition cursor-pointer">
-          <Image src="/pictures/FilipinoHomes.png" alt="Filipino Homes" width={160} height={36} className="h-8 sm:h-10 w-auto" priority />
-          <div className="hidden md:block text-xs text-gray-500 border-l pl-3">
-            <div className="font-semibold text-gray-700 leading-tight">Zonal Value</div>
-            <div className="leading-tight">{domain}</div>
-          </div>
-        </Link>
-      </div>
+      {/* Removed top-left partner header card for a cleaner view */}
 
       {/* Map type controls */}
       <div className="absolute top-4 right-4 z-30">
@@ -588,21 +597,42 @@ export function Home() {
 
           {/* Navy header */}
           <div className="px-4 pt-4 pb-3 shrink-0" style={{ background: "#1e3a8a" }}>
-            <div className="flex items-center gap-2.5 mb-3">
+            <div className="flex items-center justify-between gap-2.5 mb-3">
+              <div className="flex items-center gap-2.5">
               <ZonalHouseIcon
                 size={32}
                 onClick={async () => {
                   try {
                     const me = await apiMe();
                     if (me?.role === "admin") router.push("/admin");
-                    else if (me) router.push("/dashboard/reports");
+                    else if (me) router.push("/dashboard");
                     else router.push("/login");
                   } catch {
-                    router.push("/dashboard/reports");
+                    router.push("/dashboard");
                   }
                 }}
               />
-              <h2 className="text-sm font-bold text-[#f5f0eb]">Property Search</h2>
+              <button
+                onClick={()=>{ const r=String(me?.role||'').toLowerCase(); router.push(r==='admin'? '/admin' : '/dashboard'); }}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold border border-[#e8e0d8] bg-white text-[#1e3a8a] hover:bg-[#fff8e6]"
+                title="Back to Dashboard"
+              >
+                <ChevronLeft size={12} /> Back to Dashboard
+              </button>
+              </div>
+              {/* Token pill + request (hidden for admin) */}
+              {!isAdmin && (
+              <div className="hidden sm:flex items-center gap-2">
+                <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{ color: "#0f1f38", background: "#f5f0eb" }} title="Zonal tokens available">
+                  Tokens: {tokenBalance === null ? "—" : tokenBalance}
+                </span>
+                {tokenBalance === 0 && (
+                  <button onClick={()=>router.push('/dashboard/request')} className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-[#e8e0d8] bg-white text-[#1e3a8a] hover:bg-[#fff8e6]">
+                    Request Tokens
+                  </button>
+                )}
+              </div>
+              )}
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" size={15} style={{color:"#c9a84c"}} />
@@ -610,6 +640,19 @@ export function Home() {
               {searchLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin"><div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full" /></div>}
               {regionSearch&&!searchLoading&&<button onClick={()=>setRegionSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition"><X size={15} /></button>}
             </div>
+            {/* Mobile tokens bar (clear and visible) — hidden for admin */}
+            {!isAdmin && (
+            <div className="mt-2 flex items-center justify-between sm:hidden">
+              <span className="text-[11px] font-extrabold px-2 py-1 rounded-lg border border-[#e8e0d8] bg-white text-[#1e3a8a]" title="Zonal tokens available">
+                Tokens: {tokenBalance === null ? "—" : tokenBalance}
+              </span>
+              {tokenBalance === 0 && (
+                <button onClick={()=>router.push('/dashboard/request')} className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-[#e8e0d8] bg-white text-[#1e3a8a] hover:bg-[#fff8e6]">
+                  Request Tokens
+                </button>
+              )}
+            </div>
+            )}
             <div className="mt-2.5 flex items-center gap-2">
               <button onClick={()=>setShowFilters(v=>!v)} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition" style={showFilters?{background:"#f5f0eb",color:"#1e3a8a"}:{background:"rgba(255,255,255,0.10)",color:"#f5f0eb"}}>
                 <SlidersHorizontal size={13} />Filters

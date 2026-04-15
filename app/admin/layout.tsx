@@ -2,7 +2,7 @@
 
 import DashboardSidebar from "../components/DashboardSidebar";
 import LowBalanceNotice from "../components/LowBalanceNotice";
-import { User, Users, ClipboardCheck, FileText, Home, LogOut, Menu, X } from "lucide-react";
+import { User, Users, ClipboardCheck, FileText, Home, LogOut, Menu, X, AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiLogout, apiMe } from "../lib/authClient";
 import { useEffect, useState } from "react";
@@ -206,6 +206,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   { href: "/admin/users",      label: "Users",    icon: <Users size={16} /> },
                   { href: "/admin/requests",   label: "Requests", icon: <ClipboardCheck size={16} /> },
                   { href: "/admin/reports",    label: "Reports",  icon: <FileText size={16} /> },
+                  { href: "/admin/concerns",   label: "Concerns", icon: <AlertTriangle size={16} /> },
                 ]}
               />
               <div className="sb-logout-row">
@@ -242,6 +243,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     { href: "/admin/users",      label: "Users",    icon: <Users size={16} /> },
                     { href: "/admin/requests",   label: "Requests", icon: <ClipboardCheck size={16} /> },
                     { href: "/admin/reports",    label: "Reports",  icon: <FileText size={16} /> },
+                    { href: "/admin/concerns",   label: "Concerns", icon: <AlertTriangle size={16} /> },
                   ]}
                 />
                 <div className="sb-logout-row">

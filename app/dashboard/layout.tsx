@@ -2,7 +2,7 @@
 
 import DashboardSidebar from "../components/DashboardSidebar";
 import LowBalanceNotice from "../components/LowBalanceNotice";
-import { User, Coins, Home, Bell, X, Search, LogOut, Menu } from "lucide-react";
+import { User, Coins, Home, Bell, X, Search, LogOut, Menu, AlertTriangle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { apiMe, getCachedUser, getToken, apiLogout } from "../lib/authClient";
@@ -57,22 +57,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
     return (
       <>
-        {/* Profile section — display only, no edit */}
-        <div className="sb-profile-section">
-          <div className="sb-profile-av-btn">
-            {initials !== "?" ? initials : <User size={20} color="#c9a84c" />}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div className="sb-profile-name">{userName || (me?.email ?? "—")}</div>
-            <div className="sb-profile-role">{me?.role ?? "Client"}</div>
-          </div>
-        </div>
-
         <div onClick={onLinkClick}>
           <DashboardSidebar
             title=""
             links={[
+              { href: "/dashboard/profile", label: "Profile", icon: <User size={16} /> },
               { href: "/dashboard/reports", label: "Reports", icon: <Home size={16} /> },
+              { href: "/dashboard/concerns", label: "Report a Concern", icon: <AlertTriangle size={16} /> },
               {
                 href: "/dashboard/request",
                 label: "Request Tokens",
@@ -83,27 +74,29 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   </span>
                 ),
               },
-              {
-                href: "/",
-                label: "Zonal Value Finder",
-                icon: <Search size={16} />,
-                title: tokenBalance === 0 ? "You have 0 tokens — request more to use the finder" : undefined,
-                onClick: (e) => {
-                  if (tokenBalance === 0) {
-                    e.preventDefault();
-                    try {
-                      toast.error("Your token balance is 0. Request tokens to continue.", {
-                        action: {
-                          label: "Request Tokens",
-                          onClick: () => { window.location.href = "/dashboard/request"; },
-                        },
-                      });
-                    } catch {}
-                  }
-                },
-              },
             ]}
           />
+        </div>
+
+        {/* Search Zonal button */}
+        <div className="sb-search-row">
+          <button
+            className="sb-search-btn"
+            onClick={() => {
+              if (tokenBalance === 0) {
+                try {
+                  toast.error("Your token balance is 0. Request tokens to continue.", {
+                    action: { label: "Request Tokens", onClick: () => { window.location.href = "/dashboard/request"; } },
+                  });
+                } catch {}
+                return;
+              }
+              window.location.href = "/";
+            }}
+          >
+            <Search size={16} />
+            <span>Search Zonal</span>
+          </button>
         </div>
 
         {/* Log out row */}
@@ -190,6 +183,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         .sb-logout-row { padding:0.75rem 1rem; border-top:1px solid #f0ebe4; margin-top:auto; flex-shrink:0; }
         .sb-logout-btn { width:100%; display:flex; align-items:center; gap:0.65rem; padding:0.65rem 1rem; border-radius:10px; background:transparent; border:1.5px solid #e2d9d0; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:0.83rem; font-weight:500; color:#6b7585; transition:border-color 0.15s,background 0.15s,color 0.15s; }
         .sb-logout-btn:hover { border-color:#1e40af; background:#dbeafe; color:#1e3a8a; }
+
+        /* ── Search Zonal button (light tone) ── */
+        .sb-search-row { padding:0.75rem 1rem 0; }
+        .sb-search-btn { width:100%; display:flex; align-items:center; gap:0.55rem; padding:0.6rem 0.9rem; border-radius:10px; border:1.5px solid #e8e0d8; background:#ffffff; color:#0f1f38; font-weight:700; cursor:pointer; }
+        .sb-search-btn:hover { background:#fff8e6; border-color:#e6d7b0; }
 
         /* ── Main content ── */
         .cl-main { height:100%; overflow-y:auto; padding:2rem 1.5rem 2rem 0.75rem; box-sizing:border-box; display:flex; flex-direction:column; gap:1.25rem; min-width:0; }
