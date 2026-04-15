@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { Compass, ShieldCheck, TrendingUp, Zap } from "lucide-react";
+import { Compass, ShieldCheck, TrendingUp, Zap, ArrowRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiMe, getToken } from "../lib/authClient";
 import LowBalanceNotice from "../components/LowBalanceNotice";
@@ -11,174 +11,132 @@ import LowBalanceNotice from "../components/LowBalanceNotice";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
+import Chip from "@mui/material/Chip";
 
-const sansFont = "'DM Sans', sans-serif";
-const NAVY = "#1a2744";
-const GOLD = "#c9a84c";
+const FONT_TITLE = "'Urbanist', sans-serif";
+const FONT_TEXT = "'Outfit', sans-serif";
 
-// ══════════════════════════════════
-// Profile Avatar
-// ══════════════════════════════════
-function ProfileAvatar({
-  name,
-  balance,
-  href,
-}: {
-  name: string;
-  balance: number | null;
-  href: string;
-}) {
-  const initials =
-    name
-      .split(" ")
-      .slice(0, 2)
-      .map((w) => w[0] ?? "")
-      .join("")
-      .toUpperCase() || "?";
+const C = {
+  blue: "#4cc9f0",
+  blueDeep: "#4361ee",
+  glass: "rgba(255, 255, 255, 0.03)",
+  glassBorder: "rgba(255, 255, 255, 0.12)",
+  textMain: "#ffffff",
+  textMuted: "rgba(255, 255, 255, 0.6)",
+  bgDark: "#050b14",
+};
 
+const STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@700;800;900&family=Outfit:wght@300;400;500;600&display=swap');
+
+  @keyframes shimmer-glow {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 10px currentColor; }
+    50% { box-shadow: 0 0 25px currentColor, 0 0 40px currentColor; }
+  }
+  @keyframes card-glow {
+    0%, 100% { box-shadow: 0 0 15px var(--card-color); }
+    50% { box-shadow: 0 0 25px var(--card-color), 0 0 40px var(--card-color); }
+  }
+`;
+
+
+function StatBox({ value, label }: { value: string; label: string }) {
   return (
-    <Link href={href} title="Go to Dashboard" style={{ textDecoration: "none" }}>
-      <Box
-        sx={{
-          width: 52,
-          height: 52,
-          borderRadius: "14px",
-          background: "linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)",
-          border: "2px solid rgba(201,168,76,0.55)",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          position: "relative",
-          cursor: "pointer",
-        }}
-      >
-        <Typography sx={{ color: GOLD, fontWeight: 700 }}>{initials}</Typography>
-        <Box
-          component="span"
-          sx={{
-            position: "absolute",
-            bottom: -6,
-            right: -8,
-            background: GOLD,
-            fontSize: "0.65rem",
-            px: "4px",
-            borderRadius: "10px",
-            color: "#1e3a8a",
-            fontWeight: 700,
-            lineHeight: "18px",
-          }}
-        >
-          {balance ?? 0}
-        </Box>
-      </Box>
-    </Link>
+    <Box sx={{
+      px: 2.5, py: 1.2, borderRadius: "14px",
+      background: "rgba(255,255,255,0.07)",
+      border: `1px solid ${C.glassBorder}`,
+      backdropFilter: "blur(10px)",
+      minWidth: "95px",
+      cursor: "default",
+      transition: "all 0.3s ease",
+      "&:hover": {
+        background: "rgba(255,255,255,0.1)",
+        transform: "translateY(-2px)",
+        boxShadow: "0 8px 25px rgba(76, 201, 240, 0.2)",
+        borderColor: C.blue,
+      }
+    }}>
+      <Typography sx={{
+        fontFamily: FONT_TITLE, fontWeight: 800, fontSize: "1.7rem", color: "#fff",
+        textShadow: "0 2px 15px rgba(0,0,0,0.4)",
+        transition: "all 0.3s ease",
+      }}>{value}</Typography>
+      <Typography sx={{
+        fontFamily: FONT_TEXT, fontSize: "1rem",  color: "rgba(255,255,255,0.8)",
+        textTransform: "unset", letterSpacing: "0.6px",
+        textShadow: "0 1px 5px rgba(0,0,0,0.3)",
+      }}>{label}</Typography>
+    </Box>
   );
 }
 
-// ══════════════════════════════════
-// Feature card
-// ══════════════════════════════════
-function FeatureCard({
-  icon,
-  title,
-  desc,
-  gradient,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-  gradient: string;
-}) {
+function FeatureGlassCard({ icon, title, desc, delay, color }: { icon: React.ReactNode; title: string; desc: string; delay: string; color: string }) {
   return (
-    <Box
-      sx={{
-        position: "relative",
-        overflow: "hidden",
-        borderRadius: "16px",
-        p: "1.1rem 0.9rem 1rem",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        textAlign: "center",
-        gap: "0.45rem",
-        background: "#fff",
-        flex: 1,
-        minWidth: 0,
-        boxShadow: "0 2px 16px rgba(26,39,68,0.08)",
-        border: "1.5px solid rgba(26,39,68,0.07)",
-        transition: "transform 0.2s, box-shadow 0.2s",
-        "&:hover": {
-          transform: "translateY(-3px)",
-          boxShadow: "0 8px 28px rgba(26,39,68,0.13)",
+    <Box sx={{
+      "--card-color": color,
+      p: 2, borderRadius: "16px",
+      background: "rgba(255, 255, 255, 0.06)",
+      border: `1px solid ${C.glassBorder}`,
+      backdropFilter: "blur(12px)",
+      transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+      animation: `slide-up 0.6s ease ${delay} both`,
+      cursor: "pointer",
+      "&:hover": {
+        background: "rgba(255, 255, 255, 0.12)",
+        transform: "translateY(-5px) scale(1.02)",
+        borderColor: color,
+        boxShadow: `0 15px 40px ${color}30, 0 0 20px ${color}15`,
+        "& .card-icon": {
+          transform: "scale(1.1) rotate(5deg)",
+          boxShadow: `0 6px 20px ${color}50`,
         },
-        "&::before": {
-          content: '""',
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "3px",
-          background: gradient,
-          borderRadius: "16px 16px 0 0",
+        "& .card-title": {
+          textShadow: `0 0 20px ${color}80`,
         },
-      }}
-    >
-      <Box
-        sx={{
-          width: 46,
-          height: 46,
-          borderRadius: "12px",
-          background: gradient,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#fff",
-          mb: "0.2rem",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-        }}
-      >
+      }
+    }}>
+      <Box className="card-icon" sx={{
+        width: 55, height: 55, borderRadius: "12px",
+        background: `${color}25`,
+        border: `1px solid ${color}40`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: color, mb: 1.5,
+        boxShadow: `0 4px 15px ${color}40`,
+        transition: "all 0.3s ease",
+      }}>
         {icon}
       </Box>
-
-      <Typography
-        sx={{
-          fontWeight: 800,
-          fontSize: "0.72rem",
-          letterSpacing: "0.1em",
-          textTransform: "uppercase",
-          color: NAVY,
-          fontFamily: sansFont,
-          lineHeight: 1.3,
-        }}
-      >
+      <Typography className="card-title" sx={{
+        fontFamily: FONT_TITLE, fontWeight: 700, fontSize: "1.1rem", color: "#fff", mb: 0.5, letterSpacing: "0.5px",
+        textShadow: "0 2px 10px rgba(0,0,0,0.5)",
+        transition: "all 0.3s ease",
+      }}>
         {title}
       </Typography>
-
-      {/* ✅ Hidden on mobile, visible from sm and up */}
-      <Typography
-        sx={{
-          fontSize: "0.73rem",
-          color: "#6b7280",
-          lineHeight: 1.5,
-          fontFamily: sansFont,
-          display: { xs: "none", sm: "block" },
-        }}
-      >
+      <Typography sx={{
+        fontFamily: FONT_TEXT, fontSize: "1rem", color: "rgba(255,255,255,0.9)", lineHeight: 1.6,
+        textShadow: "0 1px 5px rgba(0,0,0,0.3)",
+      }}>
         {desc}
       </Typography>
     </Box>
   );
 }
 
-// ══════════════════════════════════
-// Welcome Page
-// ══════════════════════════════════
 export default function WelcomePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
   const [name, setName] = useState("");
-  const [role, setRole] = useState("");
   const [authed, setAuthed] = useState(false);
 
   useEffect(() => {
@@ -187,357 +145,179 @@ export default function WelcomePage() {
       if (me) {
         setBalance(me.token_balance ?? null);
         setName(me.name || "");
-        setRole(me.role || "");
         setAuthed(true);
       }
     });
   }, []);
 
-  const isAdmin = (role || name).toLowerCase().includes("admin");
-  const canExplore = (balance ?? 0) > 0 || isAdmin;
-  const dashHref = isAdmin ? "/admin/users" : "/dashboard/reports";
-
-  function enterApp() {
-    if (!canExplore) return;
+  const enterApp = () => {
     setLoading(true);
-    setTimeout(() => router.push("/?skip=1"), 50);
-  }
-
-  const features = [
-    {
-      icon: <Compass size={22} strokeWidth={2} />,
-      title: "Smart Pinning",
-      desc: "Precise street-level accuracy with integrated satellite and street view.",
-      gradient: "linear-gradient(135deg, #1e3a8a, #2563eb)",
-    },
-    {
-      icon: <ShieldCheck size={22} strokeWidth={2} />,
-      title: "Reliable Filters",
-      desc: "Find specific areas by province, city, and barangay in seconds.",
-      gradient: "linear-gradient(135deg, #b45309, #d97706)",
-    },
-    {
-      icon: <TrendingUp size={22} strokeWidth={2} />,
-      title: "Instant Insights",
-      desc: "Analyze nearby POIs, commercial zones, and quick-fact overlays.",
-      gradient: "linear-gradient(135deg, #065f46, #059669)",
-    },
-    {
-      icon: <Zap size={22} strokeWidth={2} />,
-      title: "1-Click Reports",
-      desc: "Generate professional, branded PDFs in one click.",
-      gradient: "linear-gradient(135deg, #7c1d1d, #cc2a2a)",
-    },
-  ];
+    router.push("/?skip=1");
+  };
 
   return (
-    <Box
-      component="main"
-      sx={{
-        position: "relative",
-        // ✅ Desktop: locked full screen. Mobile: scrollable min-height
-        minHeight: "100vh",
-        height: { lg: "100vh" },
-        overflow: { xs: "auto", lg: "hidden" },
-        background: "#f5f1e8",
-        fontFamily: sansFont,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
+    <Box sx={{ 
+      minHeight: "100vh", bgcolor: C.bgDark, color: "#fff", 
+      position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" 
+    }}>
+      <style>{STYLES}</style>
       <LowBalanceNotice threshold={3} remindAfterHours={24} />
 
-      {/* ── Background triangles ── */}
-      <Box
-        sx={{
-          position: "absolute",
-          top: -60,
-          right: -60,
-          width: 340,
-          height: 340,
-          background: "rgba(201,168,76,0.12)",
-          clipPath: "polygon(100% 0, 0 0, 100% 100%)",
-          zIndex: 0,
-          pointerEvents: "none",
-        }}
-      />
-      <Box
-        sx={{
-          position: "absolute",
-          bottom: -80,
-          left: -80,
-          width: 400,
-          height: 400,
-          background: "rgba(20,184,166,0.08)",
-          clipPath: "polygon(0 100%, 100% 100%, 0 0)",
-          zIndex: 0,
-          pointerEvents: "none",
-        }}
-      />
-      <Box
-        sx={{
-          position: "absolute",
-          bottom: 40,
-          right: 0,
-          width: 260,
-          height: 260,
-          background: "rgba(201,168,76,0.09)",
-          clipPath: "polygon(100% 0, 0 100%, 100% 100%)",
-          zIndex: 0,
-          pointerEvents: "none",
-        }}
-      />
-
-      {/* ══════════════════════════════════
-          HEADER
-      ══════════════════════════════════ */}
-      <Box
-        component="header"
-        sx={{
-          maxWidth: "1280px",
-          width: "100%",
-          mx: "auto",
-          px: { xs: "1.25rem", md: "2.5rem" },
-          py: "0.7rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          position: "relative",
-          zIndex: 10,
-          flexShrink: 0,
-        }}
-      >
-        <Image
-          src="/pictures/FilipinoHomes.png"
-          alt="Filipino Homes"
-          width={200}
-          height={55}
-          style={{ objectFit: "contain" }}
+      <Box sx={{ position: "absolute", inset: 0, zIndex: 0 }}>
+        <video src="/video/map_vid.mov" autoPlay loop muted playsInline 
+          style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 1 }} 
         />
-
-        {authed ? (
-          <ProfileAvatar name={name} balance={balance} href={dashHref} />
-        ) : (
-          <Link href="/login" style={{ textDecoration: "none" }}>
-            <Box
-              sx={{
-                border: `2px solid ${NAVY}`,
-                borderRadius: "9999px",
-                px: "1.6rem",
-                py: "0.4rem",
-                color: NAVY,
-                fontWeight: 700,
-                fontSize: "0.95rem",
-                fontFamily: sansFont,
-                background: "transparent",
-                cursor: "pointer",
-                transition: "all 0.2s",
-                "&:hover": { background: NAVY, color: "#fff" },
-              }}
-            >
-              Login
-            </Box>
-          </Link>
-        )}
+        <Box sx={{ 
+          position: "absolute", inset: 0, 
+          background: `radial-gradient(circle at 20% 50%, rgba(5, 11, 20, 0.8) 0%, ${C.bgDark} 100%)` 
+        }} />
       </Box>
 
-      {/* ══════════════════════════════════
-          HERO
-      ══════════════════════════════════ */}
-      <Box
-        component="section"
-        sx={{
-          flex: 1,
-          maxWidth: "1280px",
-          width: "100%",
-          mx: "auto",
-          // ✅ More padding on mobile so content breathes when scrolling
-          px: { xs: "1.25rem", md: "2.5rem" },
-          py: { xs: "1.5rem", lg: "0" },
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" },
-          gap: { xs: "1.5rem", lg: "2rem" },
-          alignItems: "center",
-          position: "relative",
-          zIndex: 1,
-        }}
-      >
-        {/* ── Left content ── */}
-        <Box sx={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
+      <Box sx={{
+        position: "relative", zIndex: 10, px: { xs: 2, md: 6 }, py: 2,
+        display: "flex", justifyContent: "space-between", alignItems: "center"
+      }}>
+        <Image src="/pictures/fh.png" alt="Filipino Homes" width={300} height={35} />
+        <Box sx={{ display: "flex", gap: 2, alignItems: "center"}}>
+          <Chip label="Zonal Finder v2" sx={{ bgcolor: "rgba(76,201,240,0.1)", color: C.blue, fontWeight: 400, fontFamily: FONT_TEXT, fontSize: "1.2rem", padding: "1.5rem 1rem", borderRadius: "100px" }} />
+          {authed && (
+            <Box sx={{ px: 1.5, py: 0.4, borderRadius: "8px", border: `1px solid ${C.glassBorder}`, fontFamily: FONT_TEXT, fontSize: "0.75rem" }}>
+              {name} • <span style={{ color: C.blue }}>{balance ?? 0}</span>
+            </Box>
+          )}
+        </Box>
+      </Box>
 
-          <Box>
-            <Typography
-              component="h1"
-              sx={{
-                fontSize: { xs: "1.9rem", sm: "2.5rem", xl: "3.2rem" },
-                fontWeight: 900,
-                lineHeight: 1.12,
-                color: NAVY,
-                fontFamily: sansFont,
-                mb: "0.2rem",
-              }}
-            >
-              Discover Precise Zonal Values
-              <br />
-              With Filipino Homes
-            </Typography>
-
-            <Typography
-              sx={{
-                fontSize: { xs: "1.2rem", sm: "1.6rem", xl: "1.9rem" },
-                fontWeight: 800,
-                fontStyle: "italic",
-                color: GOLD,
-                fontFamily: sansFont,
-                lineHeight: 1.2,
-              }}
-            >
-              Accelerate Your Decisions
-            </Typography>
+      <Box sx={{ position: "relative", zIndex: 1, flex: 1, px: { xs: 2, md: 6 }, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+        <Box sx={{ maxWidth: "1000px" }}>
+          <Box sx={{
+            display: "inline-flex", alignItems: "center", gap: 1, px: 2, py: 0.6, borderRadius: "100px",
+            bgcolor: "rgba(76, 201, 240, 0.08)", border: `1px solid rgba(76, 201, 240, 0.25)`,
+            mb: 2, backdropFilter: "blur(10px)",
+            transition: "all 0.3s ease",
+            "&:hover": {
+              bgcolor: "rgba(76, 201, 240, 0.12)",
+              boxShadow: "0 0 20px rgba(76, 201, 240, 0.2)",
+            }
+          }}>
+            <Box sx={{
+              width: 6, height: 6, bgcolor: C.blue, borderRadius: "50%",
+              boxShadow: `0 0 10px ${C.blue}`,
+              animation: "pulse-glow 2s ease-in-out infinite",
+            }} />
+            <Typography sx={{ fontFamily: FONT_TITLE, fontSize: "0.9rem", fontWeight: 800, letterSpacing: "1.5px", color: C.blue }}>REAL ESTATE INTELLIGENCE</Typography>
           </Box>
 
-          <Typography
-            sx={{
-              color: "#374151",
-              fontSize: { xs: "0.88rem", sm: "0.95rem" },
-              lineHeight: 1.7,
-              maxWidth: "34rem",
-              fontFamily: sansFont,
-            }}
-          >
-            Developed for real estate professionals, the Zonal Finder provides
-            instant, accurate zonal values per square meter for every street and
-            barangay across the Philippines. Make data-driven property decisions
-            faster.
+          <Typography variant="h1" sx={{
+            fontFamily: FONT_TITLE, fontWeight: 900, fontSize: { xs: "2rem", md: "3rem", lg: "4.5rem" },
+            lineHeight: 1.1, mb: 1.5, letterSpacing: "-0.5px",
+            textShadow: "0 4px 25px rgba(0,0,0,0.6)"
+          }}>
+            Discover <span style={{ color: C.blue, textShadow: '0 0px 40px rgba(76, 201, 240, 0.55)' }}>Precise Zonal Values</span> <br /> Across the Philippines
           </Typography>
 
-          {/* Feature cards */}
-          <Box
-            sx={{
-              display: "flex",
-              // ✅ On mobile: 2-column grid so cards don't stack too tall
-              flexDirection: { xs: "row", sm: "row" },
-              flexWrap: { xs: "wrap", sm: "nowrap" },
-              gap: "0.6rem",
-            }}
-          >
-            {features.map((f) => (
-              <FeatureCard key={f.title} {...f} />
-            ))}
+          <Typography sx={{
+            fontFamily: FONT_TEXT, fontSize: "1.3rem", color: "rgba(255,255,255,0.95)",
+            maxWidth: "100%", mb: 3, fontWeight: 400, lineHeight: 1.7,
+            textShadow: "0 2px 15px rgba(0,0,0,0.4)",
+          }}>
+            Built for real estate professionals — get street-level accuracy for every barangay and province.
+          </Typography>
+
+          <Box sx={{ display: "flex", gap: 1.5, mb: 3 }}>
+            <StatBox value="81+" label="Provinces" />
+            <StatBox value="1,634" label="Municipalities" />
+            <StatBox value="42K+" label="Barangays" />
           </Box>
 
-          <Box>
+          {/* Action Row */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
             <Button
               onClick={enterApp}
-              disabled={!canExplore}
               sx={{
-                px: "2.2rem",
-                py: "0.8rem",
-                borderRadius: "10px",
-                color: "#fff",
-                fontFamily: sansFont,
-                fontWeight: 800,
-                fontSize: "0.95rem",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                background: canExplore
-                  ? `linear-gradient(135deg, ${NAVY}, #2d4a80)`
-                  : "#9ca3af",
-                boxShadow: canExplore
-                  ? `0 6px 22px rgba(26,39,68,0.32)`
-                  : "none",
-                "&:hover": canExplore
-                  ? {
-                      background: `linear-gradient(135deg, #0f1f38, ${NAVY})`,
-                      boxShadow: "0 8px 28px rgba(26,39,68,0.42)",
-                      transform: "translateY(-2px)",
-                    }
-                  : {},
-                "&.Mui-disabled": {
-                  color: "#fff",
-                  background: "#9ca3af",
+                px: 3.5, py: 1.4, borderRadius: "14px",
+                background: `linear-gradient(135deg, ${C.blueDeep} 0%, ${C.blue} 100%)`,
+                color: "#fff", fontFamily: FONT_TITLE, fontWeight: 600, textTransform: "none", fontSize: "1rem",
+                boxShadow: `0 15px 30px rgba(67, 97, 238, 0.3)`,
+                transition: "all 0.3s ease",
+                "&:hover": {
+                  transform: "translateY(-3px) scale(1.02)",
+                  boxShadow: `0 25px 50px rgba(67, 97, 238, 0.5), 0 0 30px rgba(76, 201, 240, 0.3)`,
+                  background: `linear-gradient(135deg, ${C.blue} 0%, ${C.blueDeep} 100%)`,
                 },
-                transition: "all 0.2s",
+                "&:active": {
+                  transform: "translateY(-1px) scale(0.98)",
+                }
               }}
+              endIcon={<ArrowRight size={18} />}
             >
-              {loading ? "Loading..." : "Start Now"}
+              {loading ? "Loading..." : "Start Exploring"}
             </Button>
+            {!authed && (
+              <Link href="/login" style={{
+                color: "rgba(255,255,255,0.9)", textDecoration: "none", fontFamily: FONT_TEXT, fontWeight: 600, fontSize: "1rem",
+                textShadow: "0 2px 10px rgba(0,0,0,0.3)",
+                transition: "all 0.3s ease",
+                padding: "0.8rem 1rem",
+                borderRadius: "10px",
+                border: "1px solid transparent",
+              }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = "#fff";
+                  e.currentTarget.style.borderColor = C.blue;
+                  e.currentTarget.style.background = "rgba(76, 201, 240, 0.1)";
+                  e.currentTarget.style.boxShadow = "0 0 20px rgba(76, 201, 240, 0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "rgba(255,255,255,0.9)";
+                  e.currentTarget.style.borderColor = "transparent";
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              >
+                Sign in to your account
+              </Link>
+            )}
+          </Box>
+
+          <Box sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr 1fr", lg: "1fr 1fr 1fr 1fr" },
+            gap: 1.5
+          }}>
+            <FeatureGlassCard delay="0.1s" icon={<Compass size={16}/>} title="SMART PINNING" desc="Street-level accuracy with satellite view." color="#4cc9f0" />
+            <FeatureGlassCard delay="0.2s" icon={<ShieldCheck size={16}/>} title="RELIABLE FILTERS" desc="Filter by province, city & barangay." color="#10b981" />
+            <FeatureGlassCard delay="0.3s" icon={<TrendingUp size={16}/>} title="INSTANT INSIGHTS" desc="Analyze nearby commercial zones." color="#f59e0b" />
+            <FeatureGlassCard delay="0.4s" icon={<Zap size={16}/>} title="1-CLICK REPORTS" desc="Generate professional PDF reports." color="#ef4444" />
           </Box>
         </Box>
 
-        {/* ── Right: Map image ── */}
-        <Box
-          sx={{
-            // ✅ Show map on mobile too but smaller
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "flex-start",
-            position: "relative",
-            height: { xs: "280px", sm: "360px", lg: "100%" },
-          }}
-        >
-          <Box
-            sx={{
-              position: "relative",
-              width: "100%",
-              height: { xs: "280px", sm: "360px", lg: "105%" },
-              mt: { lg: "-5%" },
-            }}
-          >
-            <Image
-              src="/pictures/phil3.png"
-              alt="Philippines map"
-              fill
-              style={{ objectFit: "contain", objectPosition: "center top" }}
-              priority
-            />
-
-            {/* ✅ Pointer shifted left: was left:"55%", now left:"44%" */}
-            <Box
-              component="img"
-              src="/pictures/filipinohomespointer.png"
-              alt="Pointer"
-              sx={{
-                position: "absolute",
-                left: "44%",
-                top: "36%",
-                transform: "translateX(-50%) translateY(-100%)",
-                width: { xs: 60, lg: 85 },
-                height: { xs: 60, lg: 85 },
-                animation: "bounce 1s infinite",
-                "@keyframes bounce": {
-                  "0%, 100%": {
-                    transform: "translateX(-50%) translateY(-100%)",
-                    animationTimingFunction: "cubic-bezier(0.8,0,1,1)",
-                  },
-                  "50%": {
-                    transform: "translateX(-50%) translateY(calc(-100% - 14px))",
-                    animationTimingFunction: "cubic-bezier(0,0,0.2,1)",
-                  },
-                },
-              }}
-            />
-          </Box>
+        <Box sx={{
+          display: { xs: "none", lg: "flex" },
+          alignItems: "center",
+          justifyContent: "center",
+          animation: "float 2s ease-in-out infinite",
+          "& img": {
+            width: "100%",
+            maxWidth: "380px",
+            height: "auto",
+            filter: "drop-shadow(0 0px 20px rgb(76, 201, 240, 0.65))",
+          }
+        }}>
+          <Image
+            src="/pictures/3d-fh.png"
+            alt="Filipino Homes 3D"
+            width={380}
+            height={380}
+            style={{ objectFit: "contain" }}
+          />
         </Box>
       </Box>
 
-      {/* ══════════════════════════════════
-          FOOTER
-      ══════════════════════════════════ */}
-      <Box
-        component="footer"
-        sx={{
-          textAlign: "center",
-          py: "0.5rem",
-          fontSize: "0.72rem",
-          color: "#9ca3af",
-          fontFamily: sansFont,
-          position: "relative",
-          zIndex: 1,
-          flexShrink: 0,
-        }}
-      >
-        © {new Date().getFullYear()} Filipino Homes | Developers
+      <Box sx={{ py: 2, textAlign: "center", borderTop: `1px solid ${C.glassBorder}` }}>
+        <Typography sx={{ fontFamily: FONT_TEXT, fontSize: "0.75rem", color: "rgba(255,255,255,0.6)", textShadow: "0 1px 5px rgba(0,0,0,0.3)" }}>
+          © {new Date().getFullYear()} Filipino Homes | Real Estate Tech Division
+        </Typography>
       </Box>
     </Box>
   );
