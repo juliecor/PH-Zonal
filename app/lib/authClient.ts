@@ -268,7 +268,7 @@ export async function apiAdminResolveConcern(id: number, resolutionFile?: File |
     if (note) fd.append("note", note);
     res = await fetch(`${backendBase}/api/admin/concerns/${id}/resolve`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       body: fd,
     });
   } else {
