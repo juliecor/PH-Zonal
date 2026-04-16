@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "sonner";
+import ClientToaster from "./components/ClientToaster";
 import RouteProgress from "./components/RouteProgress";
 import "leaflet/dist/leaflet.css";
 import ThemeRegistry from "./mui/ThemeRegistry";
@@ -32,7 +32,7 @@ export default function RootLayout({
       <body className={`${outfit.variable} antialiased`}>
         <ThemeRegistry>
           <RouteProgress />
-          <Toaster richColors position="top-right" closeButton />
+          <ClientToaster />
           {children}
         </ThemeRegistry>
       </body>
