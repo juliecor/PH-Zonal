@@ -633,7 +633,7 @@ export function Home() {
       <ZonalSearchIndicator visible={loading} />
 
       <div className="absolute inset-0">
-        <MapComponent key={mapKey} selected={selectedLocation} onPickOnMap={selectLocationFromMap} disablePickOnMap={Boolean(selectedLocation)} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} />
+        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} />
       </div>
 
       {/* Brand pill */}
@@ -732,9 +732,7 @@ export function Home() {
                   🔄 Refresh
                 </button>
               )}
-              <button onClick={()=>setRightOpen(v=>!v)} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ml-auto" style={rightOpen?{background:"#f5f0eb",color:"#1e3a8a"}:{background:"rgba(255,255,255,0.10)",color:"#f5f0eb"}} title="Open report panel">
-                {rightOpen?<PanelRightClose size={13}/>:<PanelRightOpen size={13}/>}Report
-              </button>
+              {/* Report toggle removed as requested */}
             </div>
           </div>
 
