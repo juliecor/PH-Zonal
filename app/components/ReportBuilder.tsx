@@ -856,7 +856,7 @@ export default function ReportBuilder(props: {
           <div className="border-t border-gray-200 pt-4 mt-4">
 
             {/* Investment Viability Score */}
-            {poiData && !poiLoading && (
+            {false && (
               <div className="mb-5 p-4 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 shadow-sm">
                 <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-3">Investment Viability Score</h3>
                 {(() => {
