@@ -16,6 +16,7 @@ type MapType = "street" | "terrain" | "satellite";
 interface GMapProps {
   selected?: LatLng | null;
   onPickOnMap?: (lat: number, lon: number) => void;
+  disablePickOnMap?: boolean;
   popupLabel?: string;
   boundary?: Boundary | null;
   highlightRadiusMeters?: number;
@@ -98,6 +99,7 @@ const MINIMAL_STYLE: any[] = [
 export default function GMap({
   selected,
   onPickOnMap,
+  disablePickOnMap,
   boundary,
   highlightRadiusMeters = 80,
   containerId = "map-container",
@@ -115,6 +117,12 @@ export default function GMap({
   const streetCasingRef = useRef<any>(null);
   const streetLineRef = useRef<any>(null);
   const labelMarkersRef = useRef<any[]>([]);
+  const onPickRef = useRef<typeof onPickOnMap | null>(null);
+  const canPickRef = useRef<boolean>(true);
+
+  // keep click handler + flag fresh
+  useEffect(() => { onPickRef.current = onPickOnMap ?? null; }, [onPickOnMap]);
+  useEffect(() => { canPickRef.current = !(disablePickOnMap ?? false); }, [disablePickOnMap]);
 
   // init map
   useEffect(() => {
@@ -140,12 +148,12 @@ export default function GMap({
         fullscreenControl: false,
         zoomControl: true,
       });
-      if (onPickOnMap) {
-        map.addListener("click", (e: any) => {
-          if (!e.latLng) return;
-          onPickOnMap(e.latLng.lat(), e.latLng.lng());
-        });
-      }
+      map.addListener("click", (e: any) => {
+        if (!e?.latLng) return;
+        if (!onPickRef.current) return;
+        if (!canPickRef.current) return;
+        onPickRef.current(e.latLng.lat(), e.latLng.lng());
+      });
       mapRef.current = map;
     });
     return () => { cancelled = true; };
