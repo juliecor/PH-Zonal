@@ -637,7 +637,7 @@ export function Home() {
       </div>
 
       {/* Brand pill */}
-      {/* Removed top-left partner header card for a cleaner view */}
+      {/* Removed top-left partner header card fo-r a cleaner view */}
 
       {/* Map type controls */}
       <div className="absolute top-4 right-4 z-30">
