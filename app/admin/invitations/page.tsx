@@ -157,9 +157,8 @@ export default function AdminInvitationsPage() {
           <Box>
             <Typography
               variant="h6"
-              fontWeight={700}
               color="primary.contrastText"
-              lineHeight={1.2}
+              sx={{ fontWeight: 700, lineHeight: 1.2 }}
             >
               Invite Users
             </Typography>
