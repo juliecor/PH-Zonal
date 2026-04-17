@@ -20,6 +20,12 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Admin Invitations
+
+- Set `NEXT_PUBLIC_BACKEND_URL` in `.env.local` to your Laravel base URL (e.g. `http://192.168.1.64:8000`).
+- Open `/admin/invitations` to paste one or more emails and send invites.
+- The backend sends emails using the configured SMTP and links to your current origin's `/register` page.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

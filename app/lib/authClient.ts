@@ -468,3 +468,29 @@ export async function apiUploadAvatar(file: File) {
   setCachedUser(j.user);
   return j;
 }
+
+// --- Admin invitations ---
+export async function apiAdminInviteUsers(params: { emails: string[]; redirect_url?: string }) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const payload: Record<string, any> = { emails: params.emails };
+  if (params.redirect_url) payload.redirect_url = params.redirect_url;
+
+  const res = await fetch(`${backendBase}/api/admin/invitations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `Invite failed (${res.status})`);
+  }
+
+  return await res.json();
+}

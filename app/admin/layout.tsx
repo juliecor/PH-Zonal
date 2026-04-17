@@ -206,6 +206,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   { href: "/admin/users",      label: "Users",    icon: <Users size={16} /> },
                   { href: "/admin/requests",   label: "Requests", icon: <ClipboardCheck size={16} /> },
                   { href: "/admin/reports",    label: "Reports",  icon: <FileText size={16} /> },
+                  { href: "/admin/invitations",label: "Invitations", icon: <Users size={16} /> },
                   { href: "/admin/concerns",   label: "Concerns", icon: <AlertTriangle size={16} /> },
                 ]}
               />
@@ -243,6 +244,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     { href: "/admin/users",      label: "Users",    icon: <Users size={16} /> },
                     { href: "/admin/requests",   label: "Requests", icon: <ClipboardCheck size={16} /> },
                     { href: "/admin/reports",    label: "Reports",  icon: <FileText size={16} /> },
+                    { href: "/admin/invitations",label: "Invitations", icon: <Users size={16} /> },
                     { href: "/admin/concerns",   label: "Concerns", icon: <AlertTriangle size={16} /> },
                   ]}
                 />
