@@ -131,9 +131,10 @@ function FeatureGlassCard({ icon, title, desc, delay, color }: { icon: React.Rea
     <Box sx={{
       "--card-color": color,
       p: 2, borderRadius: "16px",
-      background: "rgba(255, 255, 255, 0.03)",
+      background: "rgba(255, 255, 255, 0.08)",
       border: `1px solid ${C.glassBorder}`,
       backdropFilter: "blur(4px)",
+      WebkitBackdropFilter: "blur(4px)",
       transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
       animation: `slide-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) ${delay} both`,
       cursor: "pointer",

@@ -177,37 +177,6 @@ export default function LoginPage() {
           />
         </Box>
 
-        {/* Back to Homepage Button */}
-        <Box sx={{ position: "absolute", top: { xs: "1rem", md: "1.5rem" }, left: { xs: "1rem", md: "1.5rem" }, zIndex: 10 }}>
-          <Link href="/welcome">
-            <Button
-              sx={{
-                color: "#fff",
-                fontFamily: FONT_TITLE,
-                fontSize: "0.8rem",
-                fontWeight: 600,
-                letterSpacing: "1px",
-                textTransform: "uppercase",
-                border: "1px solid rgba(255,255,255,0.2)",
-                borderRadius: "100px",
-                px: 2.5,
-                py: 0.8,
-                backdropFilter: "blur(10px)",
-                background: "rgba(255,255,255,0.05)",
-                transition: "all 0.3s ease",
-                "&:hover": {
-                  background: "rgba(255,255,255,0.15)",
-                  borderColor: C.blue,
-                  color: C.blue,
-                },
-              }}
-            >
-              <ArrowBackIcon sx={{ fontSize: 16, mr: 0.5 }} />
-              Back to Homepage
-            </Button>
-          </Link>
-        </Box>
-
         {/* ══════════════════════════════════
             LEFT DECORATIVE PANEL
         ══════════════════════════════════ */}
@@ -255,6 +224,7 @@ export default function LoginPage() {
                 fontWeight: 800,
                 color: "#fff",
                 lineHeight: 1.2,
+                textTransform: "capitalize",
                 mb: "1rem",
                 textShadow: "0 4px 25px rgba(0,0,0,0.5)",
               }}
@@ -587,6 +557,37 @@ export default function LoginPage() {
                 Create one
               </Link>
             </Typography>
+
+            {/* Back to Homepage Button */}
+            <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+              <Link href="/welcome">
+                <Button
+                  sx={{
+                    color: "#fff",
+                    fontFamily: FONT_TITLE,
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    letterSpacing: "1px",
+                    textTransform: "uppercase",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: "100px",
+                    px: 2.5,
+                    py: 0.8,
+                    backdropFilter: "blur(10px)",
+                    background: "rgba(255,255,255,0.05)",
+                    transition: "all 0.3s ease",
+                    "&:hover": {
+                      background: "rgba(255,255,255,0.15)",
+                      borderColor: C.blue,
+                      color: C.blue,
+                    },
+                  }}
+                >
+                  <ArrowBackIcon sx={{ fontSize: 14, mr: 0.5 }} />
+                  Back to Homepage
+                </Button>
+              </Link>
+            </Box>
           </Box>
         </Box>
       </Box>

@@ -20,7 +20,7 @@ import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
 
 // ── Design tokens ──────────────────────────────────────────
 const FONT_TITLE = "'Urbanist', sans-serif";
@@ -67,6 +67,7 @@ const inputSx = {
     },
     "& .MuiInputAdornment-root": {
       background: "transparent",
+      color: "rgba(255, 255, 255, 0.4)",
     },
     "& input:-webkit-autofill": {
       "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
@@ -81,7 +82,6 @@ const inputSx = {
       "-webkit-text-fill-color": "#fff",
     },
     "& input::placeholder": { color: "rgba(255, 255, 255, 0.35)", opacity: 1 },
-    "& .MuiInputAdornment-root": { color: "rgba(255, 255, 255, 0.4)" },
   },
 };
 
@@ -262,7 +262,7 @@ export default function RegisterPage() {
       n: "03",
       title: "Start searching",
       desc: "Instant access to verified zonal value data.",
-      icon: <CheckCircleOutlineIcon sx={{ fontSize: 16 }} />,
+      icon: <CheckCircleOutlinedIcon sx={{ fontSize: 16 }} />,
     },
   ];
 
@@ -306,44 +306,6 @@ export default function RegisterPage() {
               pointerEvents: "none",
             }}
           />
-        </Box>
-
-        {/* ── Back to Homepage Button ── */}
-        <Box
-          sx={{
-            position: "absolute",
-            top: { xs: "1rem", md: "1.5rem" },
-            left: { xs: "1rem", md: "1.5rem" },
-            zIndex: 10,
-          }}
-        >
-          <Link href="/welcome">
-            <Button
-              sx={{
-                color: "#fff",
-                fontFamily: FONT_TITLE,
-                fontSize: "0.8rem",
-                fontWeight: 600,
-                letterSpacing: "1px",
-                textTransform: "uppercase",
-                border: "1px solid rgba(255,255,255,0.2)",
-                borderRadius: "100px",
-                px: 2.5,
-                py: 0.8,
-                backdropFilter: "blur(10px)",
-                background: "rgba(255,255,255,0.05)",
-                transition: "all 0.3s ease",
-                "&:hover": {
-                  background: "rgba(255,255,255,0.15)",
-                  borderColor: C.blue,
-                  color: C.blue,
-                },
-              }}
-            >
-              <ArrowBackIcon sx={{ fontSize: 16, mr: 0.5 }} />
-              Back to Homepage
-            </Button>
-          </Link>
         </Box>
 
         {/* ══════════════════════════════════
@@ -390,11 +352,12 @@ export default function RegisterPage() {
             <Typography
               sx={{
                 fontFamily: FONT_TITLE,
-                fontSize: { xs: "1.8rem", md: "2.3rem" },
+                fontSize: { xs: "1.8rem", md: "2.8rem" },
                 fontWeight: 800,
                 color: "#fff",
                 lineHeight: 1.2,
                 mb: "0.8rem",
+                textTransform: "capitalize",
                 textShadow: "0 4px 25px rgba(0,0,0,0.5)",
               }}
             >
@@ -408,10 +371,10 @@ export default function RegisterPage() {
             </Typography>
             <Typography
               sx={{
-                fontSize: "1rem",
+                fontSize: "1.2rem",
                 color: "rgba(255,255,255,0.7)",
                 lineHeight: 1.75,
-                maxWidth: "320px",
+                maxWidth: "100%",
                 fontWeight: 400,
                 textShadow: "0 2px 15px rgba(0,0,0,0.4)",
               }}
@@ -438,8 +401,8 @@ export default function RegisterPage() {
                 >
                   <Box
                     sx={{
-                      width: 36,
-                      height: 36,
+                      width: 55,
+                      height: 55,
                       borderRadius: "50%",
                       background: "rgba(76, 201, 240, 0.08)",
                       border: `1px solid rgba(76, 201, 240, 0.35)`,
@@ -456,7 +419,7 @@ export default function RegisterPage() {
                     <Box
                       sx={{
                         width: "1px",
-                        height: 28,
+                        height: 38,
                         background: "rgba(76, 201, 240, 0.2)",
                         my: "4px",
                       }}
@@ -468,7 +431,7 @@ export default function RegisterPage() {
                 <Box sx={{ pt: "6px", pb: i < steps.length - 1 ? "28px" : 0 }}>
                   <Typography
                     sx={{
-                      fontSize: "0.9rem",
+                      fontSize: "1.2rem",
                       fontWeight: 700,
                       color: "#fff",
                       mb: "0.2rem",
@@ -479,7 +442,7 @@ export default function RegisterPage() {
                   </Typography>
                   <Typography
                     sx={{
-                      fontSize: "0.82rem",
+                      fontSize: "1rem",
                       color: "rgba(255,255,255,0.5)",
                       fontWeight: 400,
                       fontFamily: FONT_TEXT,
@@ -515,7 +478,7 @@ export default function RegisterPage() {
             onSubmit={onSubmit}
             sx={{
               width: "100%",
-              maxWidth: 520,
+              maxWidth: 650,
               p: { xs: 3, sm: 4 },
               borderRadius: "24px",
               background: "rgba(255, 255, 255, 0.02)",
@@ -942,6 +905,38 @@ export default function RegisterPage() {
                 Sign in
               </Link>
             </Typography>
+
+            {/* Back to Homepage Button */}
+            <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+              <Link href="/welcome">
+                <Button
+                  sx={{
+                    color: "#fff",
+                    fontFamily: FONT_TITLE,
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    letterSpacing: "1px",
+                    textTransform: "uppercase",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: "100px",
+                    px: 2.5,
+                    py: 0.8,
+                    backdropFilter: "blur(10px)",
+                    WebkitBackdropFilter: "blur(10px)",
+                    background: "rgba(255,255,255,0.05)",
+                    transition: "all 0.3s ease",
+                    "&:hover": {
+                      background: "rgba(255,255,255,0.15)",
+                      borderColor: C.blue,
+                      color: C.blue,
+                    },
+                  }}
+                >
+                  <ArrowBackIcon sx={{ fontSize: 14, mr: 0.5 }} />
+                  Back to Homepage
+                </Button>
+              </Link>
+            </Box>
           </Box>
         </Box>
       </Box>
