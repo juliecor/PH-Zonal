@@ -4,50 +4,105 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiLogin, setToken, setCachedUser } from "../lib/authClient";
+import Image from "next/image";
 
 // MUI imports
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
-import InputAdornment from "@mui/material/InputAdornment";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 // MUI Icons
 import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
-import ErrorOutlinedIcon from "@mui/icons-material/ErrorOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 
 // ── Design tokens ──────────────────────────────────────────
-const NAVY = "#0f1f38";
-const GOLD = "#c9a84c";
-const CREAM = "#f5f0eb";
-const MUTED = "#8fa3bf";
-const BORDER = "#e2d9d0";
+const FONT_TITLE = "'Urbanist', sans-serif";
+const FONT_TEXT = "'Outfit', sans-serif";
 
-const serifFont = "'Cormorant Garamond', serif";
-const sansFont = "'DM Sans', sans-serif";
+const C = {
+  blue: "#4cc9f0",
+  blueDeep: "#4361ee",
+  glass: "rgba(255, 255, 255, 0.03)",
+  glassBorder: "rgba(255, 255, 255, 0.12)",
+  textMain: "#ffffff",
+  textMuted: "rgba(255, 255, 255, 0.6)",
+  bgDark: "#050b14",
+  green: "#10b981",
+};
 
-// ── Shared TextField sx ────────────────────────────────────
+// ── Shared input sx ────────────────────────────────────────
 const inputSx = {
   "& .MuiOutlinedInput-root": {
-    fontFamily: sansFont,
-    fontSize: "1.05rem",
-    color: NAVY,
-    borderRadius: "12px",
-    background: "#fff",
-    "& fieldset": { borderWidth: "2px", borderColor: BORDER },
-    "&:hover fieldset": { borderColor: GOLD },
-    "&.Mui-focused fieldset": {
-      borderColor: GOLD,
-      boxShadow: `0 0 0 4px rgba(201,168,76,0.12)`,
+    fontFamily: FONT_TEXT,
+    fontSize: "1rem",
+    color: "#fff",
+    borderRadius: "14px",
+    background: "rgba(20, 30, 48, 1)",  // ← solid, no transparency
+    backdropFilter: "blur(10px)",
+    border: "1px solid rgba(255, 255, 255, 0.12)",
+    transition: "all 0.3s ease",
+    "& fieldset": { border: "none", borderRadius: "inherit", padding: 0 },
+"& .MuiOutlinedInput-notchedOutline": { border: "none", borderRadius: "inherit" },
+    "&:hover": {
+      background: "rgba(20, 30, 48, 1)",  // ← keep solid on hover
+      borderColor: "rgba(76, 201, 240, 0.3)",
     },
+    "&.Mui-focused": {
+      background: "rgba(20, 30, 48, 1)",  // ← keep solid on focus
+      borderColor: C.blue,
+      boxShadow: `0 0 0 3px rgba(76, 201, 240, 0.15), 0 0 25px rgba(76, 201, 240, 0.1)`,
+      "& fieldset": { border: "none", borderRadius: "inherit", padding: 0 },
+"& .MuiOutlinedInput-notchedOutline": { border: "none", borderRadius: "inherit" },
+    },
+    "& .MuiInputBase-input": {
+      background: "transparent",
+      color: "#fff",
+    },
+    // ← Make the adornment area blend seamlessly
+    "& .MuiInputAdornment-root": {
+      background: "transparent",
+    },
+    "& input:-webkit-autofill": {
+      "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
+      "-webkit-text-fill-color": "#fff",
+    },
+    "& input:-webkit-autofill:hover": {
+      "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
+      "-webkit-text-fill-color": "#fff",
+    },
+    "& input:-webkit-autofill:focus": {
+      "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
+      "-webkit-text-fill-color": "#fff",
+    },
+    "& input::placeholder": { color: "rgba(255, 255, 255, 0.5)", opacity: 1 },
+    "& .MuiInputAdornment-root": { color: "rgba(255, 255, 255, 0.5)" },
   },
-  "& input::placeholder": { color: "#c0b9b2", opacity: 1 },
-  "& .MuiInputAdornment-root": { color: "#9aa3b0" },
 };
+
+const STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@700;800;900&family=Outfit:wght@300;400;500;600&display=swap');
+
+  @keyframes slideInLeft {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 10px currentColor; }
+    50% { box-shadow: 0 0 25px currentColor, 0 0 40px currentColor; }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+`;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -75,20 +130,84 @@ export default function LoginPage() {
 
   return (
     <>
-      {/* Google Fonts */}
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap');
-      `}</style>
+      <style>{STYLES}</style>
 
       {/* ── Root ── */}
       <Box
         sx={{
           minHeight: "100vh",
+          bgcolor: C.bgDark,
           display: "flex",
-          fontFamily: sansFont,
-          background: CREAM,
+          fontFamily: FONT_TEXT,
+          position: "relative",
+          overflow: "hidden",
         }}
       >
+        {/* Background Video Layer */}
+        <Box
+        sx={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: "none",
+        }}
+      >
+          <Box
+            component="video"
+            src="/video/map_vid.mov"
+            autoPlay
+            loop
+            muted
+            playsInline
+            sx={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              opacity: 0.65,
+              pointerEvents: "none",
+            }}
+          />
+          <Box
+            sx={{
+              position: "absolute",
+              inset: 0,
+              background: `radial-gradient(circle at 20% 50%, rgba(5, 11, 20, 0.72) 0%, ${C.bgDark} 100%)`,
+              pointerEvents: "none",
+            }}
+          />
+        </Box>
+
+        {/* Back to Homepage Button */}
+        <Box sx={{ position: "absolute", top: { xs: "1rem", md: "1.5rem" }, left: { xs: "1rem", md: "1.5rem" }, zIndex: 10 }}>
+          <Link href="/welcome">
+            <Button
+              sx={{
+                color: "#fff",
+                fontFamily: FONT_TITLE,
+                fontSize: "0.8rem",
+                fontWeight: 600,
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+                border: "1px solid rgba(255,255,255,0.2)",
+                borderRadius: "100px",
+                px: 2.5,
+                py: 0.8,
+                backdropFilter: "blur(10px)",
+                background: "rgba(255,255,255,0.05)",
+                transition: "all 0.3s ease",
+                "&:hover": {
+                  background: "rgba(255,255,255,0.15)",
+                  borderColor: C.blue,
+                  color: C.blue,
+                },
+              }}
+            >
+              <ArrowBackIcon sx={{ fontSize: 16, mr: 0.5 }} />
+              Back to Homepage
+            </Button>
+          </Link>
+        </Box>
+
         {/* ══════════════════════════════════
             LEFT DECORATIVE PANEL
         ══════════════════════════════════ */}
@@ -96,119 +215,69 @@ export default function LoginPage() {
           sx={{
             display: { xs: "none", md: "flex" },
             width: "45%",
-            background: NAVY,
             position: "relative",
             overflow: "hidden",
-            p: "3rem",
             flexDirection: "column",
-            justifyContent: "space-between",
+            justifyContent: "center",
+            alignItems: "center",
+            animation: "slideInLeft 0.6s ease-out both",
+            zIndex: 1,
           }}
         >
-          {/* Background decorations */}
+          {/* Glow decorations */}
+          {/* 3D Image */}
           <Box
             sx={{
-              position: "absolute",
-              width: 420,
-              height: 420,
-              top: -120,
-              right: -140,
-              borderRadius: "50%",
-              background: GOLD,
-              opacity: 0.07,
-            }}
-          />
-          <Box
-            sx={{
-              position: "absolute",
-              width: 260,
-              height: 260,
-              bottom: -60,
-              left: -80,
-              borderRadius: "50%",
-              background: GOLD,
-              opacity: 0.07,
-            }}
-          />
-          <Box
-            sx={{
-              position: "absolute",
-              inset: 0,
-              background:
-                "repeating-linear-gradient(-55deg, transparent, transparent 40px, rgba(201,168,76,0.03) 40px, rgba(201,168,76,0.03) 41px)",
-            }}
-          />
-
-          {/* Logo */}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.7rem",
-              zIndex: 1,
+              animation: "float 3s ease-in-out infinite",
+              "& img": {
+                width: "100%",
+                maxWidth: "320px",
+                height: "auto",
+                filter: `drop-shadow(0 0px 30px rgba(76, 201, 240, 0.4))`,
+              }
             }}
           >
-            <Box
-              sx={{
-                width: 40,
-                height: 40,
-                border: `2px solid ${GOLD}`,
-                borderRadius: "10px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: GOLD,
-              }}
-            >
-              <HomeOutlinedIcon sx={{ fontSize: 20 }} />
-            </Box>
-            <Typography
-              sx={{
-                fontFamily: serifFont,
-                fontSize: "1.4rem",
-                fontWeight: 600,
-                color: CREAM,
-                letterSpacing: "0.02em",
-              }}
-            >
-              Zonal Value
-            </Typography>
+            <Image
+              src="/pictures/3d-fh.png"
+              alt="Filipino Homes 3D"
+              width={320}
+              height={320}
+              style={{ objectFit: "contain" }}
+            />
           </Box>
 
           {/* Headline */}
-          <Box sx={{ zIndex: 1 }}>
+          <Box sx={{ zIndex: 1, textAlign: "center", mt: 4 }}>
             <Typography
               sx={{
-                fontFamily: serifFont,
-                fontSize: "2.9rem",
-                fontWeight: 700,
-                color: CREAM,
+                fontFamily: FONT_TITLE,
+                fontSize: { xs: "1.8rem", md: "2.4rem" },
+                fontWeight: 800,
+                color: "#fff",
                 lineHeight: 1.2,
-                mb: "1.3rem",
+                mb: "1rem",
+                textShadow: "0 4px 25px rgba(0,0,0,0.5)",
               }}
             >
-              Property insights,
-              <br />
-              <Box component="span" sx={{ color: GOLD }}>
+              Property insights,{" "}
+              <Box component="span" sx={{ color: C.blue, textShadow: `0 0 40px rgba(76, 201, 240, 0.55)` }}>
                 precisely
               </Box>{" "}
               mapped.
             </Typography>
             <Typography
               sx={{
-                fontSize: "1.05rem",
-                color: MUTED,
+                fontSize: "1.1rem",
+                color: "rgba(255,255,255,0.8)",
                 lineHeight: 1.75,
-                maxWidth: 320,
+                maxWidth: "100%",
                 fontWeight: 400,
+                textShadow: "0 2px 15px rgba(0,0,0,0.4)",
               }}
             >
-              Access verified zonal values across all regions — empowering
-              smarter real estate decisions.
+              Access verified zonal values across all regions empowering smarter real estate decisions.
             </Typography>
           </Box>
-
-          {/* Stats placeholder */}
-          <Box sx={{ zIndex: 1 }} />
         </Box>
 
         {/* ══════════════════════════════════
@@ -221,53 +290,107 @@ export default function LoginPage() {
             alignItems: "center",
             justifyContent: "center",
             p: { xs: "2rem 1.25rem", sm: "2.5rem 2rem" },
-            background: CREAM,
+            animation: "slideInRight 0.6s ease-out 0.1s both",
+            zIndex: 1,
           }}
         >
+          {/* Glass Card */}
           <Box
             component="form"
             onSubmit={onSubmit}
-            sx={{ width: "100%", maxWidth: 440 }}
+            sx={{
+              width: "100%",
+              maxWidth: 480,
+              p: { xs: 3, sm: 4 },
+              borderRadius: "24px",
+              background: "rgba(255, 255, 255, 0.02)",
+              backdropFilter: "blur(20px)",
+              // border: "1px solid rgba(255, 255, 255, 0.12)",
+              boxShadow: "0 25px 50px rgba(0, 0, 0, 0.3)",
+            }}
           >
-            {/* Eyebrow */}
-            <Typography
+            {/* Logo */}
+            <Box sx={{ display: "flex", justifyContent: "center", mb: 5.5 }}>
+              <Link href="/welcome">
+                <Box
+                  component="span"
+                  sx={{
+                    display: "inline-block",
+                    transition: "all 0.3s ease",
+                    "&:hover": {
+                      opacity: 0.8,
+                      transform: "scale(1.02)",
+                    },
+                  }}
+                >
+                  <Image src="/pictures/fh.png" alt="Filipino Homes" width={260} height={21} />
+                </Box>
+              </Link>
+            </Box>
+
+            {/* Eyebrow badge */}
+            <Box
               sx={{
-                fontSize: "0.78rem",
-                fontWeight: 600,
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-                color: GOLD,
-                mb: "1rem",
-                fontFamily: sansFont,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.8,
+                px: 2,
+                py: 0.5,
+                borderRadius: "100px",
+                bgcolor: "rgba(76, 201, 240, 0.08)",
+                border: "1px solid rgba(76, 201, 240, 0.25)",
+                mb: 2,
               }}
             >
-              Secure access
-            </Typography>
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
+                  bgcolor: C.blue,
+                  borderRadius: "50%",
+                  boxShadow: `0 0 10px ${C.blue}`,
+                  animation: "pulse-glow 2s ease-in-out infinite",
+                }}
+              />
+              <Typography
+                sx={{
+                  fontFamily: FONT_TITLE,
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  letterSpacing: "1.5px",
+                  color: C.blue,
+                }}
+              >
+                SECURE ACCESS
+              </Typography>
+            </Box>
 
             {/* Title */}
             <Typography
               component="h1"
               sx={{
-                fontFamily: serifFont,
-                fontSize: "2.8rem",
-                fontWeight: 700,
-                color: NAVY,
-                mb: "0.5rem",
+                fontFamily: FONT_TITLE,
+                fontSize: { xs: "2rem", md: "2.5rem" },
+                fontWeight: 800,
+                color: "#fff",
+                mb: 0.5,
                 lineHeight: 1.1,
+                textShadow: "0 4px 25px rgba(0,0,0,0.5)",
               }}
             >
               Welcome back
             </Typography>
 
-            {/* Gold divider */}
+            {/* Blue divider */}
             <Box
               sx={{
                 width: 44,
-                height: "2.5px",
-                background: GOLD,
+                height: "3px",
+                background: `linear-gradient(90deg, ${C.blueDeep}, ${C.blue})`,
                 borderRadius: 2,
-                mb: "2rem",
-                mt: "0.75rem",
+                mb: 2,
+                mt: 1,
+                boxShadow: `0 0 15px ${C.blue}50`,
               }}
             />
 
@@ -275,29 +398,30 @@ export default function LoginPage() {
             <Typography
               sx={{
                 fontSize: "1.05rem",
-                color: "#4a5568",
-                mb: "2.2rem",
+                color: "rgba(255,255,255,0.8)",
+                mb: 3,
                 fontWeight: 400,
                 lineHeight: 1.6,
-                fontFamily: sansFont,
+                fontFamily: FONT_TEXT,
+                textShadow: "0 1px 5px rgba(0,0,0,0.3)",
               }}
             >
               Sign in to your Zonal Value account to continue.
             </Typography>
 
             {/* ── Email field ── */}
-            <Box sx={{ mb: "1.4rem" }}>
+            <Box sx={{ mb: 2.5 }}>
               <Typography
                 component="label"
                 sx={{
                   display: "block",
                   fontSize: "0.85rem",
                   fontWeight: 600,
-                  letterSpacing: "0.05em",
+                  letterSpacing: "0.5px",
                   textTransform: "uppercase",
-                  color: NAVY,
-                  mb: "0.55rem",
-                  fontFamily: sansFont,
+                  color: "rgba(255,255,255,0.9)",
+                  mb: 1,
+                  fontFamily: FONT_TITLE,
                 }}
               >
                 Email address
@@ -312,9 +436,9 @@ export default function LoginPage() {
                 slotProps={{
                   input: {
                     startAdornment: (
-                      <InputAdornment position="start">
-                        <EmailOutlinedIcon sx={{ fontSize: 18 }} />
-                      </InputAdornment>
+                      <Box component="span" sx={{ mr: 1, display: "flex" }}>
+                        <EmailOutlinedIcon sx={{ fontSize: 20 }} />
+                      </Box>
                     ),
                   },
                 }}
@@ -323,18 +447,18 @@ export default function LoginPage() {
             </Box>
 
             {/* ── Password field ── */}
-            <Box>
+            <Box sx={{ mb: 3 }}>
               <Typography
                 component="label"
                 sx={{
                   display: "block",
                   fontSize: "0.85rem",
                   fontWeight: 600,
-                  letterSpacing: "0.05em",
+                  letterSpacing: "0.5px",
                   textTransform: "uppercase",
-                  color: NAVY,
-                  mb: "0.55rem",
-                  fontFamily: sansFont,
+                  color: "rgba(255,255,255,0.9)",
+                  mb: 1,
+                  fontFamily: FONT_TITLE,
                 }}
               >
                 Password
@@ -345,13 +469,13 @@ export default function LoginPage() {
                 fullWidth
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Enter your password"
                 slotProps={{
                   input: {
                     startAdornment: (
-                      <InputAdornment position="start">
-                        <LockOutlinedIcon sx={{ fontSize: 18 }} />
-                      </InputAdornment>
+                      <Box component="span" sx={{ mr: 1, display: "flex" }}>
+                        <LockOutlinedIcon sx={{ fontSize: 20 }} />
+                      </Box>
                     ),
                   },
                 }}
@@ -365,20 +489,19 @@ export default function LoginPage() {
                 sx={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.55rem",
-                  mt: "1.2rem",
+                  gap: 1,
+                  mb: 2,
                   p: "0.85rem 1rem",
-                  background: "#fff3f3",
-                  border: "1.5px solid #f5c6c6",
-                  borderRadius: "10px",
-                  color: "#c0392b",
-                  fontSize: "0.95rem",
+                  background: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  borderRadius: "12px",
+                  color: "#ef4444",
+                  fontSize: "0.9rem",
                   fontWeight: 500,
-                  fontFamily: sansFont,
-                  lineHeight: 1.5,
+                  fontFamily: FONT_TEXT,
                 }}
               >
-                <ErrorOutlinedIcon sx={{ fontSize: 18, flexShrink: 0 }} />
+                <Box sx={{ width: 6, height: 6, bgcolor: "#ef4444", borderRadius: "50%", flexShrink: 0 }} />
                 {err}
               </Box>
             )}
@@ -389,70 +512,76 @@ export default function LoginPage() {
               disabled={loading}
               fullWidth
               sx={{
-                mt: "2rem",
-                p: "0.95rem",
-                background: NAVY,
-                color: CREAM,
-                fontFamily: sansFont,
+                p: "1rem",
+                background: `linear-gradient(135deg, ${C.blueDeep} 0%, ${C.blue} 100%)`,
+                color: "#fff",
+                fontFamily: FONT_TITLE,
                 fontSize: "1rem",
-                fontWeight: 600,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                borderRadius: "12px",
-                boxShadow: "0 4px 18px rgba(15,31,56,0.2)",
-                transition: "background 0.2s, transform 0.15s, box-shadow 0.2s",
+                fontWeight: 700,
+                letterSpacing: "0.5px",
+                textTransform: "none",
+                borderRadius: "14px",
+                boxShadow: `0 15px 30px rgba(67, 97, 238, 0.3)`,
+                transition: "all 0.3s ease",
+                position: "relative",
+                overflow: "hidden",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  inset: 0,
+                  background: `radial-gradient(circle at 50% 50%, rgba(255,255,255,0.4) 0%, transparent 65%)`,
+                  opacity: 0,
+                  transition: "opacity 0.4s ease",
+                  zIndex: 0,
+                },
                 "&:hover": {
-                  background: "#182f52",
-                  boxShadow: "0 6px 24px rgba(15,31,56,0.28)",
-                  transform: "translateY(-1px)",
+                  transform: "translateY(-3px) scale(1.02)",
+                  boxShadow: `0 25px 50px rgba(67, 97, 238, 0.5), 0 0 30px rgba(76, 201, 240, 0.3)`,
+                  background: `linear-gradient(135deg, ${C.blue} 0%, ${C.blueDeep} 100%)`,
+                  "&::before": { opacity: 1 },
                 },
                 "&:active": {
-                  transform: "translateY(0)",
-                  boxShadow: "0 2px 8px rgba(15,31,56,0.18)",
+                  transform: "translateY(-1px) scale(0.98)",
                 },
                 "&.Mui-disabled": {
                   opacity: 0.6,
-                  color: CREAM,
-                  background: NAVY,
+                  color: "#fff",
+                  background: `linear-gradient(135deg, ${C.blueDeep} 0%, ${C.blue} 100%)`,
                 },
               }}
             >
               <Box
-                sx={{ display: "flex", alignItems: "center", gap: "0.6rem" }}
+                sx={{ display: "flex", alignItems: "center", gap: "0.6rem", position: "relative", zIndex: 1 }}
               >
                 {loading && (
-                  <CircularProgress
-                    size={16}
-                    thickness={4}
-                    sx={{ color: "rgba(245,240,235,0.8)" }}
-                  />
+                  <CircularProgress size={18} thickness={4} sx={{ color: "rgba(255,255,255,0.8)" }} />
                 )}
-                {loading ? "Signing in…" : "Sign in"}
-                {!loading && <ArrowForwardIcon sx={{ fontSize: 17 }} />}
+                {loading ? "Signing in..." : "Sign in"}
+                {!loading && <ArrowForwardIcon sx={{ fontSize: 18 }} />}
               </Box>
             </Button>
 
             {/* ── Footer ── */}
             <Typography
               sx={{
-                mt: "1.8rem",
+                mt: 2.5,
                 textAlign: "center",
                 fontSize: "0.95rem",
-                color: "#6b7585",
+                color: "rgba(255,255,255,0.7)",
                 fontWeight: 400,
-                fontFamily: sansFont,
+                fontFamily: FONT_TEXT,
+                textShadow: "0 1px 5px rgba(0,0,0,0.3)",
               }}
             >
               Don&apos;t have an account?{" "}
               <Link
                 href="/register"
                 style={{
-                  color: NAVY,
+                  color: C.blue,
                   fontWeight: 600,
                   textDecoration: "none",
-                  borderBottom: `2px solid ${GOLD}`,
-                  paddingBottom: "1px",
-                  transition: "color 0.15s",
+                  textShadow: `0 0 15px rgba(76, 201, 240, 0.3)`,
+                  transition: "all 0.3s ease",
                 }}
               >
                 Create one
