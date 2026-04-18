@@ -4,8 +4,8 @@ import DashboardSidebar from "../components/DashboardSidebar";
 import LowBalanceNotice from "../components/LowBalanceNotice";
 import { User, Users, ClipboardCheck, FileText, Home, LogOut, Menu, X, AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { apiLogout, apiMe } from "../lib/authClient";
-import { useEffect, useState } from "react";
+import { apiLogout, apiMe, apiAdminPendingCounts } from "../lib/authClient";
+import { useEffect, useMemo, useState } from "react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -31,6 +31,53 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       }
     })();
   }, [router]);
+
+  // ── Admin badge counts (pending requests/concerns) ───────────────
+  const [reqCount, setReqCount] = useState(0);
+  const [concernCount, setConcernCount] = useState(0);
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const c = await apiAdminPendingCounts();
+        if (!mounted) return;
+        setReqCount(c.tokenRequests || 0);
+        setConcernCount(c.concerns || 0);
+      } catch {}
+    };
+    load();
+    const id = setInterval(load, 30000);
+    return () => { mounted = false; clearInterval(id); };
+  }, []);
+
+  const CountBadge = ({ n }: { n: number }) => (
+    <span style={{
+      marginLeft: 8,
+      minWidth: 18,
+      height: 18,
+      padding: '0 6px',
+      borderRadius: 10,
+      background: '#ef4444',
+      color: '#fff',
+      fontSize: 11,
+      fontWeight: 700,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      lineHeight: 1,
+      boxShadow: '0 1px 6px rgba(239,68,68,0.35)'
+    }}>{n}</span>
+  );
+
+  const desktopLinks = useMemo(() => ([
+    { href: "/welcome",          label: "Home",     icon: <Home size={16} /> },
+    { href: "/admin/profile",    label: "Profile",  icon: <User size={16} /> },
+    { href: "/admin/users",      label: "Users",    icon: <Users size={16} /> },
+    { href: "/admin/requests",   label: "Requests", icon: <ClipboardCheck size={16} />, badge: reqCount > 0 ? <CountBadge n={reqCount} /> : undefined },
+    { href: "/admin/reports",    label: "Reports",  icon: <FileText size={16} /> },
+    { href: "/admin/invitations",label: "Invitations", icon: <Users size={16} /> },
+    { href: "/admin/concerns",   label: "Concerns", icon: <AlertTriangle size={16} />, badge: concernCount > 0 ? <CountBadge n={concernCount} /> : undefined },
+  ]), [reqCount, concernCount]);
   return (
     <>
       <style>{`
@@ -211,18 +258,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {/* Sidebar */}
           <aside className="al-sidebar-wrap">
             <div className="al-sidebar-card">
-              <DashboardSidebar
-                title="Admin"
-                links={[
-                  { href: "/welcome",          label: "Home",     icon: <Home size={16} /> },
-                    { href: "/admin/profile",    label: "Profile",  icon: <User size={16} /> },
-                    { href: "/admin/users",      label: "Users",    icon: <Users size={16} /> },
-                    { href: "/admin/requests",   label: "Requests", icon: <ClipboardCheck size={16} /> },
-                    { href: "/admin/reports",    label: "Reports",  icon: <FileText size={16} /> },
-                    { href: "/admin/invitations",label: "Invitations", icon: <Users size={16} /> },
-                    { href: "/admin/concerns",   label: "Concerns", icon: <AlertTriangle size={16} /> },
-                ]}
-              />
+              <DashboardSidebar title="Admin" links={desktopLinks} />
               <div className="sb-logout-row">
                 <button className="sb-logout-btn" onClick={async () => { try { await apiLogout(); } catch {} router.replace("/login"); }}>
                   <LogOut size={15} />
@@ -251,15 +287,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <div className="al-sidebar-card" style={{ boxShadow:'none', border:'none', height:'100%' }}>
                 <DashboardSidebar
                   title="Admin"
-                  links={[
-                    { href: "/welcome",          label: "Home",     icon: <Home size={16} />, onClick: closeMobileMenu },
-                    { href: "/admin/profile",    label: "Profile",  icon: <User size={16} />, onClick: closeMobileMenu },
-                    { href: "/admin/users",      label: "Users",    icon: <Users size={16} />, onClick: closeMobileMenu },
-                    { href: "/admin/requests",   label: "Requests", icon: <ClipboardCheck size={16} />, onClick: closeMobileMenu },
-                    { href: "/admin/reports",    label: "Reports",  icon: <FileText size={16} />, onClick: closeMobileMenu },
-                    { href: "/admin/invitations",label: "Invitations", icon: <Users size={16} />, onClick: closeMobileMenu },
-                    { href: "/admin/concerns",   label: "Concerns", icon: <AlertTriangle size={16} />, onClick: closeMobileMenu },
-                  ]}
+                  links={desktopLinks.map(l => ({ ...l, onClick: closeMobileMenu }))}
                 />
                 <div className="sb-logout-row">
                   <button className="sb-logout-btn" onClick={async () => { try { await apiLogout(); } catch {} closeMobileMenu(); router.replace("/login"); }}>
