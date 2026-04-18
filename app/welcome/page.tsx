@@ -415,16 +415,16 @@ export default function WelcomePage() {
           <Box
             className="enter-up"
             sx={{
-              animationDelay: "1.75s",
+              animationDelay: "0.85s",
               display: "grid",
               gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", lg: "repeat(4, 1fr)" },
               gap: 1.5
             }}
           >
-            <FeatureGlassCard delay="1.85s" icon={<Compass size={16} />}     title="SMART PINNING"    desc="Street-level accuracy with satellite view." color="#4cc9f0" />
-            <FeatureGlassCard delay="1.98s" icon={<ShieldCheck size={16} />} title="RELIABLE FILTERS" desc="Filter by province, city & barangay."        color="#10b981" />
-            <FeatureGlassCard delay="2.11s" icon={<TrendingUp size={16} />}  title="INSTANT INSIGHTS" desc="Analyze nearby commercial zones."             color="#f59e0b" />
-            <FeatureGlassCard delay="2.24s" icon={<Zap size={16} />}         title="1-CLICK REPORTS"  desc="Generate professional PDF reports."           color="#ef4444" />
+            <FeatureGlassCard delay="0.85s" icon={<Compass size={16} />}     title="SMART PINNING"    desc="Street-level accuracy with satellite view." color="#4cc9f0" />
+            <FeatureGlassCard delay="0.98s" icon={<ShieldCheck size={16} />} title="RELIABLE FILTERS" desc="Filter by province, city & barangay."        color="#10b981" />
+            <FeatureGlassCard delay="1.11s" icon={<TrendingUp size={16} />}  title="INSTANT INSIGHTS" desc="Analyze nearby commercial zones."             color="#f59e0b" />
+            <FeatureGlassCard delay="1.24s" icon={<Zap size={16} />}         title="1-CLICK REPORTS"  desc="Generate professional PDF reports."           color="#ef4444" />
           </Box>
         </Box>
 
