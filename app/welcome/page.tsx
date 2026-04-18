@@ -200,7 +200,12 @@ export default function WelcomePage() {
 
   const enterApp = () => {
     setLoading(true);
-    router.push("/?skip=1");
+    if (authed || getToken()) {
+      router.push("/?skip=1");
+    } else {
+      const next = encodeURIComponent("/?skip=1");
+      router.push(`/login?next=${next}`);
+    }
   };
 
   return (

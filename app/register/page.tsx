@@ -20,7 +20,7 @@ import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
+import { CheckCircle } from "lucide-react";
 
 // ── Design tokens ──────────────────────────────────────────
 const FONT_TITLE = "'Urbanist', sans-serif";
@@ -70,16 +70,16 @@ const inputSx = {
       color: "rgba(255, 255, 255, 0.4)",
     },
     "& input:-webkit-autofill": {
-      "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
-      "-webkit-text-fill-color": "#fff",
+      WebkitBoxShadow: "0 0 0 1000px rgba(20, 30, 48, 1) inset",
+      WebkitTextFillColor: "#fff",
     },
     "& input:-webkit-autofill:hover": {
-      "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
-      "-webkit-text-fill-color": "#fff",
+      WebkitBoxShadow: "0 0 0 1000px rgba(20, 30, 48, 1) inset",
+      WebkitTextFillColor: "#fff",
     },
     "& input:-webkit-autofill:focus": {
-      "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
-      "-webkit-text-fill-color": "#fff",
+      WebkitBoxShadow: "0 0 0 1000px rgba(20, 30, 48, 1) inset",
+      WebkitTextFillColor: "#fff",
     },
     "& input::placeholder": { color: "rgba(255, 255, 255, 0.35)", opacity: 1 },
   },
@@ -262,7 +262,7 @@ export default function RegisterPage() {
       n: "03",
       title: "Start searching",
       desc: "Instant access to verified zonal value data.",
-      icon: <CheckCircleOutlinedIcon sx={{ fontSize: 16 }} />,
+      icon: <CheckCircle size={16} />,
     },
   ];
 
