@@ -20,7 +20,7 @@ import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import { CheckCircle } from "lucide-react";
 
 // ── Design tokens ──────────────────────────────────────────
 const FONT_TITLE = "'Urbanist', sans-serif";
@@ -262,7 +262,7 @@ export default function RegisterPage() {
       n: "03",
       title: "Start searching",
       desc: "Instant access to verified zonal value data.",
-      icon: <CheckCircleOutlineIcon sx={{ fontSize: 16 }} />,
+      icon: <CheckCircle size={16} />,
     },
   ];
 
