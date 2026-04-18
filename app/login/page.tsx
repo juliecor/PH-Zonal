@@ -65,6 +65,7 @@ const inputSx = {
     // ← Make the adornment area blend seamlessly
     "& .MuiInputAdornment-root": {
       background: "transparent",
+      color: "rgba(255, 255, 255, 0.5)",
     },
     "& input:-webkit-autofill": {
       "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
@@ -79,7 +80,6 @@ const inputSx = {
       "-webkit-text-fill-color": "#fff",
     },
     "& input::placeholder": { color: "rgba(255, 255, 255, 0.5)", opacity: 1 },
-    "& .MuiInputAdornment-root": { color: "rgba(255, 255, 255, 0.5)" },
   },
 };
 
