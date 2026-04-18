@@ -61,6 +61,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           <DashboardSidebar
             title=""
             links={[
+              { href: "/welcome", label: "Home", icon: <Home size={16} /> },
               { href: "/dashboard/profile", label: "Profile", icon: <User size={16} /> },
               { href: "/dashboard/reports", label: "Reports", icon: <Home size={16} /> },
               { href: "/dashboard/concerns", label: "Report a Concern", icon: <AlertTriangle size={16} /> },

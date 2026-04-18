@@ -234,7 +234,7 @@ export default function RegisterPage() {
         password_confirmation: confirm,
       });
       setToken(token);
-      router.replace("/welcome");
+      router.replace("/dashboard");
     } catch (e: any) {
       setErr(e?.message || "Register failed");
       if (e?.errors && typeof e.errors === "object") {

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { Compass, ShieldCheck, TrendingUp, Zap, ArrowRight } from "lucide-react";
+import { Compass, ShieldCheck, TrendingUp, Zap, ArrowRight, ArrowUpRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiMe, getToken } from "../lib/authClient";
 import LowBalanceNotice from "../components/LowBalanceNotice";
@@ -186,6 +186,7 @@ export default function WelcomePage() {
   const [balance, setBalance] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [authed, setAuthed] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     setAuthed(!!getToken());
@@ -193,6 +194,7 @@ export default function WelcomePage() {
       if (me) {
         setBalance(me.token_balance ?? null);
         setName(me.name || "");
+        setRole((me.role || "").toString().toLowerCase());
         setAuthed(true);
       }
     });
@@ -206,6 +208,10 @@ export default function WelcomePage() {
       const next = encodeURIComponent("/?skip=1");
       router.push(`/login?next=${next}`);
     }
+  };
+
+  const goToDashboard = () => {
+    router.push((role === "admin") ? "/admin" : "/dashboard");
   };
 
   return (
@@ -386,8 +392,41 @@ export default function WelcomePage() {
             >
               {loading ? "Loading..." : "Start Exploring"}
             </Button>
-
-            {!authed && (
+            {authed ? (
+              <button
+                onClick={goToDashboard}
+                style={{
+                  color: "rgba(255,255,255,0.9)",
+                  background: "transparent",
+                  border: "1px solid transparent",
+                  borderRadius: "10px",
+                  padding: "0.8rem 1rem",
+                  fontFamily: FONT_TEXT,
+                  fontWeight: 600,
+                  fontSize: "1rem",
+                  textShadow: "0 2px 10px rgba(0,0,0,0.3)",
+                  transition: "all 0.3s ease",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color = "#fff";
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = C.blue as any;
+                  (e.currentTarget as HTMLButtonElement).style.background = "rgba(76, 201, 240, 0.1)";
+                  (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 0 20px rgba(76, 201, 240, 0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.9)";
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = "transparent";
+                  (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                  (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
+                }}
+              >
+                Go to Dashboard
+                <span style={{ display: "inline-flex", alignItems: "center", marginLeft: 8 }}>
+                  <ArrowUpRight size={18} />
+                </span>
+              </button>
+            ) : (
               <Link
                 href="/login"
                 style={{
