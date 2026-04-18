@@ -10,6 +10,14 @@ import { useEffect, useState } from "react";
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMenuClosing, setMobileMenuClosing] = useState(false);
+
+  const openMobileMenu = () => { setMobileMenuOpen(true); setMobileMenuClosing(false); };
+  const closeMobileMenu = () => {
+    setMobileMenuClosing(true);
+    // Wait for CSS slide-out animation, then unmount
+    setTimeout(() => { setMobileMenuOpen(false); setMobileMenuClosing(false); }, 250);
+  };
   useEffect(() => {
     (async () => {
       try {
@@ -148,8 +156,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         /* ── Mobile Drawer Overlay ── */
         .al-mobile-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); backdrop-filter:blur(3px); z-index:300; display:flex; animation:alMbFadeIn 0.2s ease; }
         @keyframes alMbFadeIn { from{opacity:0} to{opacity:1} }
+        .al-mobile-overlay.closing { animation:alMbFadeOut 0.22s ease forwards; }
+        @keyframes alMbFadeOut { from{opacity:1} to{opacity:0} }
+
         .al-mobile-drawer { width:300px; max-width:85vw; height:100%; background:#fff; display:flex; flex-direction:column; box-shadow:4px 0 32px rgba(30,58,138,0.2); animation:alMbSlideIn 0.25s cubic-bezier(0.22,1,0.36,1); overflow:hidden; position:relative; }
         @keyframes alMbSlideIn { from{transform:translateX(-100%)} to{transform:translateX(0)} }
+        .al-mobile-drawer.closing { animation:alMbSlideOut 0.25s cubic-bezier(0.22,1,0.36,1) forwards; }
+        @keyframes alMbSlideOut { from{transform:translateX(0)} to{transform:translateX(-100%)} }
         .al-mobile-drawer-close { position:absolute; top:14px; right:-48px; width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.15); border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#fff; transition:background 0.15s; }
         .al-mobile-drawer-close:hover { background:rgba(255,255,255,0.25); }
 
@@ -171,7 +184,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* ── Top bar ── */}
         <header className="al-topbar">
           <div className="al-topbar-logo">
-            <button className="al-hamburger" onClick={() => setMobileMenuOpen(true)} title="Menu">
+            <button className="al-hamburger" onClick={openMobileMenu} title="Menu">
               <Menu size={20} color="#fff" />
             </button>
             <div className="al-topbar-mark">
@@ -202,12 +215,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 title="Admin"
                 links={[
                   { href: "/welcome",          label: "Home",     icon: <Home size={16} /> },
-                  { href: "/admin/profile",    label: "Profile",  icon: <User size={16} /> },
-                  { href: "/admin/users",      label: "Users",    icon: <Users size={16} /> },
-                  { href: "/admin/requests",   label: "Requests", icon: <ClipboardCheck size={16} /> },
-                  { href: "/admin/reports",    label: "Reports",  icon: <FileText size={16} /> },
-                  { href: "/admin/invitations",label: "Invitations", icon: <Users size={16} /> },
-                  { href: "/admin/concerns",   label: "Concerns", icon: <AlertTriangle size={16} /> },
+                    { href: "/admin/profile",    label: "Profile",  icon: <User size={16} /> },
+                    { href: "/admin/users",      label: "Users",    icon: <Users size={16} /> },
+                    { href: "/admin/requests",   label: "Requests", icon: <ClipboardCheck size={16} /> },
+                    { href: "/admin/reports",    label: "Reports",  icon: <FileText size={16} /> },
+                    { href: "/admin/invitations",label: "Invitations", icon: <Users size={16} /> },
+                    { href: "/admin/concerns",   label: "Concerns", icon: <AlertTriangle size={16} /> },
                 ]}
               />
               <div className="sb-logout-row">
@@ -228,10 +241,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
 
       {/* ── Mobile Drawer ── */}
-      {mobileMenuOpen && (
-        <div className="al-mobile-overlay" onClick={(e) => { if (e.target === e.currentTarget) setMobileMenuOpen(false); }}>
-          <div className="al-mobile-drawer">
-            <button className="al-mobile-drawer-close" onClick={() => setMobileMenuOpen(false)} title="Close menu">
+      {(mobileMenuOpen || mobileMenuClosing) && (
+        <div className={`al-mobile-overlay${mobileMenuClosing ? " closing" : ""}`} onClick={(e) => { if (e.target === e.currentTarget) closeMobileMenu(); }}>
+          <div className={`al-mobile-drawer${mobileMenuClosing ? " closing" : ""}`}>
+            <button className="al-mobile-drawer-close" onClick={closeMobileMenu} title="Close menu">
               <X size={16} />
             </button>
             <div style={{ display:'flex', flexDirection:'column', height:'100%' }}>
@@ -239,17 +252,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <DashboardSidebar
                   title="Admin"
                   links={[
-                    { href: "/welcome",          label: "Home",     icon: <Home size={16} /> },
-                    { href: "/admin/profile",    label: "Profile",  icon: <User size={16} /> },
-                    { href: "/admin/users",      label: "Users",    icon: <Users size={16} /> },
-                    { href: "/admin/requests",   label: "Requests", icon: <ClipboardCheck size={16} /> },
-                    { href: "/admin/reports",    label: "Reports",  icon: <FileText size={16} /> },
-                    { href: "/admin/invitations",label: "Invitations", icon: <Users size={16} /> },
-                    { href: "/admin/concerns",   label: "Concerns", icon: <AlertTriangle size={16} /> },
+                    { href: "/welcome",          label: "Home",     icon: <Home size={16} />, onClick: closeMobileMenu },
+                    { href: "/admin/profile",    label: "Profile",  icon: <User size={16} />, onClick: closeMobileMenu },
+                    { href: "/admin/users",      label: "Users",    icon: <Users size={16} />, onClick: closeMobileMenu },
+                    { href: "/admin/requests",   label: "Requests", icon: <ClipboardCheck size={16} />, onClick: closeMobileMenu },
+                    { href: "/admin/reports",    label: "Reports",  icon: <FileText size={16} />, onClick: closeMobileMenu },
+                    { href: "/admin/invitations",label: "Invitations", icon: <Users size={16} />, onClick: closeMobileMenu },
+                    { href: "/admin/concerns",   label: "Concerns", icon: <AlertTriangle size={16} />, onClick: closeMobileMenu },
                   ]}
                 />
                 <div className="sb-logout-row">
-                  <button className="sb-logout-btn" onClick={async () => { try { await apiLogout(); } catch {} setMobileMenuOpen(false); router.replace("/login"); }}>
+                  <button className="sb-logout-btn" onClick={async () => { try { await apiLogout(); } catch {} closeMobileMenu(); router.replace("/login"); }}>
                     <LogOut size={15} />
                     <span>Log out</span>
                   </button>
