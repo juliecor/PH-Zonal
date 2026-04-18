@@ -24,9 +24,12 @@ export default function DashboardSidebar({ title, links }: { title: string; link
   }, []);
 
   const avatarUrl = useMemo(() => {
-    if (me?.avatar_path) {
+    if (!me) return "";
+    if (me.avatar_url && typeof me.avatar_url === "string") return me.avatar_url;
+    if (me.avatar_path) {
       const p = String(me.avatar_path);
       if (p.startsWith("http")) return p;
+      // Legacy local storage fallback (kept for dev/local only)
       return `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000"}/storage/${p.replace(/^storage\//,'')}`;
     }
     return "";
@@ -113,7 +116,7 @@ export default function DashboardSidebar({ title, links }: { title: string; link
         <div className="dsb-user">
           <div className="dsb-avatar" aria-hidden>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={avatarUrl || "/pictures/default-avatar.png"} alt="avatar" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} />
+            <img src={avatarUrl || "/pictures/profile-icon.png"} alt="avatar" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%'}} />
           </div>
           <div className="dsb-name">{me?.name || 'Welcome'}</div>
           <div className="dsb-email">{me?.email || ''}</div>

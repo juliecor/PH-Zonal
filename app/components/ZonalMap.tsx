@@ -16,6 +16,7 @@ type HazardLayers = {
 interface ZonalMapProps {
   selected?: LatLng | null;
   onPickOnMap?: (lat: number, lon: number) => void;
+  disablePickOnMap?: boolean;
   popupLabel?: string;
   boundary?: Boundary | null;
   highlightRadiusMeters?: number;
@@ -58,6 +59,7 @@ const TILESERVERS: Record<MapType, { url: string; attribution: string; maxZoom: 
 export default function ZonalMap({
   selected,
   onPickOnMap,
+  disablePickOnMap,
   popupLabel,
   boundary,
   highlightRadiusMeters = 80,
@@ -77,6 +79,8 @@ export default function ZonalMap({
   const tileLayerRef = useRef<any>(null);
   const googleReadyRef = useRef<boolean>(false);
   const canvasRendererRef = useRef<any>(null);
+  const onPickRef = useRef<typeof onPickOnMap | null>(null);
+  const canPickRef = useRef<boolean>(true);
 
   const hazardRefs = useRef<{ [k: string]: any | null }>({
     flood: null,
@@ -94,6 +98,10 @@ export default function ZonalMap({
     const event = new CustomEvent("zonalmap:idle");
     window.dispatchEvent(event);
   };
+
+  // keep handler + flag fresh for click listener
+  useEffect(() => { onPickRef.current = onPickOnMap ?? null; }, [onPickOnMap]);
+  useEffect(() => { canPickRef.current = !(disablePickOnMap ?? false); }, [disablePickOnMap]);
 
   // Init map
   useEffect(() => {
@@ -125,7 +133,9 @@ export default function ZonalMap({
     } catch {}
 
     map.on("click", (e: any) => {
-      if (onPickOnMap) onPickOnMap(e.latlng.lat, e.latlng.lng);
+      if (!onPickRef.current) return;
+      if (!canPickRef.current) return;
+      onPickRef.current(e.latlng.lat, e.latlng.lng);
     });
 
     mapRef.current = map;

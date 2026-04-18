@@ -349,6 +349,35 @@ export async function apiAdminDenyTokenRequest(id: number) {
   return await res.json();
 }
 
+// --- Admin counts (badges) ---
+export async function apiAdminPendingCounts(): Promise<{ tokenRequests: number; concerns: number }> {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const headers = { Accept: "application/json", Authorization: `Bearer ${token}` } as const;
+
+  // Request minimal data but keep pagination meta for totals
+  const [trRes, cRes] = await Promise.all([
+    fetch(`${backendBase}/api/admin/token-requests?status=pending&per_page=1`, { headers }),
+    fetch(`${backendBase}/api/admin/concerns?status=pending&per_page=1`, { headers }),
+  ]);
+
+  let trTotal = 0, cTotal = 0;
+  try {
+    if (trRes.ok) {
+      const j = await trRes.json();
+      trTotal = typeof j.total === "number" ? j.total : Array.isArray(j.data) ? j.data.length : 0;
+    }
+  } catch {}
+  try {
+    if (cRes.ok) {
+      const j = await cRes.json();
+      cTotal = typeof j.total === "number" ? j.total : Array.isArray(j.data) ? j.data.length : 0;
+    }
+  } catch {}
+
+  return { tokenRequests: trTotal, concerns: cTotal };
+}
 // --- Reports (client) ---
 export async function apiCreateReport(payload: {
   street?: string;
@@ -467,4 +496,30 @@ export async function apiUploadAvatar(file: File) {
   const j = await res.json();
   setCachedUser(j.user);
   return j;
+}
+
+// --- Admin invitations ---
+export async function apiAdminInviteUsers(params: { emails: string[]; redirect_url?: string }) {
+  const token = getToken();
+  if (!token) throw new Error("Not authenticated");
+
+  const payload: Record<string, any> = { emails: params.emails };
+  if (params.redirect_url) payload.redirect_url = params.redirect_url;
+
+  const res = await fetch(`${backendBase}/api/admin/invitations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `Invite failed (${res.status})`);
+  }
+
+  return await res.json();
 }

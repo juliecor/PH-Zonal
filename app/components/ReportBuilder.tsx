@@ -856,14 +856,15 @@ export default function ReportBuilder(props: {
           <div className="border-t border-gray-200 pt-4 mt-4">
 
             {/* Investment Viability Score */}
-            {poiData && !poiLoading && (
+            {false && (
               <div className="mb-5 p-4 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 shadow-sm">
                 <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wide mb-3">Investment Viability Score</h3>
                 {(() => {
-                  const healthcare = (poiData.counts.hospitals || 0) + (poiData.counts.clinics || 0);
-                  const education  = poiData.counts.schools || 0;
-                  const security   = (poiData.counts.policeStations || 0) + (poiData.counts.fireStations || 0);
-                  const services   = poiData.counts.pharmacies || 0;
+                  const counts = (poiData?.counts as any) || {};
+                  const healthcare = (counts.hospitals || 0) + (counts.clinics || 0);
+                  const education  = counts.schools || 0;
+                  const security   = (counts.policeStations || 0) + (counts.fireStations || 0);
+                  const services   = counts.pharmacies || 0;
                   const totalScore = Math.min(100, Math.round((healthcare * 15 + education * 15 + security * 10 + services * 10) / 5));
                   const viability  = totalScore >= 75 ? "Excellent" : totalScore >= 60 ? "Good" : totalScore >= 45 ? "Moderate" : "Limited";
                   const color      = totalScore >= 75 ? "from-green-400 to-emerald-500" : totalScore >= 60 ? "from-blue-400 to-cyan-500" : totalScore >= 45 ? "from-yellow-400 to-amber-500" : "from-orange-400 to-red-500";

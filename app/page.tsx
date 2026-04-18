@@ -19,6 +19,7 @@ import {
   PanelRightClose,
   Zap,
   MapPin,
+  RefreshCw,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiMe } from "./lib/authClient";
@@ -197,6 +198,68 @@ export function Home() {
   const [rightOpen, setRightOpen] = useState(false);
   const [autoPreview, setAutoPreview] = useState(false);
   const [showRegionPicker, setShowRegionPicker] = useState(true);
+  const [mapKey, setMapKey] = useState(0);
+
+  function resetToFirstVisit() {
+    try { zonalAbortRef.current?.abort(); } catch {}
+    // Invalidate any pending async updates
+    try { reqIdRef.current++; } catch {}
+    try { filterPinpointRef.current = 0; } catch {}
+    try { citiesReqGenerationRef.current++; } catch {}
+    if (searchDebounceRef.current) { try { clearTimeout(searchDebounceRef.current); } catch {} searchDebounceRef.current = null; }
+    // Map + selection
+    setSelectedLocation(null);
+    setAnchorLocation(null);
+    setSelectedRow(null);
+    setBoundary(null);
+    setGeoLabel("");
+    setMatchStatus("");
+    setStreetGeo(null);
+    setShowStreetHighlight(false);
+    setAreaLabels([]);
+
+    // Details / side effects
+    setPoiData(null);
+    setDetailsErr("");
+    setAreaDescription("");
+    setAreaDescErr("");
+    setIdealBusinessText("");
+    setComps(null);
+
+    // Filters & results
+    setCity("");
+    setBarangay("");
+    setClassification("");
+    setQ("");
+    setRows([]);
+    setTotalRows(0);
+    setPage(1);
+    setPageCount(null);
+    setHasPrev(false);
+    setHasNext(false);
+    setFacetCities([]);
+    setFacetBarangays([]);
+
+    // Search UI
+    setRegionSearch("");
+    setMatches([]);
+    setSearchMode("province");
+    setShowRegionPicker(true);
+
+    // Spinners off
+    setLoading(false);
+    setGeoLoading(false);
+    setPoiLoading(false);
+
+    // Panels
+    setLeftOpen(true);
+    setBottomOpen(true);
+    setRightOpen(false);
+    setAutoPreview(false);
+
+    // Force remount the map component to reset center/zoom/tiles
+    setMapKey((k) => k + 1);
+  }
 
   function normalizeCityHint(city: string, province?: string) {
     const c = String(city || "").toUpperCase().trim();
@@ -570,11 +633,11 @@ export function Home() {
       <ZonalSearchIndicator visible={loading} />
 
       <div className="absolute inset-0">
-        <MapComponent selected={selectedLocation} onPickOnMap={selectLocationFromMap} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} />
+        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} />
       </div>
 
       {/* Brand pill */}
-      {/* Removed top-left partner header card for a cleaner view */}
+      {/* Removed top-left partner header card fo-r a cleaner view */}
 
       {/* Map type controls */}
       <div className="absolute top-4 right-4 z-30">
@@ -588,6 +651,13 @@ export function Home() {
               </button>
             );
           })}
+          <button
+            onClick={resetToFirstVisit}
+            className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold transition border-t border-gray-100 text-gray-700 hover:bg-gray-50"
+            title="Reset map and selections"
+          >
+            <RefreshCw size={14} /> <span className="hidden sm:inline">Reset</span>
+          </button>
         </div>
       </div>
 
@@ -662,9 +732,7 @@ export function Home() {
                   🔄 Refresh
                 </button>
               )}
-              <button onClick={()=>setRightOpen(v=>!v)} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ml-auto" style={rightOpen?{background:"#f5f0eb",color:"#1e3a8a"}:{background:"rgba(255,255,255,0.10)",color:"#f5f0eb"}} title="Open report panel">
-                {rightOpen?<PanelRightClose size={13}/>:<PanelRightOpen size={13}/>}Report
-              </button>
+              {/* Report toggle removed as requested */}
             </div>
           </div>
 

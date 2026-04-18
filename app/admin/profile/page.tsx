@@ -51,6 +51,7 @@ export default function AdminProfilePage() {
 
   function avatarUrl() {
     if (previewUrl) return previewUrl;
+    if (me?.avatar_url && typeof me.avatar_url === "string") return me.avatar_url as string;
     if (me?.avatar_path) {
       const p = String(me.avatar_path);
       if (p.startsWith("http")) return p;
