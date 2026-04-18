@@ -68,16 +68,16 @@ const inputSx = {
       color: "rgba(255, 255, 255, 0.5)",
     },
     "& input:-webkit-autofill": {
-      "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
-      "-webkit-text-fill-color": "#fff",
+      WebkitBoxShadow: "0 0 0 1000px rgba(20, 30, 48, 1) inset",
+      WebkitTextFillColor: "#fff",
     },
     "& input:-webkit-autofill:hover": {
-      "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
-      "-webkit-text-fill-color": "#fff",
+      WebkitBoxShadow: "0 0 0 1000px rgba(20, 30, 48, 1) inset",
+      WebkitTextFillColor: "#fff",
     },
     "& input:-webkit-autofill:focus": {
-      "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
-      "-webkit-text-fill-color": "#fff",
+      WebkitBoxShadow: "0 0 0 1000px rgba(20, 30, 48, 1) inset",
+      WebkitTextFillColor: "#fff",
     },
     "& input::placeholder": { color: "rgba(255, 255, 255, 0.5)", opacity: 1 },
   },

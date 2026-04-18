@@ -69,16 +69,16 @@ const inputSx = {
       background: "transparent",
     },
     "& input:-webkit-autofill": {
-      "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
-      "-webkit-text-fill-color": "#fff",
+      WebkitBoxShadow: "0 0 0 1000px rgba(20, 30, 48, 1) inset",
+      WebkitTextFillColor: "#fff",
     },
     "& input:-webkit-autofill:hover": {
-      "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
-      "-webkit-text-fill-color": "#fff",
+      WebkitBoxShadow: "0 0 0 1000px rgba(20, 30, 48, 1) inset",
+      WebkitTextFillColor: "#fff",
     },
     "& input:-webkit-autofill:focus": {
-      "-webkit-box-shadow": "0 0 0 1000px rgba(20, 30, 48, 1) inset",
-      "-webkit-text-fill-color": "#fff",
+      WebkitBoxShadow: "0 0 0 1000px rgba(20, 30, 48, 1) inset",
+      WebkitTextFillColor: "#fff",
     },
     "& input::placeholder": { color: "rgba(255, 255, 255, 0.35)", opacity: 1 },
     "& .MuiInputAdornment-root": { color: "rgba(255, 255, 255, 0.4)" },
