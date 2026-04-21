@@ -21,7 +21,7 @@ export async function apiRegister(payload: {
   email: string;
   password: string;
   password_confirmation: string;
-}): Promise<AuthResponse> {
+}): Promise<AuthResponse | { pending_verification: boolean; user_id: number; email: string; resend_cooldown?: number }> {
   const res = await fetch(`${backendBase}/api/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -44,7 +44,7 @@ export async function apiRegister(payload: {
     throw { message: msg, errors: j?.errors, status: res.status } as any;
   }
 
-  return (await res.json()) as AuthResponse;
+  return (await res.json()) as any;
 }
 
 export async function apiLogin(payload: {
@@ -522,4 +522,58 @@ export async function apiAdminInviteUsers(params: { emails: string[]; redirect_u
   }
 
   return await res.json();
+}
+
+// OTP endpoints
+export async function apiVerifyOtp(user_id: number, code: string): Promise<AuthResponse> {
+  const res = await fetch(`${backendBase}/api/otp/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ user_id, code }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `Verify failed (${res.status})`);
+  }
+  return (await res.json()) as AuthResponse;
+}
+
+export async function apiResendOtp(user_id: number) {
+  const res = await fetch(`${backendBase}/api/otp/resend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ user_id }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `Resend failed (${res.status})`);
+  }
+  return await res.json();
+}
+
+// Passwordless login OTP
+export async function apiRequestLoginOtp(email: string): Promise<{ user_id: number; resend_cooldown?: number }> {
+  const res = await fetch(`${backendBase}/api/login/otp/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `Request failed (${res.status})`);
+  }
+  return (await res.json()) as any;
+}
+
+export async function apiVerifyLoginOtp(user_id: number, code: string): Promise<AuthResponse> {
+  const res = await fetch(`${backendBase}/api/login/otp/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ user_id, code }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `Verify failed (${res.status})`);
+  }
+  return (await res.json()) as AuthResponse;
 }
