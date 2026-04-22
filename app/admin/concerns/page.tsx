@@ -51,11 +51,12 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 const theme = createTheme({
   palette: {
     mode: "light",
-    primary: { main: "#1a2e4a", light: "#2d4a72", dark: "#0f1f38" },
-    secondary: { main: "#e67e4d" },
+    // Brand: navy + gold
+    primary: { main: "#0f1f38", light: "#1e3a8a", dark: "#0a1628" },
+    secondary: { main: "#c9a84c" },
     success: { main: "#059669", light: "#d1fae5" },
     warning: { main: "#d97706", light: "#fef3c7" },
-    background: { default: "#f4f1ed", paper: "#ffffff" },
+    background: { default: "#f5f0eb", paper: "#ffffff" },
   },
   typography: {
     fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
@@ -259,6 +260,25 @@ export default function AdminConcernsPage() {
       <Box sx={{ p: { xs: 2, md: 3 }, bgcolor: "background.default", minHeight: "100vh" }}>
         <Stack spacing={2.5}>
 
+          {/* ── Minimal Header ── */}
+          <Paper elevation={0} sx={{
+            borderRadius: 2,
+            px: 2.5, py: 2,
+            background: '#fff',
+            border: '1px solid rgba(15,31,56,0.06)'
+          }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Stack spacing={0.25}>
+                <Typography sx={{ fontWeight:800, fontSize:18, color:'#0f1f38', letterSpacing:.2 }}>User Concerns</Typography>
+                <Typography sx={{ fontSize:13, color:'text.secondary' }}>Review and resolve support items</Typography>
+              </Stack>
+              <Stack direction="row" spacing={1}>
+                <Box sx={{ px:1.25, py:0.5, borderRadius: 20, bgcolor:'rgba(30,58,138,0.06)', border:'1px solid rgba(30,58,138,0.2)', color:'#1e3a8a', fontSize:12, fontWeight:700 }}>Open: {openCount}</Box>
+                <Box sx={{ px:1.25, py:0.5, borderRadius: 20, bgcolor:'rgba(201,168,76,0.08)', border:'1px solid rgba(201,168,76,0.26)', color:'#7a5f16', fontSize:12, fontWeight:700 }}>Resolved: {rows.length - openCount}</Box>
+              </Stack>
+            </Stack>
+          </Paper>
+
           {/* ── Header ── */}
           <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 1.5 }}>
             <Box>
@@ -386,13 +406,13 @@ export default function AdminConcernsPage() {
           </Paper>
 
           {/* ── Table Card ── */}
-          <Paper sx={{ borderRadius: 0, overflow: "hidden" }}>
+          <Paper sx={{ borderRadius: 2, overflow: "hidden", boxShadow:'0 10px 36px rgba(15,31,56,0.10), 0 1px 2px rgba(15,31,56,0.08)', border:'1px solid rgba(15,31,56,0.06)' }}>
             <TableContainer>
               <Table>
                 <TableHead>
                   <TableRow>
                     {["Status", "Submitted", "Category", "Subject", "Message", "Before Photo", "After Photo", "After Note", "User", "Action"].map((h) => (
-                      <TableCell key={h}>{h}</TableCell>
+                      <TableCell key={h} sx={{ fontWeight:700, letterSpacing:'.06em' }}>{h}</TableCell>
                     ))}
                   </TableRow>
                 </TableHead>
@@ -400,13 +420,20 @@ export default function AdminConcernsPage() {
                   {loading ? (
                     <SkeletonRows />
                   ) : rows.length ? (
-                    rows.map((r) => (
+                    rows.map((r) => {
+                      const resolved = String(r.status).toLowerCase() === 'resolved';
+                      return (
                       <TableRow
                         key={r.id}
                         sx={{
-                          transition: "background 0.15s",
-                          "&:hover": { bgcolor: "#faf8f5" },
+                          position:'relative',
+                          transition: "background 0.12s",
+                          "&:hover": { bgcolor: '#fafafa' },
                           "&:last-child td": { borderBottom: 0 },
+                          "&::before": {
+                            content:'""', position:'absolute', left:0, top:0, bottom:0, width:2,
+                            background: resolved ? 'rgba(22,163,74,0.8)' : 'rgba(245,158,11,0.85)', borderRadius:'0 3px 3px 0'
+                          }
                         }}
                       >
                         {/* Status */}
@@ -560,7 +587,7 @@ export default function AdminConcernsPage() {
                           </Stack>
                         </TableCell>
                       </TableRow>
-                    ))
+                    )})
                   ) : (
                     <TableRow>
                       <TableCell colSpan={8}>
