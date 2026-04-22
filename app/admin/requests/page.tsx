@@ -64,6 +64,19 @@ export default function AdminRequestsPage() {
     return requests.filter((r: any) => `${r.user?.first_name || r.user?.name || ''} ${r.user?.last_name || ''} ${r.user?.email || ''}`.toLowerCase().includes(s));
   }, [requests, q]);
 
+  // ── Derived KPIs ──
+  const kpiPending = filtered.length;
+  const kpiTotalQty = filtered.reduce((sum: number, r: any) => sum + (Number(r.quantity) || 0), 0);
+  const kpiOldestAge = (() => {
+    if (filtered.length === 0) return "—";
+    const oldest = filtered.reduce((min: number, r: any) => Math.min(min, new Date(r.created_at).getTime()), Date.now());
+    const diffMs = Date.now() - oldest;
+    const hrs = Math.floor(diffMs / 3_600_000);
+    if (hrs < 24) return `${hrs}h`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d`;
+  })();
+
   async function approve(id: number) {
     setActing(id);
     setRequests((r) => r.filter((x: any) => x.id !== id));
@@ -375,6 +388,15 @@ export default function AdminRequestsPage() {
           </div>
         </div>
 
+        {/* ── Summary Band ── */}
+        <div className="req-list-card" style={{ padding: '0.9rem 1rem' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(12,1fr)', gap:'0.75rem' }}>
+            <Kpi label="Pending Requests" value={kpiPending.toLocaleString()} note="Matching filters" colSpan={4} />
+            <Kpi label="Total Tokens Asked" value={kpiTotalQty.toLocaleString()} note="Across pending" colSpan={4} />
+            <Kpi label="Oldest Age" value={kpiOldestAge} note="Queue age" colSpan={4} />
+          </div>
+        </div>
+
         {/* ── Content ── */}
         {loading ? (
           <div className="req-list-card">
@@ -467,5 +489,20 @@ export default function AdminRequestsPage() {
 
       </div>
     </>
+  );
+}
+
+function Kpi({ label, value, note, colSpan = 4 }: { label: string; value: string; note?: string; colSpan?: number }) {
+  return (
+    <div style={{ gridColumn: `span ${colSpan} / span ${colSpan}` }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem', padding:'0.9rem 0.9rem', background:'#fff', border:'1px solid #e8e0d8', borderRadius:12 }}>
+        <div>
+          <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'.14em', color:'#1e3a8a' }}>{label}</div>
+          <div style={{ marginTop:4, fontSize:22, fontWeight:700, color:'#0f1f38' }}>{value}</div>
+          {note && <div style={{ marginTop:4, fontSize:12, color:'#6b7585' }}>{note}</div>}
+        </div>
+        <span aria-hidden style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:24, height:24, borderRadius:999, border:'1px solid #e8e0d8', color:'#c9a84c', fontWeight:800 }}>•</span>
+      </div>
+    </div>
   );
 }

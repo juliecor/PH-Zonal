@@ -44,71 +44,74 @@ export default function DashboardSidebar({ title, links }: { title: string; link
           height: 100%;
           display: flex;
           flex-direction: column;
-          background: #fff;
+          /* Light, modern palette */
+          background: linear-gradient(180deg, #ffffff 0%, #faf6f2 100%);
+          border-right: 1px solid #e8e0d8;
+          position: relative;
+          color: #0f1f38;
           font-family: 'DM Sans', sans-serif;
           overflow: hidden;
         }
+        /* Removed stripe overlay for a smoother, eye-friendly background */
 
         .dsb-user {
           flex-shrink: 0;
-          padding: 1.1rem 1rem 1rem;
-          background: linear-gradient(160deg, #0f1f38 0%, #1e3a8a 80%);
-          border-bottom: 1px solid #0b1628;
-          display: flex; flex-direction: column; align-items: center; gap: 10px;
+          padding: 1.15rem 1rem 1rem;
+          background: linear-gradient(180deg, #ffffff 0%, #faf6f2 100%);
+          border-bottom: 1px solid #e8e0d8;
+          display: flex; flex-direction: column; align-items: center; gap: 12px;
         }
-        .dsb-avatar { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; position: relative; box-shadow: 0 2px 10px rgba(0,0,0,0.25); }
-        .dsb-avatar::after { content:""; position:absolute; inset:-3px; border-radius:50%; border:3px solid #c9a84c; pointer-events:none; }
-        .dsb-name { font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#f5f0eb; font-size:15px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .dsb-email { color:rgba(245,240,235,0.85); font-size:12px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .dsb-avatar { width: 84px; height: 84px; border-radius: 50%; overflow: hidden; position: relative; box-shadow: 0 8px 22px rgba(15,31,56,0.12); }
+        .dsb-avatar::after { content:""; position:absolute; inset:0; border-radius:50%; box-shadow: 0 0 0 2.5px rgba(201,168,76,0.9) inset; pointer-events:none; }
+        .dsb-name { font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#0f1f38; font-size:15px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .dsb-email { color:#7a8394; font-size:12px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .dsb-role { display:inline-flex; align-items:center; gap:.35rem; padding:.2rem .55rem; border:1px solid rgba(201,168,76,0.35); background:rgba(201,168,76,0.12); color:#7a5f16; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
 
+        .dsb-sec { padding: 0.2rem 0.9rem; font-size: 0.7rem; letter-spacing: 0.12em; color: #9aa3b0; text-transform: uppercase; font-weight: 700; }
         .dsb-nav {
           flex: 1;
           overflow-y: auto;
-          padding: 0.75rem 0.75rem;
+          padding: 0.9rem 0.75rem 1rem;
           display: flex;
           flex-direction: column;
-          gap: 0.2rem;
+          gap: 0.25rem;
         }
+        .dsb-nav::-webkit-scrollbar { width: 10px; }
+        .dsb-nav::-webkit-scrollbar-thumb { background: #e8e0d8; border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+        .dsb-nav::-webkit-scrollbar-track { background: transparent; }
 
         .dsb-link {
+          position: relative;
           display: flex;
           align-items: center;
           gap: 0.75rem;
-          padding: 0.6rem 0.75rem;
-          border-radius: 10px;
-          font-size: 0.85rem;
-          font-weight: 400;
+          padding: 0.62rem 0.8rem 0.62rem 0.85rem;
+          border-radius: 12px;
+          font-size: 0.88rem;
+          font-weight: 500;
           text-decoration: none;
-          transition: background 0.14s, color 0.14s;
+          transition: background 0.16s ease, color 0.16s ease, transform 0.12s ease;
           color: #4a5568;
         }
-        .dsb-link:hover { background: #f9f6f2; color: #0f1f38; }
-        .dsb-link.active {
-          background: #0f1f38;
-          color: #f5f0eb;
-          font-weight: 500;
-          box-shadow: 0 2px 10px rgba(15,31,56,0.18);
-        }
+        .dsb-link:hover { background: #f9f6f2; color: #0f1f38; transform: translateX(2px); }
+        .dsb-link.active { background: #1e40af; color: #ffffff; box-shadow: 0 6px 18px rgba(30,64,175,0.18); }
+        .dsb-link.active::before { content:""; position:absolute; left:-6px; top:8px; bottom:8px; width:4px; border-radius:3px; background: linear-gradient(180deg,#e7d8a0,#c9a84c); box-shadow:0 0 18px rgba(201,168,76,0.55); }
         .dsb-link.disabled { opacity: 0.45; pointer-events: none; }
 
         .dsb-icon {
           width: 30px; height: 30px;
-          border-radius: 8px;
+          border-radius: 10px;
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
-          transition: background 0.14s;
+          transition: background 0.14s, transform 0.14s, color 0.14s;
         }
         .dsb-icon.inactive { background: #f5f0eb; color: #7a8394; }
-        .dsb-icon.active { background: rgba(201,168,76,0.18); color: #c9a84c; }
+        .dsb-icon.active { background: rgba(201,168,76,0.18); color: #c9a84c; transform: scale(1.02); }
 
         .dsb-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        .dsb-link.active .dsb-dot {
-          width: 5px; height: 5px;
-          border-radius: 50%;
-          background: #c9a84c;
-          flex-shrink: 0;
-        }
+        /* Hide old dot; we use a left accent bar now */
+        .dsb-link .dsb-dot { display:none; }
       `}</style>
 
       <div className="dsb-root">
@@ -120,10 +123,12 @@ export default function DashboardSidebar({ title, links }: { title: string; link
           </div>
           <div className="dsb-name">{me?.name || 'Welcome'}</div>
           <div className="dsb-email">{me?.email || ''}</div>
+          {(me?.role || title) && <div className="dsb-role">{String(me?.role || title).toUpperCase()}</div>}
         </div>
 
         {/* Nav links */}
         <nav className="dsb-nav">
+          <div className="dsb-sec">Menu</div>
           {links.map(l => {
             const active = pathname === l.href || pathname?.startsWith(l.href + "/");
             return (

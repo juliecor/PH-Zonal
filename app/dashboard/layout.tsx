@@ -4,8 +4,9 @@ import DashboardSidebar from "../components/DashboardSidebar";
 import LowBalanceNotice from "../components/LowBalanceNotice";
 import { User, Coins, Home, Bell, X, Search, LogOut, Menu, AlertTriangle } from "lucide-react";
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { toast } from "sonner";
-import { apiMe, getCachedUser, getToken, apiLogout } from "../lib/authClient";
+import { apiMe, getCachedUser, getToken, apiLogout, apiMyReports } from "../lib/authClient";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const [showNotificationModal, setShowNotificationModal] = useState(false);
@@ -14,6 +15,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [me, setMe] = useState<any>(null);
   const [notifTab, setNotifTab] = useState<"all" | "unread">("all");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [rep7, setRep7] = useState<number | null>(null);
+  const [rep30, setRep30] = useState<number | null>(null);
+  const pathname = usePathname();
 
   async function fetchUserData() {
     const cached = getCachedUser();
@@ -33,6 +37,27 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }
 
   useEffect(() => { fetchUserData(); }, []);
+
+  // Fetch my reports counts for KPI band
+  useEffect(() => {
+    async function loadCounts() {
+      try {
+        if (!getToken()) { setRep7(0); setRep30(0); return; }
+        const now = new Date();
+        const d7 = new Date(now); d7.setDate(now.getDate() - 7);
+        const d30 = new Date(now); d30.setDate(now.getDate() - 30);
+        const fmt = (d: Date) => d.toISOString().slice(0, 10);
+        const [r7, r30] = await Promise.all([
+          apiMyReports({ from: fmt(d7), to: fmt(now), per_page: 1 }).catch(() => null),
+          apiMyReports({ from: fmt(d30), to: fmt(now), per_page: 1 }).catch(() => null),
+        ]);
+        const ext = (j: any) => (typeof j?.total === 'number' ? j.total : (j?.meta?.total ?? (Array.isArray(j?.data) ? j.data.length : 0)));
+        setRep7(ext(r7));
+        setRep30(ext(r30));
+      } catch {}
+    }
+    loadCounts();
+  }, []);
 
   const displayName = me?.name || userName || "?";
   const initials = displayName.split(" ").slice(0, 2).map((w: string) => w[0] ?? "").join("").toUpperCase() || "?";
@@ -269,7 +294,17 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             </div>
           </aside>
 
-          <main className="cl-main">{children}</main>
+          <main className="cl-main">
+            {/* KPI Band (hide on profile route) */}
+            {!(pathname && pathname.startsWith("/dashboard/profile")) && (
+              <div className="r-kpi" style={{ display:'grid', gridTemplateColumns:'repeat(12,1fr)', gap:'0.75rem' }}>
+                <Kpi label="Token Balance" value={tokenBalance === null ? '—' : tokenBalance.toLocaleString()} note="Current tokens" colSpan={4} highlight="token" />
+                <Kpi label="Reports (7d)" value={rep7 === null ? '—' : rep7.toLocaleString()} note="Last 7 days" colSpan={4} />
+                <Kpi label="Reports (30d)" value={rep30 === null ? '—' : rep30.toLocaleString()} note="Last 30 days" colSpan={4} />
+              </div>
+            )}
+            {children}
+          </main>
         </div>
       </div>
 
@@ -334,5 +369,20 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </div>
       )}
     </>
+  );
+}
+
+function Kpi({ label, value, note, colSpan = 4, highlight }: { label: string; value: string; note?: string; colSpan?: number; highlight?: 'token' }) {
+  return (
+    <div style={{ gridColumn: `span ${colSpan} / span ${colSpan}` }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem', padding:'0.9rem 0.9rem', background:'#fff', border:'1px solid #e8e0d8', borderRadius:12, boxShadow:'0 2px 12px rgba(30,64,175,0.04)' }}>
+        <div>
+          <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'.14em', color:'#1e3a8a' }}>{label}</div>
+          <div style={{ marginTop:4, fontSize:22, fontWeight:700, color:'#0f1f38' }}>{value}</div>
+          {note && <div style={{ marginTop:4, fontSize:12, color:'#6b7585' }}>{note}</div>}
+        </div>
+        <span aria-hidden style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:24, height:24, borderRadius:999, border:'1px solid #e8e0d8', color: highlight==='token' ? '#c9a84c' : '#1e3a8a', fontWeight:800 }}>•</span>
+      </div>
+    </div>
   );
 }

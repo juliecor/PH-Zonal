@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Card from "../../components/Card";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { backendBase, getToken } from "../../lib/authClient";
 import { toast } from "sonner";
@@ -36,6 +37,8 @@ export default function AdminReportsPage() {
   const urlSyncRef = useRef<string>("");
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   async function load(p = page) {
     setLoading(true); setErr("");
@@ -90,6 +93,24 @@ export default function AdminReportsPage() {
 
   const totalPages = meta?.last_page || 1;
   const currentPage = meta?.current_page || page;
+
+  // Derived KPIs for current filter
+  const kpiTotalReports = meta?.total ?? rows.length;
+  const kpiUniqueCities = (() => {
+    const set = new Set<string>();
+    rows.forEach(r => { if (r.city) set.add(String(r.city)); });
+    return set.size;
+  })();
+  const kpiAvgZonal = (() => {
+    const nums = rows
+      .map(r => r.zonal_value)
+      .filter((v): v is string => typeof v === 'string')
+      .map(v => parseFloat(v.replace(/[^0-9.]/g, '')))
+      .filter(n => !isNaN(n));
+    if (nums.length === 0) return null;
+    const avg = nums.reduce((a,b)=>a+b,0) / nums.length;
+    return Math.round(avg).toLocaleString();
+  })();
 
   async function exportCsv() {
     try {
@@ -318,6 +339,29 @@ export default function AdminReportsPage() {
         }
         .btn-export:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
+        .btn-refresh, .btn-more {
+          display: flex; align-items: center; gap: 0.4rem;
+          background: #fff; color: #0f1f38; border: 1.5px solid #e2d9d0;
+          border-radius: 9px; padding: 0.55rem 0.9rem; font-size: 0.825rem; font-weight: 500; cursor: pointer;
+          transition: border-color 0.18s, background 0.18s, transform 0.13s, box-shadow 0.18s;
+        }
+        .btn-refresh:hover, .btn-more:hover { border-color: #c9a84c; background:#fdf9f3; transform: translateY(-1px); box-shadow: 0 2px 10px rgba(15,31,56,0.12); }
+        .more-menu { position: absolute; right: 0; margin-top: 6px; background:#fff; border:1px solid #e8e0d8; border-radius:10px; box-shadow:0 8px 24px rgba(15,31,56,0.12); overflow:hidden; z-index:5; }
+        .more-item { display:flex; align-items:center; gap:0.5rem; padding:0.55rem 0.9rem; font-size:0.82rem; color:#0f1f38; cursor:pointer; white-space:nowrap; }
+        .more-item:hover { background:#faf7f4; }
+
+        /* ── Filters sheet ── */
+        .flt-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); backdrop-filter:blur(2px); z-index:60; display:flex; justify-content:flex-end; }
+        .flt-panel { width:320px; max-width:90vw; height:100%; background:#fff; border-left:1px solid #e8e0d8; box-shadow:-8px 0 28px rgba(15,31,56,0.18); animation:fltIn .2s ease; display:flex; flex-direction:column; }
+        @keyframes fltIn { from{ transform:translateX(30px); opacity:0 } to{ transform:translateX(0); opacity:1 } }
+        .flt-head { padding:1rem 1rem; border-bottom:1px solid #f0ebe4; font-weight:700; color:#0f1f38; display:flex; align-items:center; justify-content:space-between; }
+        .flt-body { padding:0.9rem 1rem; display:flex; flex-direction:column; gap:0.75rem; }
+        .flt-label { font-size:0.75rem; color:#6b7585; font-weight:600; letter-spacing:.05em; }
+        .flt-inp { width:100%; background:#fff; border:1.5px solid #e2d9d0; border-radius:10px; padding:.55rem .75rem; font-size:.85rem; color:#0f1f38; outline:none; }
+        .flt-actions { margin-top:auto; padding:1rem; border-top:1px solid #f0ebe4; display:flex; gap:.5rem; }
+        .btn-primary { background:#0f1f38; color:#f5f0eb; border:none; border-radius:10px; padding:.6rem .95rem; font-weight:600; cursor:pointer; }
+        .btn-ghost { background:#fff; color:#0f1f38; border:1.5px solid #e2d9d0; border-radius:10px; padding:.6rem .95rem; font-weight:600; cursor:pointer; }
+
         /* ── Card shell ── */
         .rpt-card {
           background: #fff;
@@ -370,6 +414,7 @@ export default function AdminReportsPage() {
         .rpt-table thead tr {
           background: #f9f6f2;
           border-bottom: 1.5px solid #e8e0d8;
+          position: sticky; top: 0; z-index: 1;
         }
         .rpt-table th {
           padding: 0.8rem 1rem;
@@ -387,6 +432,7 @@ export default function AdminReportsPage() {
           border-bottom: 1px solid #f0ebe4;
           transition: background 0.12s;
         }
+        .rpt-table tbody tr:nth-child(even) { background: #fffdfb; }
         .rpt-table tbody tr:last-child { border-bottom: none; }
         .rpt-table tbody tr:hover { background: #faf7f4; }
 
@@ -552,23 +598,79 @@ export default function AdminReportsPage() {
               ))}
             </select>
 
+            {/* Filters */}
+            <button onClick={() => setFiltersOpen(true)} className="btn-export" title="Open filters">Filters</button>
+
             {/* Apply */}
             <button onClick={() => { setPage(1); load(1); }} className="btn-apply">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               Apply
             </button>
-
-            {/* Export */}
-            <button onClick={exportCsv} className="btn-export" disabled={exporting || loading} title="Export all matching rows to CSV">
-              {exporting ? (
-                <span style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid #c9a84c', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-              ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              )}
-              Export CSV
+            {/* Refresh */}
+            <button onClick={() => load(page)} className="btn-refresh" title="Refresh list">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Refresh
             </button>
+
+            {/* More menu */}
+            <div style={{ position:'relative' }}>
+              <button onClick={() => setMoreOpen(o => !o)} className="btn-more" aria-haspopup="menu" aria-expanded={moreOpen}>More</button>
+              {moreOpen && (
+                <div className="more-menu" role="menu" onMouseLeave={() => setMoreOpen(false)}>
+                  <div className="more-item" role="menuitem" onClick={() => { setMoreOpen(false); exportCsv(); }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export CSV
+                  </div>
+                  <div className="more-item" role="menuitem" onClick={() => { setQ(""); setCity(""); setPage(1); setMoreOpen(false); load(1); }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6l3 3-3 3"/><path d="M3 6h12a4 4 0 0 1 0 8H9"/></svg>
+                    Clear filters
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* ── Filters Sheet ── */}
+        {filtersOpen && (
+          <div className="flt-overlay" onClick={(e)=>{ if(e.target===e.currentTarget) setFiltersOpen(false); }}>
+            <div className="flt-panel">
+              <div className="flt-head">
+                <span>Filters</span>
+                <button className="btn-ghost" onClick={()=> setFiltersOpen(false)}>Close</button>
+              </div>
+              <div className="flt-body">
+                <div>
+                  <div className="flt-label">Name or Email</div>
+                  <input className="flt-inp" value={q} onChange={e=> setQ(e.target.value)} placeholder="e.g. Jane" />
+                </div>
+                <div>
+                  <div className="flt-label">City</div>
+                  <input className="flt-inp" value={city} onChange={e=> setCity(e.target.value)} placeholder="e.g. Cebu" />
+                </div>
+                <div>
+                  <div className="flt-label">Rows per page</div>
+                  <select className="flt-inp" value={perPage} onChange={e=> setPerPage(Number(e.target.value))}>
+                    {[20,50,100].map(n=> <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="flt-actions">
+                <button className="btn-ghost" onClick={()=> { setQ(""); setCity(""); setPerPage(20); }}>Clear</button>
+                <button className="btn-primary" onClick={()=> { setFiltersOpen(false); setPage(1); load(1); }}>Apply Filters</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Summary Band (based on current filters) ── */}
+        <Card padding={false} className="rpt-card" style={{ padding: '0.9rem 1rem' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(12,1fr)', gap: '0.75rem' }}>
+            <Kpi label="Total Reports" value={kpiTotalReports.toLocaleString()} note={meta ? 'All matching filters' : 'This page'} colSpan={4} />
+            <Kpi label="Cities Covered" value={kpiUniqueCities.toLocaleString()} note="In current page" colSpan={4} />
+            <Kpi label="Avg Zonal (/sqm)" value={kpiAvgZonal ? `₱ ${kpiAvgZonal}` : '—'} note="Current page only" colSpan={4} />
+          </div>
+        </Card>
 
         {/* ── Content ── */}
         {loading ? (
@@ -688,5 +790,20 @@ export default function AdminReportsPage() {
 
       </div>
     </>
+  );
+}
+
+function Kpi({ label, value, note, colSpan = 4 }: { label: string; value: string; note?: string; colSpan?: number }) {
+  return (
+    <div style={{ gridColumn: `span ${colSpan} / span ${colSpan}` }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem', padding:'0.9rem 0.9rem', background:'#fff', border:'1px solid #e8e0d8', borderRadius:12 }}>
+        <div>
+          <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'.14em', color:'#1e3a8a' }}>{label}</div>
+          <div style={{ marginTop:4, fontSize:22, fontWeight:700, color:'#0f1f38' }}>{value}</div>
+          {note && <div style={{ marginTop:4, fontSize:12, color:'#6b7585' }}>{note}</div>}
+        </div>
+        <span aria-hidden style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:24, height:24, borderRadius:999, border:'1px solid #e8e0d8', color:'#c9a84c', fontWeight:800 }}>•</span>
+      </div>
+    </div>
   );
 }

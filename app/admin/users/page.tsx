@@ -326,6 +326,7 @@ export default function AdminUsersPage() {
         .usr-table thead tr {
           background: #f9f6f2;
           border-bottom: 1.5px solid #e8e0d8;
+          position: sticky; top: 0; z-index: 1;
         }
         .usr-table th {
           padding: 0.8rem 1rem;
@@ -343,6 +344,7 @@ export default function AdminUsersPage() {
           border-bottom: 1px solid #f0ebe4;
           transition: background 0.12s;
         }
+        .usr-table tbody tr:nth-child(even) { background: #fffdfb; }
         .usr-table tbody tr:last-child { border-bottom: none; }
         .usr-table tbody tr:hover { background: #faf7f4; }
         .usr-table td {
