@@ -136,7 +136,7 @@ const HeaderOrbs = () => (
     <Box sx={{
       position: "absolute", top: -30, right: 60, width: 160, height: 160,
       borderRadius: "50%",
-      background: "radial-gradient(circle, rgba(167,139,250,0.35) 0%, transparent 70%)",
+      background: "radial-gradient(circle, rgba(201,168,76,0.35) 0%, transparent 70%)",
       animation: `${floatA} 7s ease-in-out infinite`,
       pointerEvents: "none",
     }} />
@@ -144,7 +144,7 @@ const HeaderOrbs = () => (
     <Box sx={{
       position: "absolute", bottom: -20, right: 220, width: 90, height: 90,
       borderRadius: "50%",
-      background: "radial-gradient(circle, rgba(251,191,36,0.3) 0%, transparent 70%)",
+      background: "radial-gradient(circle, rgba(201,168,76,0.30) 0%, transparent 70%)",
       animation: `${floatB} 5s ease-in-out infinite`,
       pointerEvents: "none",
     }} />
@@ -152,7 +152,7 @@ const HeaderOrbs = () => (
     <Box sx={{
       position: "absolute", top: 10, right: 160, width: 50, height: 50,
       borderRadius: "50%",
-      background: "radial-gradient(circle, rgba(99,255,220,0.35) 0%, transparent 70%)",
+      background: "radial-gradient(circle, rgba(30,64,175,0.35) 0%, transparent 70%)",
       animation: `${floatC} 6s ease-in-out infinite 1s`,
       pointerEvents: "none",
     }} />
@@ -176,17 +176,17 @@ const StatBadge = ({ count }: { count: number }) => (
     px: 1.5, py: 0.6,
     borderRadius: 1,
     bgcolor: count > 0
-      ? "rgba(99,102,241,0.12)"
+      ? "rgba(201,168,76,0.12)"
       : "rgba(255,255,255,0.06)",
     border: "1px solid",
     borderColor: count > 0
-      ? "rgba(99,102,241,0.3)"
+      ? "rgba(201,168,76,0.3)"
       : "rgba(255,255,255,0.1)",
     transition: "all 0.25s ease",
     animation: count > 0 ? `${fadeSlideIn} 0.3s ease` : "none",
   }}>
     <Box sx={{
-      color: count > 0 ? "#a5b4fc" : "rgba(255,255,255,0.4)",
+      color: count > 0 ? "#e7d8a0" : "rgba(255,255,255,0.4)",
       display: "flex", alignItems: "center",
       transition: "color 0.25s",
     }}>
@@ -194,7 +194,7 @@ const StatBadge = ({ count }: { count: number }) => (
     </Box>
     <Typography variant="caption" sx={{
       fontWeight: 700, fontSize: 11,
-      color: count > 0 ? "#c7d2fe" : "rgba(255,255,255,0.4)",
+      color: count > 0 ? "#f4e3aa" : "rgba(255,255,255,0.4)",
       letterSpacing: 0.4,
       transition: "color 0.25s",
     }}>
@@ -214,7 +214,29 @@ export default function AdminInvitationsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const emails = useMemo(() => parseEmails(raw), [raw]);
+  const maxHint = 50; // soft visual target for progress bar only
   const origin = typeof window !== "undefined" ? window.location.origin : undefined;
+
+  function setRawFromEmails(list: string[]) {
+    setRaw(list.join(", "));
+  }
+
+  async function onPasteFromClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      setRaw((prev) => (prev ? prev + "\n" + text : text));
+    } catch {}
+  }
+
+  function onClearAll() {
+    setRaw(""); setResult(null); setError(null);
+  }
+
+  function onAddSample() {
+    const sample = ["alice@example.com", "bob@example.com", "carol@example.com"].join("\n");
+    setRaw(sample);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -254,7 +276,7 @@ export default function AdminInvitationsPage() {
             py: 3.5,
             position: "relative",
             overflow: "hidden",
-            background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 75%, #6366f1 100%)",
+            background: "linear-gradient(135deg, #0f1f38 0%, #1e3a6e 45%, #d1b769 100%)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -296,7 +318,7 @@ export default function AdminInvitationsPage() {
                   letterSpacing: -0.3,
                   lineHeight: 1.2,
                   /* shimmer effect on the text */
-                  background: `linear-gradient(90deg, #fff 0%, #c7d2fe 30%, #fff 60%, #a5b4fc 100%)`,
+                  background: `linear-gradient(90deg, #fff 0%, #f4e3aa 30%, #fff 60%, #d1b769 100%)`,
                   backgroundSize: "400px 100%",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
@@ -329,7 +351,7 @@ export default function AdminInvitationsPage() {
         {/* ── Thin accent stripe ── */}
         <Box sx={{
           height: 3,
-          background: "linear-gradient(90deg, #6366f1, #a78bfa, #f59e0b, #6366f1)",
+          background: "linear-gradient(90deg, #1e3a8a, #c9a84c, #1e3a8a)",
           backgroundSize: "300% 100%",
           animation: `${shimmer} 4s linear infinite`,
         }} />
@@ -349,19 +371,33 @@ export default function AdminInvitationsPage() {
             display: "flex", alignItems: "flex-start", gap: 1.5,
             px: 2, py: 1.75,
             borderRadius: 1,
-            bgcolor: "rgba(99,102,241,0.04)",
-            border: "1px solid rgba(99,102,241,0.1)",
+            bgcolor: "rgba(201,168,76,0.06)",
+            border: "1px solid rgba(201,168,76,0.18)",
           }}>
             <Box sx={{ color: "primary.main", mt: 0.15, flexShrink: 0, display: "flex" }}>
               <IconUsers />
             </Box>
             <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.75, fontSize: 13 }}>
               Paste one or more email addresses below. You can separate them with{" "}
-              <Box component="span" sx={{ fontWeight: 600, color: "primary.main" }}>commas</Box>,{" "}
-              <Box component="span" sx={{ fontWeight: 600, color: "primary.main" }}>spaces</Box>, or{" "}
-              <Box component="span" sx={{ fontWeight: 600, color: "primary.main" }}>new lines</Box> —
+              <Box component="span" sx={{ fontWeight: 600, color: "#1e3a8a" }}>commas</Box>,{" "}
+              <Box component="span" sx={{ fontWeight: 600, color: "#1e3a8a" }}>spaces</Box>, or{" "}
+              <Box component="span" sx={{ fontWeight: 600, color: "#1e3a8a" }}>new lines</Box> —
               duplicates are handled automatically.
             </Typography>
+          </Box>
+
+          {/* Quick actions */}
+          <Box sx={{ display:'flex', alignItems:'center', gap:1, px:2 }}>
+            <Button size="small" variant="outlined" onClick={onPasteFromClipboard} sx={{ textTransform:'none', borderRadius:1, fontWeight:700, fontSize:12 }}>
+              Paste from Clipboard
+            </Button>
+            <Button size="small" variant="text" onClick={onAddSample} sx={{ textTransform:'none', color:'#1e3a8a', fontWeight:700, fontSize:12 }}>
+              Use sample
+            </Button>
+            <Box sx={{ flex:1 }} />
+            <Button size="small" color="inherit" variant="text" onClick={onClearAll} sx={{ textTransform:'none', fontWeight:700, fontSize:12, opacity:.7, '&:hover':{ opacity:1 } }}>
+              Clear
+            </Button>
           </Box>
 
           {/* Textarea */}
@@ -382,19 +418,19 @@ export default function AdminInvitationsPage() {
                   borderRadius: 1,
                   fontSize: 13,
                   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  bgcolor: "rgba(248,250,252,1)",
+                  bgcolor: "#fff",
                   transition: "all 0.2s ease",
                   "&:hover fieldset": {
-                    borderColor: "rgba(99,102,241,0.4)",
+                    borderColor: "rgba(30,58,138,0.45)",
                   },
                   "&.Mui-focused fieldset": {
-                    borderColor: "#6366f1",
+                    borderColor: "#1e3a8a",
                     borderWidth: 2,
-                    boxShadow: "0 0 0 3px rgba(99,102,241,0.1)",
+                    boxShadow: "0 0 0 3px rgba(30,58,138,0.12)",
                   },
                 },
                 "& .MuiInputLabel-root.Mui-focused": {
-                  color: "#6366f1",
+                  color: "#1e3a8a",
                 },
               }}
             />
@@ -404,8 +440,8 @@ export default function AdminInvitationsPage() {
               <Box sx={{
                 mt: 1.5, p: 1.5,
                 borderRadius: 1,
-                bgcolor: "rgba(99,102,241,0.04)",
-                border: "1px dashed rgba(99,102,241,0.2)",
+                bgcolor: "rgba(201,168,76,0.06)",
+                border: "1px dashed rgba(201,168,76,0.28)",
                 animation: `${fadeSlideIn} 0.3s ease`,
               }}>
                 <Typography variant="caption" sx={{
@@ -419,12 +455,16 @@ export default function AdminInvitationsPage() {
                     <Chip
                       key={email}
                       label={email}
+                      onDelete={() => {
+                        const next = emails.filter(e => e !== email);
+                        setRawFromEmails(next);
+                      }}
                       size="small"
                       sx={{
                         fontSize: 11, height: 22, borderRadius: 0.5,
-                        bgcolor: "rgba(99,102,241,0.08)",
-                        color: "#4338ca",
-                        border: "1px solid rgba(99,102,241,0.2)",
+                        bgcolor: "rgba(201,168,76,0.10)",
+                        color: "#7a5f16",
+                        border: "1px solid rgba(201,168,76,0.28)",
                         fontFamily: "monospace",
                         "& .MuiChip-label": { px: 1 },
                       }}
@@ -444,11 +484,23 @@ export default function AdminInvitationsPage() {
                     />
                   )}
                 </Box>
+
+                {/* Domain breakdown + progress */}
+                <Box sx={{ mt: 1.25, display:'flex', alignItems:'center', gap:1.5, flexWrap:'wrap' }}>
+                  {Object.entries(
+                    emails.reduce<Record<string, number>>((acc, e) => { const d = e.split('@')[1] || 'domain'; acc[d] = (acc[d]||0)+1; return acc; }, {})
+                  ).slice(0,4).map(([d,c]) => (
+                    <Chip key={d} label={`${d} • ${c}`} size="small" sx={{ fontSize:11, height:20, bgcolor:'rgba(30,58,138,0.08)', color:'#1e3a8a', border:'1px solid rgba(30,58,138,0.22)' }} />
+                  ))}
+                  <Box sx={{ flex:1, minWidth:160, height:8, borderRadius:999, bgcolor:'rgba(30,58,138,0.08)', position:'relative' }}>
+                    <Box sx={{ position:'absolute', inset:0, width:`${Math.min(100, Math.round((emails.length/maxHint)*100))}%`, background:'linear-gradient(90deg,#1e3a8a,#c9a84c)', borderRadius:999, transition:'width .25s' }} />
+                  </Box>
+                </Box>
               </Box>
             )}
           </Box>
 
-          <Divider sx={{ borderColor: "rgba(99,102,241,0.08)" }} />
+          <Divider sx={{ borderColor: "rgba(30,58,138,0.08)" }} />
 
           {/* Action Row */}
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
@@ -491,15 +543,15 @@ export default function AdminInvitationsPage() {
                 letterSpacing: 0.4,
                 textTransform: "none",
                 background: canSend
-                  ? "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)"
+                  ? "linear-gradient(135deg, #1e3a8a 0%, #0f1f38 60%, #d1b769 100%)"
                   : undefined,
                 boxShadow: canSend
-                  ? "0 4px 20px rgba(79,70,229,0.4), 0 1px 4px rgba(79,70,229,0.2)"
+                  ? "0 4px 20px rgba(30,58,138,0.35), 0 1px 4px rgba(201,168,76,0.25)"
                   : "none",
                 transition: "all 0.25s ease",
                 "&:hover": canSend ? {
-                  background: "linear-gradient(135deg, #4338ca 0%, #6d28d9 100%)",
-                  boxShadow: "0 6px 24px rgba(79,70,229,0.5), 0 2px 6px rgba(79,70,229,0.25)",
+                  background: "linear-gradient(135deg, #1e40af 0%, #102a54 60%, #e0c979 100%)",
+                  boxShadow: "0 6px 24px rgba(30,58,138,0.45), 0 2px 6px rgba(201,168,76,0.35)",
                   transform: "translateY(-1px)",
                 } : {},
                 "&:active": { transform: "translateY(0)" },
