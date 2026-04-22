@@ -103,6 +103,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           padding: 0 2rem;
           height: 56px;
           box-shadow: 0 2px 16px rgba(30,58,138,0.18);
+          /* On desktop, shift header to the right to free the sidebar's top space */
+          margin-left: 260px;
+          width: calc(100% - 260px);
+        }
+        @media (max-width: 860px) {
+          .al-topbar { margin-left: 0; width: 100%; }
         }
         .al-topbar-logo {
           display: flex;
@@ -171,7 +177,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           min-height: 0;
           display: grid;
           grid-template-columns: 260px 1fr;
-          overflow: hidden;
+          overflow: visible; /* allow sidebar to extend upward */
         }
 
         @media (max-width: 860px) {
@@ -181,17 +187,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         /* ── Sidebar ── */
         .al-sidebar-wrap {
-          height: 100%;
-          overflow: hidden;
-          padding: 1.5rem 1rem 1.5rem 1.5rem;
+          height: calc(100% + 56px); /* compensate the negative margin */
+          overflow: visible;
+          padding: 0; /* Flush to top and sides */
           box-sizing: border-box;
+          margin-top: -56px; /* pull sidebar to very top */
         }
 
         .al-sidebar-card {
           background:#fff;
-          border-radius:16px;
-          border:1px solid #e8e0d8;
-          box-shadow:0 2px 14px rgba(15,31,56,0.05);
+          border-radius:0; /* Remove rounded corners for full-width feel */
+          border:none;     /* No inner border so it meets the edges */
+          box-shadow:none; /* No shadow gap around sidebar */
           overflow:hidden;
           display:flex;
           flex-direction:column;

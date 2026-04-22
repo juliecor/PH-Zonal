@@ -119,7 +119,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         .cl-root { height:100vh; display:flex; flex-direction:column; background:#f5f0eb; font-family:'DM Sans',sans-serif; overflow:hidden; }
 
         /* ── Top bar ── */
-        .cl-topbar { flex-shrink:0; background:#1e3a8a; z-index:50; display:flex; align-items:center; justify-content:space-between; padding:0 1.25rem; height:56px; box-shadow:0 2px 16px rgba(30,58,138,0.18); }
+        .cl-topbar { flex-shrink:0; background:#1e3a8a; z-index:50; display:flex; align-items:center; justify-content:space-between; padding:0 1.25rem; height:56px; box-shadow:0 2px 16px rgba(30,58,138,0.18); margin-left:260px; width:calc(100% - 260px); }
+        @media (max-width:860px) { .cl-topbar { margin-left:0; width:100%; } }
         .cl-topbar-left { display:flex; align-items:center; gap:0.65rem; }
         .cl-topbar-logo { display:flex; align-items:center; gap:0.55rem; text-decoration:none; }
         .cl-topbar-mark { width:30px; height:30px; border:1.5px solid #c9a84c; border-radius:7px; display:flex; align-items:center; justify-content:center; color:#c9a84c; }
@@ -137,13 +138,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.2);opacity:0.7} }
 
         /* ── Body ── */
-        .cl-body { flex:1; min-height:0; display:grid; grid-template-columns:260px 1fr; overflow:hidden; }
+        .cl-body { flex:1; min-height:0; display:grid; grid-template-columns:260px 1fr; overflow:visible; }
         @media (max-width:860px) { .cl-body { grid-template-columns:1fr; } }
 
         /* ── Desktop Sidebar ── */
-        .cl-sidebar-wrap { height:100%; overflow:hidden; padding:1.5rem 1rem 1.5rem 1.5rem; box-sizing:border-box; display:flex; flex-direction:column; }
+        .cl-sidebar-wrap { height:calc(100% + 56px); overflow:visible; padding:0; box-sizing:border-box; display:flex; flex-direction:column; margin-top:-56px; }
         @media (max-width:860px) { .cl-sidebar-wrap { display:none; } }
-        .cl-sidebar-card { background:#fff; border-radius:16px; border:1px solid #e8e0d8; box-shadow:0 2px 14px rgba(30,58,138,0.05); overflow:hidden; display:flex; flex-direction:column; flex:1; }
+        .cl-sidebar-card { background:#fff; border-radius:0; border:none; box-shadow:none; overflow:hidden; display:flex; flex-direction:column; flex:1; }
 
         /* ── Mobile Drawer Overlay ── */
         .cl-mobile-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); backdrop-filter:blur(3px); z-index:300; display:flex; animation:mbFadeIn 0.2s ease; }
