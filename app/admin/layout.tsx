@@ -95,80 +95,90 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         /* ── Top bar ── */
         .al-topbar {
           flex-shrink: 0;
-          background: #1e3a8a; /* match client */
+          background: #fff;
           z-index: 50;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 0 2rem;
-          height: 56px;
-          box-shadow: 0 2px 16px rgba(30,58,138,0.18);
-          /* On desktop, shift header to the right to free the sidebar's top space */
+          padding: 0 1.75rem;
+          height: 60px;
+          border-bottom: 1px solid #ede8e0;
           margin-left: 260px;
           width: calc(100% - 260px);
         }
         @media (max-width: 860px) {
           .al-topbar { margin-left: 0; width: 100%; }
         }
-        .al-topbar-logo {
+        .al-topbar-left {
           display: flex;
           align-items: center;
-          gap: 0.55rem;
-          text-decoration: none;
+          gap: 0.75rem;
         }
         /* Hamburger — mobile only */
-        .al-hamburger { background:rgba(255,255,255,0.1); border:none; border-radius:10px; padding:8px; cursor:pointer; display:none; align-items:center; justify-content:center; transition:background 0.15s; margin-right:0.5rem; }
-        .al-hamburger:hover { background:rgba(255,255,255,0.2); }
+        .al-hamburger { background: #f5f0eb; border: none; border-radius: 9px; padding: 8px; cursor: pointer; display: none; align-items: center; justify-content: center; transition: background 0.15s; color: #0f1f38; }
+        .al-hamburger:hover { background: #ede8e0; }
         @media (max-width:860px) { .al-hamburger { display:flex; } }
         .al-topbar-mark {
-          width: 30px; height: 30px;
-          border: 1.5px solid #c9a84c;
-          border-radius: 7px;
+          width: 32px; height: 32px;
+          background: #0f1f38;
+          border-radius: 9px;
           display: flex; align-items: center; justify-content: center;
           color: #c9a84c;
+          flex-shrink: 0;
+        }
+        .al-topbar-brand {
+          display: flex;
+          flex-direction: column;
+          line-height: 1.2;
         }
         .al-topbar-name {
           font-family: 'Cormorant Garamond', serif;
-          font-size: 1.1rem;
+          font-size: 1.05rem;
+          font-weight: 700;
+          color: #0f1f38;
+          letter-spacing: 0.01em;
+        }
+        .al-topbar-sub {
+          font-size: 0.63rem;
           font-weight: 600;
-          color: #f5f0eb;
-          letter-spacing: 0.02em;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #9aa3b0;
+        }
+        .al-topbar-divider {
+          width: 1px;
+          height: 28px;
+          background: #ede8e0;
         }
         .al-topbar-right {
           display: flex;
           align-items: center;
           gap: 0.75rem;
         }
-        .al-topbar-label {
-          font-size: 0.72rem;
-          color: #dbeafe; /* lighter like client */
-          font-weight: 300;
-          letter-spacing: 0.06em;
-          text-transform: uppercase;
-        }
-        /* Sidebar logout styles — match client dashboard */
-        .sb-logout-row { padding:0.75rem 1rem; border-top:1px solid #f0ebe4; margin-top:auto; }
-        .sb-logout-btn { width:100%; display:flex; align-items:center; gap:0.65rem; padding:0.65rem 1rem; border-radius:10px; background:transparent; border:1.5px solid #e2d9d0; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:0.83rem; font-weight:500; color:#6b7585; transition:border-color 0.15s,background 0.15s,color 0.15s; }
-        .sb-logout-btn:hover { border-color:#1e40af; background:#dbeafe; color:#1e3a8a; }
-        /* Subtle admin badge to distinguish from client layout */
+        /* Sidebar logout styles */
+        .sb-logout-row { padding:0.85rem 0.75rem; border-top:1px solid #f0ebe4; }
+        .sb-logout-btn { width:100%; display:flex; align-items:center; gap:0.65rem; padding:0.62rem 1rem; border-radius:10px; background:transparent; border:1.5px solid #ede8e0; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:0.83rem; font-weight:500; color:#6b7585; transition:border-color 0.15s,background 0.15s,color 0.15s; }
+        .sb-logout-btn:hover { border-color:#e2d9d0; background:#f9f7f4; color:#0f1f38; }
+        /* Admin badge */
         .al-admin-badge {
           display: inline-flex;
           align-items: center;
-          gap: 0.3rem;
-          padding: 0.2rem 0.6rem;
-          background: rgba(201,168,76,0.15);
-          border: 1px solid rgba(201,168,76,0.3);
-          border-radius: 20px;
-          font-size: 0.65rem;
-          font-weight: 500;
-          letter-spacing: 0.08em;
+          gap: 0.35rem;
+          padding: 0.28rem 0.75rem;
+          background: rgba(201,168,76,0.08);
+          border: 1px solid rgba(201,168,76,0.28);
+          border-radius: 50px;
+          font-size: 0.67rem;
+          font-weight: 700;
+          letter-spacing: 0.1em;
           text-transform: uppercase;
-          color: #c9a84c;
+          color: #8a6d15;
         }
         .al-admin-dot {
-          width: 5px; height: 5px;
+          width: 6px; height: 6px;
           border-radius: 50%;
-          background: #c9a84c;
+          background: #22c55e;
+          box-shadow: 0 0 0 2px rgba(34,197,94,0.2);
         }
 
         /* ── Body ── */
@@ -187,11 +197,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         /* ── Sidebar ── */
         .al-sidebar-wrap {
-          height: calc(100% + 56px); /* compensate the negative margin */
+          height: calc(100% + 60px); /* compensate the topbar height */
           overflow: visible;
-          padding: 0; /* Flush to top and sides */
+          padding: 0;
           box-sizing: border-box;
-          margin-top: -56px; /* pull sidebar to very top */
+          margin-top: -60px; /* pull sidebar to very top */
         }
 
         .al-sidebar-card {
@@ -237,9 +247,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* ── Top bar ── */}
         <header className="al-topbar">
-          <div className="al-topbar-logo">
+          <div className="al-topbar-left">
             <button className="al-hamburger" onClick={openMobileMenu} title="Menu">
-              <Menu size={20} color="#fff" />
+              <Menu size={18} />
             </button>
             <div className="al-topbar-mark">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -247,10 +257,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <polyline points="9 22 9 12 15 12 15 22" />
               </svg>
             </div>
-            <span className="al-topbar-name">Zonal Value</span>
+            <div className="al-topbar-brand">
+              <span className="al-topbar-name">Zonal Value</span>
+              <span className="al-topbar-sub">Admin Panel</span>
+            </div>
           </div>
           <div className="al-topbar-right">
-            <span className="al-topbar-label">Admin Panel</span>
             <span className="al-admin-badge">
               <span className="al-admin-dot" />
               Admin
