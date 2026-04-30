@@ -267,7 +267,7 @@ export default function AdminConcernsPage() {
             background: '#fff',
             border: '1px solid rgba(15,31,56,0.06)'
           }}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between">
+            <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
               <Stack spacing={0.25}>
                 <Typography sx={{ fontWeight:800, fontSize:18, color:'#0f1f38', letterSpacing:.2 }}>User Concerns</Typography>
                 <Typography sx={{ fontSize:13, color:'text.secondary' }}>Review and resolve support items</Typography>
