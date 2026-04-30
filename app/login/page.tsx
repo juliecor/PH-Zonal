@@ -657,20 +657,20 @@ export default function LoginPage() {
         onClose={() => setOtpOpen(false)}
         maxWidth="xs"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: "28px",
-            overflow: "hidden",
-            backgroundColor: "rgba(8, 16, 30, 0.97) !important",
-            background: "rgba(8, 16, 30, 0.97) !important",
-            backdropFilter: "blur(32px)",
-            WebkitBackdropFilter: "blur(32px)",
-            border: "1px solid rgba(76, 201, 240, 0.15)",
-            boxShadow: `0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04) inset, 0 0 60px rgba(67,97,238,0.12)`,
-            color: "#fff",
-          },
-        }}
         slotProps={{
+          paper: {
+            sx: {
+              borderRadius: "28px",
+              overflow: "hidden",
+              backgroundColor: "rgba(8, 16, 30, 0.97) !important",
+              background: "rgba(8, 16, 30, 0.97) !important",
+              backdropFilter: "blur(32px)",
+              WebkitBackdropFilter: "blur(32px)",
+              border: "1px solid rgba(76, 201, 240, 0.15)",
+              boxShadow: `0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04) inset, 0 0 60px rgba(67,97,238,0.12)`,
+              color: "#fff",
+            },
+          },
           backdrop: {
             sx: {
               backdropFilter: "blur(6px)",
