@@ -745,7 +745,7 @@ export default function LoginPage() {
                 fontFamily: FONT_TITLE,
                 fontWeight: 800,
                 fontSize: "1.6rem",
-                color: "#050505",
+                color: "rgba(255,255,255,0.95)",
                 mb: 0.5,
                 lineHeight: 1.2,
               }}
@@ -768,7 +768,7 @@ export default function LoginPage() {
             <Typography
               sx={{
                 fontSize: "0.95rem",
-                color: "rgba(30, 29, 29, 0.65)",
+                color: "rgba(255,255,255,0.75)",
                 mb: 3,
                 fontFamily: FONT_TEXT,
                 lineHeight: 1.65,
@@ -795,7 +795,7 @@ export default function LoginPage() {
                     fontWeight: 600,
                     letterSpacing: "0.5px",
                     textTransform: "uppercase",
-                    color: "rgba(29, 29, 29, 0.9)",
+                    color: "rgba(255,255,255,0.9)",
                     mb: 1,
                     fontFamily: FONT_TITLE,
                   }}
@@ -903,7 +903,7 @@ export default function LoginPage() {
                     fontWeight: 600,
                     letterSpacing: "0.5px",
                     textTransform: "uppercase",
-                    color: "rgba(23, 23, 23, 0.9)",
+                    color: "rgba(255,255,255,0.9)",
                     mb: 1,
                     fontFamily: FONT_TITLE,
                   }}

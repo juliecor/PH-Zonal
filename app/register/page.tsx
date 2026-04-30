@@ -919,7 +919,7 @@ export default function RegisterPage() {
                   fontFamily: FONT_TITLE,
                   fontWeight: 800,
                   fontSize: "1.6rem",
-                  color: "#0f0e0e",
+                  color: "rgba(255,255,255,0.95)",
                   mb: 0.5,
                   lineHeight: 1.2,
                 }}
@@ -942,7 +942,7 @@ export default function RegisterPage() {
               <Typography
                 sx={{
                   fontSize: "0.95rem",
-                  color: "rgba(24, 24, 24, 0.65)",
+                  color: "rgba(255,255,255,0.75)",
                   fontFamily: FONT_TEXT,
                   lineHeight: 1.65,
                 }}
@@ -960,7 +960,7 @@ export default function RegisterPage() {
                 fontWeight: 600,
                 letterSpacing: "0.5px",
                 textTransform: "uppercase",
-                color: "rgba(11, 11, 11, 0.9)",
+                color: "rgba(255,255,255,0.9)",
                 mb: 1,
                 fontFamily: FONT_TITLE,
               }}
