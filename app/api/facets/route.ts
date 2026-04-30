@@ -119,27 +119,50 @@ async function getAllDomainRows(domain: string) {
     const pagesNeeded = Math.min(HARD_CAP_PAGES, Math.max(1, Math.ceil(rowsLimit / PAGE_SIZE)));
     console.log(`[getAllDomainRows] Will fetch ${pagesNeeded} pages for ${domain}`);
 
-    // Fetch all pages in parallel instead of sequentially
-    const pagePromises = [];
-    for (let p = 1; p <= pagesNeeded; p++) {
-      pagePromises.push(
-        fetchZonalValuesByDomain({
-          domain,
-          page: p,
-          itemsPerPage: PAGE_SIZE,
-          search: "", // IMPORTANT: keep empty so we fetch everything
-        })
-      );
+    // Fetch with bounded concurrency and tolerate partial 5xx failures
+    const CONCURRENCY = 8; // keep upstream happy
+    const results: Array<{ rows: AnyRow[] } | null> = [];
+    let failed = 0;
+
+    for (let start = 1; start <= pagesNeeded; start += CONCURRENCY) {
+      const end = Math.min(pagesNeeded, start + CONCURRENCY - 1);
+      const batchPromises: Array<Promise<{ rows: AnyRow[] } | null>> = [];
+
+      for (let p = start; p <= end; p++) {
+        batchPromises.push(
+          fetchZonalValuesByDomain({
+            domain,
+            page: p,
+            itemsPerPage: PAGE_SIZE,
+            search: "", // keep empty to fetch everything
+          })
+            .then((r) => ({ rows: (Array.isArray(r?.rows) ? r.rows : []) as AnyRow[] }))
+            .catch((e) => {
+              const status = e?.response?.status ?? 0;
+              const code = e?.code || "UNKNOWN";
+              console.warn(`[getAllDomainRows] Page ${p} failed for ${domain} - status=${status} code=${code}`);
+              failed += 1;
+              return null; // tolerate this page; continue with others
+            })
+        );
+      }
+
+      const settled = await Promise.all(batchPromises);
+      results.push(...settled);
     }
 
-    const results = await Promise.all(pagePromises);
     const all: AnyRow[] = [];
-
-    for (const result of results) {
-      const batch = Array.isArray(result?.rows) ? result.rows : [];
+    for (const r of results) {
+      if (!r) continue;
+      const batch = Array.isArray(r.rows) ? r.rows : [];
       all.push(...batch);
+    }
 
-      if (batch.length < PAGE_SIZE) break;
+    if (all.length === 0) {
+      // If absolutely nothing succeeded, surface the failure
+      const err: any = new Error(`Upstream returned no data for ${domain}. pagesNeeded=${pagesNeeded}, failedPages=${failed}`);
+      err.code = "UPSTREAM_EMPTY";
+      throw err;
     }
 
     FACET_CACHE.set(domain, { ts: Date.now(), rows: all });

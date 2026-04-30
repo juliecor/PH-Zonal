@@ -60,14 +60,36 @@ async function getWithRetry(url: string, opts: { timeout?: number; headers?: Rec
 }
 
 export async function fetchZonalIndex(domain: string) {
-  const data = await getWithRetry(
-    `https://api.spreadsimple.com/spread-view/public/omit-routes/${domain}`,
-    { timeout: 10000 }
-  );
-  return {
-    rowsLimit: data?.customDealLimits?.rowsLimit ?? 5000,
-    sid: data?.sid as string,
-  };
+  // Simple in-memory cache with stale-on-error behavior to survive brief upstream outages
+  const g: any = globalThis as any;
+  if (!g.__SPREAD_INDEX_CACHE__) g.__SPREAD_INDEX_CACHE__ = new Map<string, { ts: number; idx: { rowsLimit: number; sid: string } }>();
+  const INDEX_CACHE: Map<string, { ts: number; idx: { rowsLimit: number; sid: string } } > = g.__SPREAD_INDEX_CACHE__;
+  const TTL_MS = 1000 * 60 * 30; // 30 minutes
+
+  const cached = INDEX_CACHE.get(domain);
+  if (cached && Date.now() - cached.ts < TTL_MS) {
+    return cached.idx;
+  }
+
+  try {
+    const data = await getWithRetry(
+      `https://api.spreadsimple.com/spread-view/public/omit-routes/${domain}`,
+      { timeout: 10000 },
+      5 // a bit more persistent for index
+    );
+    const idx = {
+      rowsLimit: data?.customDealLimits?.rowsLimit ?? 5000,
+      sid: data?.sid as string,
+    };
+    if (idx?.sid) INDEX_CACHE.set(domain, { ts: Date.now(), idx });
+    return idx;
+  } catch (e) {
+    if (cached) {
+      // serve stale if we have it
+      return cached.idx;
+    }
+    throw e;
+  }
 }
 
 function extractRows(payload: any): any[] {
