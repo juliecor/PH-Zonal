@@ -208,6 +208,28 @@ export function Home() {
   const [drawMode, setDrawMode] = useState(false);
   const [landArea, setLandArea] = useState<number | null>(null);
   const [clearDrawSignal, setClearDrawSignal] = useState(0);
+  const [areaCardPos, setAreaCardPos] = useState<{ x: number; y: number } | null>(null);
+  const [areaCardMin, setAreaCardMin] = useState(false);
+
+  function startAreaCardDrag(e: React.PointerEvent) {
+    const parent = (e.currentTarget as HTMLElement).parentElement;
+    if (!parent || typeof window === "undefined") return;
+    const rect = parent.getBoundingClientRect();
+    const dx = e.clientX - rect.left;
+    const dy = e.clientY - rect.top;
+    const w = rect.width || 340;
+    const move = (ev: PointerEvent) => {
+      const x = Math.max(8, Math.min(window.innerWidth - w - 8, ev.clientX - dx));
+      const y = Math.max(8, Math.min(window.innerHeight - 60, ev.clientY - dy));
+      setAreaCardPos({ x, y });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
 
   function resetToFirstVisit() {
     try { zonalAbortRef.current?.abort(); } catch {}
@@ -231,6 +253,8 @@ export function Home() {
     setDrawMode(false);
     setLandArea(null);
     setClearDrawSignal((n) => n + 1);
+    setAreaCardPos(null);
+    setAreaCardMin(false);
 
     // Details / side effects
     setPoiData(null);
@@ -643,7 +667,7 @@ export function Home() {
   const isAdmin = String(me?.role || "").toLowerCase() === "admin";
 
   return (
-    <main className="h-screen w-screen overflow-hidden bg-slate-100 text-gray-900">
+    <main className="fixed inset-0 h-screen w-full overflow-hidden bg-slate-100 text-gray-900">
       <ZonalSearchIndicator visible={loading} />
 
       <div className="absolute inset-0">
@@ -680,12 +704,32 @@ export function Home() {
         const zonal = parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]);
         const estValue = landArea != null && zonal ? landArea * zonal : null;
         return (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 w-[88vw] sm:w-[360px]">
+          <div
+            className="absolute z-50 w-[88vw] sm:w-[340px]"
+            style={areaCardPos ? { left: areaCardPos.x, top: areaCardPos.y } : { top: 16, left: "50%", transform: "translateX(-50%)" }}
+          >
             <div className="rounded-2xl border-2 border-[#c9a84c] bg-white/98 backdrop-blur shadow-2xl overflow-hidden">
-              <div className="px-4 py-2.5 flex items-center justify-between" style={{background:"#1e3a8a"}}>
-                <div className="text-sm font-bold text-[#f5f0eb] flex items-center gap-2"><Ruler size={15} style={{color:"#c9a84c"}}/> Land Area</div>
-                <button onClick={()=>{ setDrawMode(false); setLandArea(null); setClearDrawSignal(n=>n+1); }} className="rounded-lg p-1 text-white/60 hover:text-white transition" title="Close"><X size={15}/></button>
+              <div
+                onPointerDown={startAreaCardDrag}
+                className="px-4 py-2.5 flex items-center justify-between cursor-move select-none touch-none"
+                style={{background:"#1e3a8a"}}
+                title="Drag to move"
+              >
+                <div className="text-sm font-bold text-[#f5f0eb] flex items-center gap-2 min-w-0">
+                  <Ruler size={15} style={{color:"#c9a84c"}}/>
+                  <span className="truncate">Land Area</span>
+                  {areaCardMin && landArea != null && (
+                    <span className="font-extrabold whitespace-nowrap" style={{color:"#c9a84c"}}>· {landArea.toLocaleString("en-PH",{maximumFractionDigits:0})} m²</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-0.5 shrink-0" onPointerDown={(e)=>e.stopPropagation()}>
+                  <button onClick={()=>setAreaCardMin(m=>!m)} className="rounded-lg p-1 text-white/60 hover:text-white transition" title={areaCardMin?"Expand":"Minimize"}>
+                    <ChevronDown size={15} style={{transform: areaCardMin ? "rotate(-90deg)" : "none", transition:"transform .2s"}}/>
+                  </button>
+                  <button onClick={()=>{ setDrawMode(false); setLandArea(null); setClearDrawSignal(n=>n+1); }} className="rounded-lg p-1 text-white/60 hover:text-white transition" title="Close"><X size={15}/></button>
+                </div>
               </div>
+              {!areaCardMin && (
               <div className="p-4">
                 {landArea == null ? (
                   <div className="text-xs text-gray-600 leading-relaxed">
@@ -717,6 +761,7 @@ export function Home() {
                   <button onClick={()=>setDrawMode(false)} className="flex-1 rounded-full px-3 py-2 text-xs font-bold transition text-[#f5f0eb]" style={{background:"#1e3a8a"}}>Done</button>
                 </div>
               </div>
+              )}
             </div>
           </div>
         );
@@ -1038,7 +1083,7 @@ export function Home() {
                     </button>
                     <button onClick={()=>setRightOpen(true)} className="shrink-0 rounded-full px-4 py-2 text-xs font-bold transition text-[#f5f0eb]" style={{background:"#1e3a8a"}}>Open Report</button>
                     <button
-                      onClick={()=>{ if(drawMode){ setDrawMode(false); } else { setLandArea(null); setClearDrawSignal(n=>n+1); setDrawMode(true); if(typeof window!=="undefined"&&window.innerWidth<640){ setBottomOpen(false); } } }}
+                      onClick={()=>{ if(drawMode){ setDrawMode(false); } else { setLandArea(null); setClearDrawSignal(n=>n+1); setAreaCardMin(false); setDrawMode(true); if(typeof window!=="undefined"&&window.innerWidth<640){ setBottomOpen(false); } } }}
                       className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-bold transition"
                       style={drawMode?{borderColor:"#c9a84c",background:"#c9a84c",color:"#1e3a8a"}:{borderColor:"#c9a84c",background:"#fff",color:"#1e3a8a"}}
                       title="Draw your land boundary on the map to estimate its area and value"
@@ -1063,26 +1108,10 @@ export function Home() {
 }
 
 export function HomePage() {
-  const router = useRouter();
-  async function handleHomeClick() {
-    try {
-      const me = await apiMe();
-      if (me?.role === "admin") router.push("/admin");
-      else if (me) router.push("/dashboard/reports");
-      else router.push("/login");
-    } catch {
-      router.push("/dashboard/reports");
-    }
-  }
-  return (
-    <>
-      <div className="property-search-header">
-        <button onClick={handleHomeClick} className="home-icon-button"><img src="/pictures/home-icon.png" alt="Home Icon" /></button>
-        <h1>Property Search</h1>
-      </div>
-      <Home />
-    </>
-  );
+  // The full-screen map view (Home) renders its own header with the home icon
+  // and "Back to Dashboard", so no extra header is needed here. Wrapping it in
+  // a fixed full-viewport box prevents any page scroll / empty gaps.
+  return <Home />;
 }
 
 export default HomePage;
