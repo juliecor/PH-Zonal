@@ -20,6 +20,10 @@ import {
   Zap,
   MapPin,
   RefreshCw,
+  Ruler,
+  FileText,
+  ChevronDown,
+  Coins,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiMe } from "./lib/authClient";
@@ -200,6 +204,11 @@ export function Home() {
   const [showRegionPicker, setShowRegionPicker] = useState(true);
   const [mapKey, setMapKey] = useState(0);
 
+  // ── Land drawing / area measurement ──
+  const [drawMode, setDrawMode] = useState(false);
+  const [landArea, setLandArea] = useState<number | null>(null);
+  const [clearDrawSignal, setClearDrawSignal] = useState(0);
+
   function resetToFirstVisit() {
     try { zonalAbortRef.current?.abort(); } catch {}
     // Invalidate any pending async updates
@@ -217,6 +226,11 @@ export function Home() {
     setStreetGeo(null);
     setShowStreetHighlight(false);
     setAreaLabels([]);
+
+    // Land drawing
+    setDrawMode(false);
+    setLandArea(null);
+    setClearDrawSignal((n) => n + 1);
 
     // Details / side effects
     setPoiData(null);
@@ -633,7 +647,7 @@ export function Home() {
       <ZonalSearchIndicator visible={loading} />
 
       <div className="absolute inset-0">
-        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} />
+        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} drawingMode={drawMode} onAreaMeasured={(info)=>setLandArea(info?info.areaSqm:null)} clearDrawingSignal={clearDrawSignal} />
       </div>
 
       {/* Brand pill */}
@@ -660,6 +674,53 @@ export function Home() {
           </button>
         </div>
       </div>
+
+      {/* LAND MEASUREMENT CARD */}
+      {(drawMode || landArea != null) && (() => {
+        const zonal = parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]);
+        const estValue = landArea != null && zonal ? landArea * zonal : null;
+        return (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 w-[88vw] sm:w-[360px]">
+            <div className="rounded-2xl border-2 border-[#c9a84c] bg-white/98 backdrop-blur shadow-2xl overflow-hidden">
+              <div className="px-4 py-2.5 flex items-center justify-between" style={{background:"#1e3a8a"}}>
+                <div className="text-sm font-bold text-[#f5f0eb] flex items-center gap-2"><Ruler size={15} style={{color:"#c9a84c"}}/> Land Area</div>
+                <button onClick={()=>{ setDrawMode(false); setLandArea(null); setClearDrawSignal(n=>n+1); }} className="rounded-lg p-1 text-white/60 hover:text-white transition" title="Close"><X size={15}/></button>
+              </div>
+              <div className="p-4">
+                {landArea == null ? (
+                  <div className="text-xs text-gray-600 leading-relaxed">
+                    <span className="font-bold text-[#1e3a8a]">Click on the map</span> to drop a corner at each edge of the land. Add at least <span className="font-bold">3 points</span> to close the shape. Drag the corners to fine-tune.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Approx. Area</div>
+                        <div className="text-3xl font-black leading-none" style={{color:"#1e3a8a"}}>{landArea.toLocaleString("en-PH",{maximumFractionDigits:0})}<span className="text-base font-bold text-gray-500"> m²</span></div>
+                      </div>
+                      <div className="text-right text-xs font-semibold text-gray-600">
+                        {(landArea/10000).toLocaleString("en-PH",{maximumFractionDigits:3})} ha
+                      </div>
+                    </div>
+                    {estValue != null && (
+                      <div className="rounded-xl p-3" style={{background:"#f5f0eb",border:"1px solid #e8e0d8"}}>
+                        <div className="text-[10px] font-bold uppercase tracking-wider" style={{color:"#9a7a20"}}>Est. Land Value (BIR Zonal)</div>
+                        <div className="text-xl font-black" style={{color:"#1e3a8a"}}>{fmtPesoNumber(estValue)}</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">{landArea.toLocaleString("en-PH",{maximumFractionDigits:0})} m² × {fmtPesoNumber(zonal!)}/m²</div>
+                      </div>
+                    )}
+                    <div className="text-[10px] text-gray-400 leading-snug">Approximate estimate from your drawing — not a substitute for a licensed survey or formal appraisal.</div>
+                  </div>
+                )}
+                <div className="mt-3 flex items-center gap-2">
+                  <button onClick={()=>{ setLandArea(null); setClearDrawSignal(n=>n+1); setDrawMode(true); }} className="flex-1 rounded-full border px-3 py-2 text-xs font-bold transition" style={{borderColor:"#e2d9d0",background:"#fff",color:"#374151"}}>Clear & Redraw</button>
+                  <button onClick={()=>setDrawMode(false)} className="flex-1 rounded-full px-3 py-2 text-xs font-bold transition text-[#f5f0eb]" style={{background:"#1e3a8a"}}>Done</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* LEFT DRAWER */}
       <div className="absolute top-0 left-0 z-40 h-full flex">
@@ -729,7 +790,7 @@ export function Home() {
               </button>
               {isDev&&(
                 <button onClick={()=>{ if(typeof window!=="undefined"){localStorage.removeItem("facetCitiesCacheV1");localStorage.removeItem("facetBarangaysCacheV1");localStorage.removeItem("zonalCacheV1");loadCities(domain).catch(()=>{});} }} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition" style={{background:"rgba(255,255,255,0.10)",color:"#f5f0eb"}} title="Clear caches (dev only)">
-                  🔄 Refresh
+                  <RefreshCw size={13}/> Refresh
                 </button>
               )}
               {/* Report toggle removed as requested */}
@@ -740,12 +801,23 @@ export function Home() {
           {(showRegionPicker||(regionSearch.length>0&&matches.length>0))&&(
             <div className="px-3 pt-3 shrink-0">
               {searchLoading?(
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-center">
-                  <div className="flex items-center justify-center gap-2"><div className="h-4 w-4 border-2 border-[#c9a84c]/40 border-t-[#c9a84c] rounded-full animate-spin"/><span className="text-sm text-gray-600">Searching...</span></div>
+                <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                  <div className="px-3 py-2 bg-[#f5f0eb] border-b border-[#e8e0d8]"><div className="h-3 w-24 rounded bg-[#1e3a8a]/15 animate-pulse"/></div>
+                  <div className="divide-y divide-gray-100">
+                    {[0,1,2].map(i=>(
+                      <div key={i} className="px-3 py-2.5 flex items-center gap-2 animate-pulse">
+                        <div className="h-3.5 w-3.5 rounded-full bg-gray-200 shrink-0"/>
+                        <div className="flex-1 space-y-1.5">
+                          <div className="h-3 rounded bg-gray-200" style={{width:`${70-i*12}%`}}/>
+                          <div className="h-2.5 w-1/3 rounded bg-gray-100"/>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ):matches.length>0?(
                 <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                  <div className="px-3 py-2 bg-[#f5f0eb] border-b border-[#e8e0d8] text-[11px] font-bold text-[#1e3a8a] uppercase tracking-wide">{searchMode==="city"?"📍 Cities Found":"🗺️ Provinces Found"} ({matches.length})</div>
+                  <div className="px-3 py-2 bg-[#f5f0eb] border-b border-[#e8e0d8] text-[11px] font-bold text-[#1e3a8a] uppercase tracking-wide flex items-center gap-1.5">{searchMode==="city"?<MapPin size={12}/>:<MapIcon size={12}/>}{searchMode==="city"?"Cities Found":"Provinces Found"} ({matches.length})</div>
                   <div className="max-h-56 overflow-auto">
                     {matches.map((m,idx)=>(
                       <button key={idx} className="w-full text-left px-3 py-2.5 text-sm hover:bg-[#f5f0eb] border-b last:border-b-0 transition"
@@ -831,6 +903,21 @@ export function Home() {
           {/* Results list */}
           <div className="flex-1 overflow-auto">
             <div className="p-2 flex flex-col gap-1.5">
+              {loading&&rows.length===0&&[0,1,2,3,4,5].map(i=>(
+                <div key={`sk-${i}`} className="w-full rounded-2xl border-2 border-gray-100 bg-white p-3 animate-pulse">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="h-3.5 rounded bg-gray-200" style={{width:`${78-i*6}%`}}/>
+                      <div className="h-2.5 w-1/2 rounded bg-gray-100"/>
+                    </div>
+                    <div className="h-4 w-16 rounded-full bg-gray-100 shrink-0"/>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div className="h-5 w-24 rounded bg-gray-200"/>
+                    <div className="h-3 w-6 rounded bg-gray-100"/>
+                  </div>
+                </div>
+              ))}
               {rows.map((r,i)=>{
                 const parsed = parseZonalValueToNumber(r["ZonalValuepersqm.-"]); const pricePerSqm = parsed??0;
                 const tier = getPriceTier(pricePerSqm); const isActive = selectedRow?.rowIndex===r.rowIndex;
@@ -881,7 +968,7 @@ export function Home() {
           <div className="h-full bg-white border-l border-gray-200 shadow-2xl flex flex-col">
             <div className="px-4 py-3 flex items-center justify-between shrink-0" style={{background:"#1e3a8a"}}>
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-base" style={{background:"#1e40af"}}>📋</div>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{background:"#1e40af"}}><FileText size={15}/></div>
                 <div className="text-sm font-bold text-[#f5f0eb]">Property Report</div>
               </div>
               <button onClick={()=>setRightOpen(false)} className="rounded-xl p-1.5 transition text-white/50 hover:text-white" style={{background:"rgba(255,255,255,0.08)"}} title="Close"><X size={16}/></button>
@@ -896,27 +983,34 @@ export function Home() {
       {/* BOTTOM SHEET */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[92vw] sm:w-[560px]">
         <div className={["rounded-3xl border-2 border-gray-200 bg-white/98 backdrop-blur shadow-2xl overflow-hidden transition-all duration-300",bottomOpen?"max-h-[38vh]":"max-h-[52px]"].join(" ")}>
-          <button onClick={()=>setBottomOpen(v=>!v)} className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition border-b border-gray-100">
-            <div className="min-w-0 text-left"><div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">📌 Selected Property</div><div className="text-sm font-bold text-gray-900 truncate">{selectedTitle}</div></div>
-            <div className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg">{bottomOpen?"▼":"▶"}</div>
+          <button onClick={()=>setBottomOpen(v=>!v)} className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-gray-50 transition border-b border-gray-100">
+            <div className="min-w-0 text-left"><div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider flex items-center gap-1.5"><MapPin size={11} style={{color:"#1e3a8a"}}/> Selected Property</div><div className="text-sm font-bold text-gray-900 truncate mt-0.5">{selectedTitle}</div></div>
+            <div className="shrink-0 ml-3 text-gray-500 bg-gray-100 p-1.5 rounded-lg transition-transform duration-300" style={{transform: bottomOpen ? "rotate(0deg)" : "rotate(-90deg)"}}><ChevronDown size={15}/></div>
           </button>
           {bottomOpen&&(
             <div className="px-4 pb-3 overflow-auto max-h-[calc(38vh-52px)]">
               {!selectedRow?(
-                <div className="pt-3 text-sm text-gray-600"><div className="flex items-center gap-2"><MapPin size={15} style={{color:"#1e3a8a"}} className="shrink-0"/>{geoLoading?"Finding location...":"Select a region, city, barangay, or click on a street from the list"}</div></div>
+                geoLoading?(
+                  <div className="pt-3 space-y-2 animate-pulse">
+                    <div className="h-3 w-32 rounded bg-gray-200"/>
+                    <div className="h-5 w-48 rounded bg-gray-200"/>
+                  </div>
+                ):(
+                  <div className="pt-3 text-sm text-gray-600"><div className="flex items-center gap-2"><MapPin size={15} style={{color:"#1e3a8a"}} className="shrink-0"/>Select a region, city, barangay, or click on a street from the list</div></div>
+                )
               ):(
                 <>
-                  <div className="mt-3 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="p-4 flex items-center justify-between" style={{background:"linear-gradient(to right,#1e3a8a,#1e40af)"}}>
-                      <div>
-                        <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{color:"#c9a84c"}}>💰 Zonal Value</div>
+                  <div className="mt-3 rounded-2xl overflow-hidden shadow-md ring-1 ring-black/5">
+                    <div className="p-4 flex items-center justify-between gap-3" style={{background:"linear-gradient(135deg,#1e3a8a,#1e40af)"}}>
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{color:"#c9a84c"}}><Coins size={12}/> Zonal Value</div>
                         <div className="text-3xl font-black text-white leading-none drop-shadow-sm">{parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])?fmtPesoNumber(parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])!):"Not Appraised"}</div>
-                        <div className="text-[11px] font-semibold mt-1" style={{color:"rgba(201,168,76,0.8)"}}>per square meter</div>
+                        <div className="text-[11px] font-semibold mt-1.5" style={{color:"rgba(201,168,76,0.85)"}}>per square meter</div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold text-lg text-white">{String(selectedRow["City-"]??"")}</div>
-                        <div className="text-xs font-semibold" style={{color:"rgba(255,255,255,0.7)"}}>{String(selectedRow["Barangay-"]??"")}</div>
-                        <div className="truncate max-w-[200px] text-xs font-medium mt-0.5" style={{color:"rgba(201,168,76,0.7)"}}>{String(selectedRow["Street/Subdivision-"]??"")}</div>
+                      <div className="text-right shrink-0">
+                        <div className="font-bold text-lg text-white truncate max-w-[170px]">{String(selectedRow["City-"]??"")}</div>
+                        <div className="text-xs font-semibold truncate max-w-[170px]" style={{color:"rgba(255,255,255,0.7)"}}>{String(selectedRow["Barangay-"]??"")}</div>
+                        <div className="truncate max-w-[170px] text-xs font-medium mt-0.5" style={{color:"rgba(201,168,76,0.7)"}}>{String(selectedRow["Street/Subdivision-"]??"")}</div>
                       </div>
                     </div>
                     {String(selectedRow["Classification-"]??"").trim()&&(
@@ -943,10 +1037,18 @@ export function Home() {
                       {streetGeoLoading?"Finding…":showStreetHighlight?"Hide Street":"Highlight Street"}
                     </button>
                     <button onClick={()=>setRightOpen(true)} className="shrink-0 rounded-full px-4 py-2 text-xs font-bold transition text-[#f5f0eb]" style={{background:"#1e3a8a"}}>Open Report</button>
+                    <button
+                      onClick={()=>{ if(drawMode){ setDrawMode(false); } else { setLandArea(null); setClearDrawSignal(n=>n+1); setDrawMode(true); if(typeof window!=="undefined"&&window.innerWidth<640){ setBottomOpen(false); } } }}
+                      className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-bold transition"
+                      style={drawMode?{borderColor:"#c9a84c",background:"#c9a84c",color:"#1e3a8a"}:{borderColor:"#c9a84c",background:"#fff",color:"#1e3a8a"}}
+                      title="Draw your land boundary on the map to estimate its area and value"
+                    >
+                      <Ruler size={13}/> {drawMode?"Drawing…":"Measure Land"}
+                    </button>
                   </div>
 
                   <div className="mt-3 space-y-2">
-                    {geoLoading&&<div className="text-xs text-gray-500 flex items-center gap-1.5"><span className="animate-spin">⟳</span> Pinpointing…</div>}
+                    {geoLoading&&<div className="text-xs text-gray-500 flex items-center gap-1.5"><RefreshCw size={12} className="animate-spin"/> Pinpointing…</div>}
                     {matchStatus&&<div className="text-xs text-green-800 bg-green-50 border border-green-200 rounded-2xl px-3 py-1.5 flex items-center gap-2"><MapPin size={11}/>{matchStatus}</div>}
                     {detailsErr&&<div className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-2xl px-3 py-1.5">{detailsErr}</div>}
                   </div>

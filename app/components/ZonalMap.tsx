@@ -36,6 +36,11 @@ interface ZonalMapProps {
   // ✅ street highlight (GeoJSON lines)
   streetGeojson?: GeoJSON.FeatureCollection | null;
   streetGeojsonEnabled?: boolean;
+
+  // ✅ land drawing / area measurement
+  drawingMode?: boolean;
+  onAreaMeasured?: (info: { areaSqm: number; path: Array<{ lat: number; lng: number }> } | null) => void;
+  clearDrawingSignal?: number;
 }
 
 const TILESERVERS: Record<MapType, { url: string; attribution: string; maxZoom: number }> = {
@@ -70,6 +75,9 @@ export default function ZonalMap({
   hazardEnabled,
   streetGeojson,
   streetGeojsonEnabled,
+  drawingMode = false,
+  onAreaMeasured,
+  clearDrawingSignal = 0,
 }: ZonalMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -93,6 +101,14 @@ export default function ZonalMap({
 
   // ✅ street line layer ref
   const streetLayerRef = useRef<any>(null);
+
+  // ✅ land drawing refs
+  const drawVerticesRef = useRef<Array<[number, number]>>([]);
+  const drawPolygonRef = useRef<any>(null);
+  const drawMarkersRef = useRef<any[]>([]);
+  const drawClickHandlerRef = useRef<any>(null);
+  const onAreaMeasuredRef = useRef<typeof onAreaMeasured | null>(null);
+  useEffect(() => { onAreaMeasuredRef.current = onAreaMeasured ?? null; }, [onAreaMeasured]);
 
   const emitIdle = () => {
     const event = new CustomEvent("zonalmap:idle");
@@ -276,21 +292,8 @@ export default function ZonalMap({
 
     markerRef.current = marker;
 
-    if (circleRef.current) mapRef.current.removeLayer(circleRef.current);
-
-    const circle = leaflet
-      .circle([selected.lat, selected.lon], {
-        radius: highlightRadiusMeters,
-        color: "#2563eb",
-        weight: 2,
-        opacity: 0.5,
-        fill: true,
-        fillColor: "#3b82f6",
-        fillOpacity: 0.15,
-      })
-      .addTo(mapRef.current);
-
-    circleRef.current = circle;
+    // Highlight circle around the pin removed (added no value, blocked drawing).
+    if (circleRef.current) { mapRef.current.removeLayer(circleRef.current); circleRef.current = null; }
 
     mapRef.current.flyTo([selected.lat, selected.lon], 15, { duration: 1 });
 
@@ -405,6 +408,78 @@ export default function ZonalMap({
     hazardEnabled?.liquefaction,
     hazardEnabled?.faults,
   ]);
+
+  // ✅ Land drawing / area measurement (Leaflet fallback — click to add corners)
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const leafletModule = require("leaflet");
+    const leaflet = leafletModule.default || leafletModule;
+    const map = mapRef.current;
+
+    const computeAndEmit = () => {
+      const verts = drawVerticesRef.current;
+      if (verts.length < 3) { onAreaMeasuredRef.current?.(null); return; }
+      try {
+        const turf = require("@turf/turf");
+        const ring = verts.map(([la, ln]) => [ln, la]);
+        ring.push(ring[0]); // close ring
+        const poly = turf.polygon([ring]);
+        const areaSqm = turf.area(poly);
+        onAreaMeasuredRef.current?.({ areaSqm, path: verts.map(([la, ln]) => ({ lat: la, lng: ln })) });
+      } catch {}
+    };
+
+    const redraw = () => {
+      if (drawPolygonRef.current) { map.removeLayer(drawPolygonRef.current); drawPolygonRef.current = null; }
+      for (const m of drawMarkersRef.current) { try { map.removeLayer(m); } catch {} }
+      drawMarkersRef.current = [];
+      const verts = drawVerticesRef.current;
+      if (verts.length >= 2) {
+        drawPolygonRef.current = leaflet.polygon(verts, {
+          color: "#1e3a8a", weight: 2, fillColor: "#c9a84c", fillOpacity: 0.25,
+        }).addTo(map);
+      }
+      verts.forEach((v, i) => {
+        const mk = leaflet.circleMarker(v, { radius: 5, color: "#1e3a8a", fillColor: "#fff", fillOpacity: 1, weight: 2 }).addTo(map);
+        mk.on("click", (ev: any) => {
+          if (leaflet.DomEvent) leaflet.DomEvent.stop(ev);
+          drawVerticesRef.current.splice(i, 1);
+          redraw(); computeAndEmit();
+        });
+        drawMarkersRef.current.push(mk);
+      });
+    };
+
+    const onClick = (e: any) => {
+      drawVerticesRef.current.push([e.latlng.lat, e.latlng.lng]);
+      redraw(); computeAndEmit();
+    };
+
+    if (drawingMode) {
+      try { map.getContainer().style.cursor = "crosshair"; } catch {}
+      drawClickHandlerRef.current = onClick;
+      map.on("click", onClick);
+    } else {
+      try { map.getContainer().style.cursor = ""; } catch {}
+      if (drawClickHandlerRef.current) { map.off("click", drawClickHandlerRef.current); drawClickHandlerRef.current = null; }
+    }
+
+    return () => {
+      if (drawClickHandlerRef.current) { map.off("click", drawClickHandlerRef.current); drawClickHandlerRef.current = null; }
+    };
+  }, [drawingMode]);
+
+  // ✅ Clear drawn polygon on signal
+  useEffect(() => {
+    const map = mapRef.current;
+    drawVerticesRef.current = [];
+    if (map) {
+      if (drawPolygonRef.current) { try { map.removeLayer(drawPolygonRef.current); } catch {} drawPolygonRef.current = null; }
+      for (const m of drawMarkersRef.current) { try { map.removeLayer(m); } catch {} }
+      drawMarkersRef.current = [];
+    }
+    onAreaMeasuredRef.current?.(null);
+  }, [clearDrawingSignal]);
 
   return (
     <div

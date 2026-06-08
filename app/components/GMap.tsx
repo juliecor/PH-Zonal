@@ -26,6 +26,11 @@ interface GMapProps {
   streetGeojson?: GeoJSON.FeatureCollection | null;
   streetGeojsonEnabled?: boolean;
   areaLabels?: Array<{ lat: number; lon: number; name: string }>; // optional labels for villages/subdivisions
+
+  // ✅ land drawing / area measurement
+  drawingMode?: boolean;
+  onAreaMeasured?: (info: { areaSqm: number; path: Array<{ lat: number; lng: number }> } | null) => void;
+  clearDrawingSignal?: number; // bump this number to clear the drawn polygon
 }
 
 function loadGoogleScript(apiKey: string) {
@@ -49,7 +54,7 @@ function loadGoogleScript(apiKey: string) {
     s.id = id;
     s.async = true;
     s.defer = true;
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=geometry`;
     s.onload = finish;
     s.onerror = () => reject(new Error("Google Maps failed to load"));
     document.head.appendChild(s);
@@ -108,6 +113,9 @@ export default function GMap({
   streetGeojson,
   streetGeojsonEnabled,
   areaLabels,
+  drawingMode = false,
+  onAreaMeasured,
+  clearDrawingSignal = 0,
 }: GMapProps) {
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -119,6 +127,15 @@ export default function GMap({
   const labelMarkersRef = useRef<any[]>([]);
   const onPickRef = useRef<typeof onPickOnMap | null>(null);
   const canPickRef = useRef<boolean>(true);
+
+  // ✅ land drawing refs
+  const drawClickListenerRef = useRef<any>(null);
+  const drawnPolygonRef = useRef<any>(null);
+  const drawMarkersRef = useRef<any[]>([]);
+  const drawPointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
+  const drawEditListenersRef = useRef<boolean>(false);
+  const onAreaMeasuredRef = useRef<typeof onAreaMeasured | null>(null);
+  useEffect(() => { onAreaMeasuredRef.current = onAreaMeasured ?? null; }, [onAreaMeasured]);
 
   // keep click handler + flag fresh
   useEffect(() => { onPickRef.current = onPickOnMap ?? null; }, [onPickOnMap]);
@@ -206,22 +223,9 @@ export default function GMap({
       markerRef.current.setIcon(icon);
     }
 
-    if (!circleRef.current) {
-      circleRef.current = new google.maps.Circle({
-        map,
-        center: { lat: selected.lat, lng: selected.lon },
-        radius: highlightRadiusMeters,
-        strokeColor: "#2563eb",
-        strokeOpacity: 0.5,
-        strokeWeight: 2,
-        fillColor: "#3b82f6",
-        fillOpacity: 0.15,
-        zIndex: 40,
-      });
-    } else {
-      circleRef.current.setCenter({ lat: selected.lat, lng: selected.lon });
-      circleRef.current.setRadius(highlightRadiusMeters);
-    }
+    // Highlight circle around the pin removed (it added no value and got in
+    // the way of the land-drawing tool). Clear any existing one just in case.
+    if (circleRef.current) { circleRef.current.setMap(null); circleRef.current = null; }
 
     smoothPanTo(map, { lat: selected.lat, lng: selected.lon });
     const targetZoom = Math.max(map.getZoom() || 10, 15);
@@ -281,6 +285,156 @@ export default function GMap({
       labelMarkersRef.current.push(marker);
     }
   }, [areaLabels]);
+
+  // ✅ Land drawing / area measurement
+  // NOTE: google.maps.drawing.DrawingManager was removed in Maps JS API v3.65,
+  // so we draw the polygon manually: each map click appends a corner to our own
+  // point list and sets it on an editable google.maps.Polygon via setPath().
+  // Area is computed with a self-contained spherical formula (no Google geometry
+  // library), so drawing works the moment the map is ready.
+  useEffect(() => {
+    let cancelled = false;
+
+    // Spherical polygon area (m²) — same formula Google's computeArea uses.
+    const sphericalArea = (pts: Array<{ lat: number; lng: number }>) => {
+      const R = 6378137; // Earth radius (m)
+      const toRad = (d: number) => (d * Math.PI) / 180;
+      let total = 0;
+      const n = pts.length;
+      for (let i = 0; i < n; i++) {
+        const p1 = pts[i];
+        const p2 = pts[(i + 1) % n];
+        total += toRad(p2.lng - p1.lng) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
+      }
+      return Math.abs((total * R * R) / 2);
+    };
+
+    const emitFromPoints = (pts: Array<{ lat: number; lng: number }>) => {
+      if (!pts || pts.length < 3) { onAreaMeasuredRef.current?.(null); return; }
+      onAreaMeasuredRef.current?.({ areaSqm: sphericalArea(pts), path: pts });
+    };
+
+    const addVertexMarker = (latLng: any) => {
+      const g = (window as any).google;
+      const marker = new g.maps.Marker({
+        map: mapRef.current,
+        position: latLng,
+        draggable: false,
+        zIndex: 70,
+        icon: {
+          path: g.maps.SymbolPath.CIRCLE,
+          scale: 6,
+          fillColor: "#ffffff",
+          fillOpacity: 1,
+          strokeColor: "#1e3a8a",
+          strokeWeight: 2,
+        },
+      });
+      drawMarkersRef.current.push(marker);
+    };
+
+    const ensurePolygon = () => {
+      const g = (window as any).google;
+      if (!drawnPolygonRef.current) {
+        drawnPolygonRef.current = new g.maps.Polygon({
+          map: mapRef.current,
+          paths: [],
+          strokeColor: "#1e3a8a",
+          strokeWeight: 2,
+          fillColor: "#c9a84c",
+          fillOpacity: 0.25,
+          editable: true,
+          clickable: false,
+          zIndex: 60,
+        });
+      }
+      return drawnPolygonRef.current;
+    };
+
+    // When the user drags a vertex, re-read the polygon's path and recompute.
+    const syncFromPolygon = () => {
+      const polygon = drawnPolygonRef.current;
+      if (!polygon) return;
+      const p = polygon.getPath?.();
+      if (!p || typeof p.getLength !== "function") return;
+      const pts: Array<{ lat: number; lng: number }> = [];
+      p.forEach((ll: any) => pts.push({ lat: ll.lat(), lng: ll.lng() }));
+      drawPointsRef.current = pts;
+      emitFromPoints(pts);
+    };
+
+    const attachEditListeners = (polygon: any) => {
+      if (drawEditListenersRef.current) return;
+      const g = (window as any).google;
+      const p = polygon.getPath?.();
+      if (!p || typeof p.getLength !== "function") return;
+      g.maps.event.addListener(p, "set_at", syncFromPolygon);
+      g.maps.event.addListener(p, "insert_at", syncFromPolygon);
+      g.maps.event.addListener(p, "remove_at", syncFromPolygon);
+      drawEditListenersRef.current = true;
+    };
+
+    const onMapClick = (e: any) => {
+      if (!e?.latLng) return;
+      const polygon = ensurePolygon();
+      // keep our own point list and set the polygon path from it (unambiguous)
+      drawPointsRef.current.push({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+      polygon.setPath(drawPointsRef.current);
+      addVertexMarker(e.latLng);
+      attachEditListeners(polygon); // getPath() is defined after setPath
+      emitFromPoints(drawPointsRef.current);
+    };
+
+    const arm = (attempt = 0) => {
+      if (cancelled) return;
+      const map = mapRef.current;
+      const g = (window as any).google;
+
+      if (!drawingMode) {
+        if (drawClickListenerRef.current) {
+          try { g?.maps?.event?.removeListener(drawClickListenerRef.current); } catch {}
+          drawClickListenerRef.current = null;
+        }
+        try { map?.setOptions({ draggableCursor: null }); } catch {}
+        return;
+      }
+
+      // Only wait for the map itself (the area calc doesn't need any Google lib).
+      if (!map || !g?.maps) {
+        if (attempt < 40) setTimeout(() => arm(attempt + 1), 150); // retry up to ~6s
+        return;
+      }
+
+      if (!drawClickListenerRef.current) {
+        drawClickListenerRef.current = map.addListener("click", onMapClick);
+      }
+      try { map.setOptions({ draggableCursor: "crosshair" }); } catch {}
+    };
+
+    arm();
+    return () => {
+      cancelled = true;
+      const g = (window as any).google;
+      if (drawClickListenerRef.current) {
+        try { g?.maps?.event?.removeListener(drawClickListenerRef.current); } catch {}
+        drawClickListenerRef.current = null;
+      }
+      try { mapRef.current?.setOptions({ draggableCursor: null }); } catch {}
+    };
+  }, [drawingMode]);
+
+  // ✅ Clear the drawn polygon when the signal changes
+  useEffect(() => {
+    if (drawnPolygonRef.current) {
+      try { drawnPolygonRef.current.setMap(null); } catch {}
+      drawnPolygonRef.current = null;
+    }
+    for (const m of drawMarkersRef.current) { try { m.setMap(null); } catch {} }
+    drawMarkersRef.current = [];
+    drawPointsRef.current = [];
+    drawEditListenersRef.current = false;
+    onAreaMeasuredRef.current?.(null);
+  }, [clearDrawingSignal]);
 
   return <div id={containerId} className="w-full h-full" style={{ position: "relative", zIndex: 1 }} />;
 }
