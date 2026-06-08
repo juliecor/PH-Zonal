@@ -107,6 +107,12 @@ export default function ReportBuilder(props: {
   onOpenEmailModal?: () => void;
   /** If true, automatically open Preview PDF once ready */
   autoPreview?: boolean;
+
+  /** Optional drawn-land measurement (from the Measure Land tool) */
+  landAreaSqm?: number | null;
+  landPerimeterM?: number | null;
+  /** false when the parcel was drawn far from the selected property (zonal may not apply) */
+  landZonalApplies?: boolean;
 }) {
   const {
     selectedLocation,
@@ -120,6 +126,9 @@ export default function ReportBuilder(props: {
     mapContainerId = "map-container",
     poiRadiusKm = 1.5,
     onChangePoiRadius,
+    landAreaSqm = null,
+    landPerimeterM = null,
+    landZonalApplies = true,
   } = props;
   const autoPreview = props.autoPreview ?? false;
 
@@ -306,8 +315,25 @@ export default function ReportBuilder(props: {
     pdf.text(locationLine, pageW / 2, 145, { align: "center" });
     pdf.text(classLine,    pageW / 2, 158, { align: "center" });
 
+    // Measured land (from the Measure Land tool), if the user drew a parcel
+    const zonalNum = Number(String(selectedRow?.["ZonalValuepersqm.-"] ?? "").replace(/[^0-9.]/g, "")) || 0;
+    const estLandValue = landAreaSqm && zonalNum ? landAreaSqm * zonalNum : 0;
+    let mapY = 190;
+    if (landAreaSqm && landAreaSqm > 0) {
+      const ha = landAreaSqm / 10000;
+      const areaStr = `${Math.round(landAreaSqm).toLocaleString()} sqm (${ha.toFixed(3)} ha)`;
+      const periStr = landPerimeterM ? `, perimeter ${Math.round(landPerimeterM).toLocaleString()} m` : "";
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.text(`Measured Land: ${areaStr}${periStr}`, pageW / 2, 174, { align: "center" });
+      if (estLandValue > 0) {
+        const caveat = landZonalApplies ? "" : " (zonal may not apply to this location)";
+        pdf.text(`Estimated Land Value: PHP ${Math.round(estLandValue).toLocaleString()}${caveat}`, pageW / 2, 188, { align: "center" });
+      }
+      mapY = 206; // push the map down so it doesn't overlap the land lines
+    }
+
     const mapX = margin;
-    const mapY = 190;
     const mapW = 240;
     const mapH = 240;
     const rightX = mapX + mapW + 36;
@@ -657,7 +683,7 @@ export default function ReportBuilder(props: {
           city: String(selectedRow?.["City-"] ?? ""),
           province: String(selectedRow?.["Province-"] ?? ""),
           zonal_value: String(selectedRow?.["ZonalValuepersqm.-"] ?? ""),
-          sqm: null as any,
+          sqm: landAreaSqm ?? (null as any),
           meta: { lat: selectedLocation?.lat, lon: selectedLocation?.lon, geoLabel },
         };
         await apiCreateReport(payload);
@@ -753,7 +779,7 @@ export default function ReportBuilder(props: {
       {/* ══════════════════════════════════════════════════════
           SIDEBAR
       ══════════════════════════════════════════════════════ */}
-      <aside className="w-96 border-l border-gray-200 bg-white p-5 overflow-auto">
+      <aside className="w-full border-l border-gray-200 bg-white p-4 sm:p-5 overflow-auto">
         <h3 className="text-lg font-bold text-gray-900 mb-5">Real Estate Assessment</h3>
 
         <div className="space-y-4">

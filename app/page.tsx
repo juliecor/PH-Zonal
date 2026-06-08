@@ -208,8 +208,50 @@ export function Home() {
   const [drawMode, setDrawMode] = useState(false);
   const [landArea, setLandArea] = useState<number | null>(null);
   const [clearDrawSignal, setClearDrawSignal] = useState(0);
+  const [landPath, setLandPath] = useState<Array<{ lat: number; lng: number }> | null>(null);
+  const [areaUnit, setAreaUnit] = useState<"sqm" | "ha" | "sqft">("sqm");
   const [areaCardPos, setAreaCardPos] = useState<{ x: number; y: number } | null>(null);
   const [areaCardMin, setAreaCardMin] = useState(false);
+
+  // perimeter + side lengths (meters) from the drawn path
+  const landMetrics = useMemo(() => {
+    const pts = landPath ?? [];
+    if (pts.length < 2) return { perimeterM: 0, sidesM: [] as number[] };
+    const R = 6371000;
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const seg = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+      const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+    };
+    const sidesM: number[] = [];
+    for (let i = 0; i < pts.length; i++) sidesM.push(seg(pts[i], pts[(i + 1) % pts.length]));
+    return { perimeterM: sidesM.reduce((a, b) => a + b, 0), sidesM };
+  }, [landPath]);
+
+  function fmtArea(sqm: number, unit: "sqm" | "ha" | "sqft") {
+    if (unit === "ha") return `${(sqm / 10000).toLocaleString("en-PH", { maximumFractionDigits: 3 })} ha`;
+    if (unit === "sqft") return `${Math.round(sqm * 10.76391).toLocaleString("en-PH")} ft²`;
+    return `${Math.round(sqm).toLocaleString("en-PH")} sqm`;
+  }
+
+  // Distance (m) between the drawn parcel's centroid and the selected pin —
+  // used to warn when the drawing is likely outside the selected zonal area.
+  const drawDistanceM = useMemo(() => {
+    const pts = landPath ?? [];
+    if (!selectedLocation || pts.length < 3) return null;
+    const cLat = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
+    const cLng = pts.reduce((s, p) => s + p.lng, 0) / pts.length;
+    const R = 6371000;
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const dLat = toRad(selectedLocation.lat - cLat), dLng = toRad(selectedLocation.lon - cLng);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(cLat)) * Math.cos(toRad(selectedLocation.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+  }, [landPath, selectedLocation]);
+  function fmtLen(m: number, unit: "sqm" | "ha" | "sqft") {
+    if (unit === "sqft") return `${Math.round(m * 3.28084).toLocaleString("en-PH")} ft`;
+    return `${m.toLocaleString("en-PH", { maximumFractionDigits: 1 })} m`;
+  }
 
   function startAreaCardDrag(e: React.PointerEvent) {
     const parent = (e.currentTarget as HTMLElement).parentElement;
@@ -252,6 +294,7 @@ export function Home() {
     // Land drawing
     setDrawMode(false);
     setLandArea(null);
+    setLandPath(null);
     setClearDrawSignal((n) => n + 1);
     setAreaCardPos(null);
     setAreaCardMin(false);
@@ -671,7 +714,7 @@ export function Home() {
       <ZonalSearchIndicator visible={loading} />
 
       <div className="absolute inset-0">
-        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} drawingMode={drawMode} onAreaMeasured={(info)=>setLandArea(info?info.areaSqm:null)} clearDrawingSignal={clearDrawSignal} />
+        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
       </div>
 
       {/* Brand pill */}
@@ -703,6 +746,8 @@ export function Home() {
       {(drawMode || landArea != null) && (() => {
         const zonal = parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]);
         const estValue = landArea != null && zonal ? landArea * zonal : null;
+        const farFromZone = drawDistanceM != null && drawDistanceM > 1000; // >1 km → likely outside selected zone
+        const distLabel = drawDistanceM == null ? "" : drawDistanceM >= 1000 ? `${(drawDistanceM/1000).toFixed(1)} km` : `${Math.round(drawDistanceM)} m`;
         return (
           <div
             className="absolute z-50 w-[88vw] sm:w-[340px]"
@@ -719,7 +764,7 @@ export function Home() {
                   <Ruler size={15} style={{color:"#c9a84c"}}/>
                   <span className="truncate">Land Area</span>
                   {areaCardMin && landArea != null && (
-                    <span className="font-extrabold whitespace-nowrap" style={{color:"#c9a84c"}}>· {landArea.toLocaleString("en-PH",{maximumFractionDigits:0})} m²</span>
+                    <span className="font-extrabold whitespace-nowrap" style={{color:"#c9a84c"}}>· {fmtArea(landArea, areaUnit)}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-0.5 shrink-0" onPointerDown={(e)=>e.stopPropagation()}>
@@ -737,20 +782,43 @@ export function Home() {
                   </div>
                 ) : (
                   <div className="space-y-2.5">
-                    <div className="flex items-end justify-between">
-                      <div>
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Approx. Area</div>
-                        <div className="text-3xl font-black leading-none" style={{color:"#1e3a8a"}}>{landArea.toLocaleString("en-PH",{maximumFractionDigits:0})}<span className="text-base font-bold text-gray-500"> m²</span></div>
+                    {/* unit toggle */}
+                    <div className="flex items-center gap-1 rounded-lg p-0.5 w-fit" style={{background:"#f1f0ec"}}>
+                      {([["sqm","sqm"],["ha","ha"],["sqft","ft²"]] as Array<["sqm"|"ha"|"sqft",string]>).map(([u,lbl])=>(
+                        <button key={u} onClick={()=>setAreaUnit(u)} className="px-2.5 py-1 rounded-md text-[11px] font-bold transition" style={areaUnit===u?{background:"#1e3a8a",color:"#fff"}:{color:"#6b7280"}}>{lbl}</button>
+                      ))}
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Approx. Area</div>
+                      <div className="text-3xl font-black leading-none" style={{color:"#1e3a8a"}}>{fmtArea(landArea, areaUnit)}</div>
+                    </div>
+                    {/* perimeter + sides */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-lg px-2.5 py-1.5 bg-gray-50 border border-gray-100">
+                        <div className="text-[9px] font-bold uppercase tracking-wide text-gray-400">Perimeter</div>
+                        <div className="font-bold text-gray-800">{fmtLen(landMetrics.perimeterM, areaUnit)}</div>
                       </div>
-                      <div className="text-right text-xs font-semibold text-gray-600">
-                        {(landArea/10000).toLocaleString("en-PH",{maximumFractionDigits:3})} ha
+                      <div className="rounded-lg px-2.5 py-1.5 bg-gray-50 border border-gray-100">
+                        <div className="text-[9px] font-bold uppercase tracking-wide text-gray-400">Corners</div>
+                        <div className="font-bold text-gray-800">{landPath?.length ?? 0} points</div>
                       </div>
                     </div>
+                    {landMetrics.sidesM.length > 0 && (
+                      <div className="text-[10px] text-gray-500 leading-relaxed">
+                        <span className="font-bold text-gray-600">Sides:</span> {landMetrics.sidesM.slice(0,8).map((s)=>fmtLen(s, areaUnit)).join(" · ")}{landMetrics.sidesM.length>8?` · +${landMetrics.sidesM.length-8} more`:""}
+                      </div>
+                    )}
+                    {farFromZone && (
+                      <div className="rounded-xl p-2.5 flex items-start gap-2 text-[11px] leading-snug" style={{background:"#fff7ed",border:"1px solid #fed7aa",color:"#9a3412"}}>
+                        <span className="text-sm leading-none">⚠️</span>
+                        <span>Your drawing is about <b>{distLabel}</b> from the selected property. Zonal values change by street/barangay, so <b>this value may not apply here.</b> Select the property that matches this location for an accurate estimate.</span>
+                      </div>
+                    )}
                     {estValue != null && (
-                      <div className="rounded-xl p-3" style={{background:"#f5f0eb",border:"1px solid #e8e0d8"}}>
-                        <div className="text-[10px] font-bold uppercase tracking-wider" style={{color:"#9a7a20"}}>Est. Land Value (BIR Zonal)</div>
+                      <div className="rounded-xl p-3" style={farFromZone?{background:"#f8f7f5",border:"1px solid #e8e0d8",opacity:0.75}:{background:"#f5f0eb",border:"1px solid #e8e0d8"}}>
+                        <div className="text-[10px] font-bold uppercase tracking-wider" style={{color:"#9a7a20"}}>Est. Land Value {farFromZone ? "(zonal may not apply)" : "(BIR Zonal)"}</div>
                         <div className="text-xl font-black" style={{color:"#1e3a8a"}}>{fmtPesoNumber(estValue)}</div>
-                        <div className="text-[10px] text-gray-500 mt-0.5">{landArea.toLocaleString("en-PH",{maximumFractionDigits:0})} m² × {fmtPesoNumber(zonal!)}/m²</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">{Math.round(landArea).toLocaleString("en-PH")} sqm × {fmtPesoNumber(zonal!)}/sqm</div>
                       </div>
                     )}
                     <div className="text-[10px] text-gray-400 leading-snug">Approximate estimate from your drawing — not a substitute for a licensed survey or formal appraisal.</div>
@@ -1008,7 +1076,7 @@ export function Home() {
       </div>
 
       {/* RIGHT REPORT DRAWER */}
-      <div className={["absolute top-0 right-0 z-40 h-full transition-all duration-300",rightOpen?"w-[360px] sm:w-[420px]":"w-0 overflow-hidden"].join(" ")}>
+      <div className={["absolute top-0 right-0 z-40 h-full transition-all duration-300",rightOpen?"w-full sm:w-[440px]":"w-0 overflow-hidden"].join(" ")}>
         {rightOpen&&(
           <div className="h-full bg-white border-l border-gray-200 shadow-2xl flex flex-col">
             <div className="px-4 py-3 flex items-center justify-between shrink-0" style={{background:"#1e3a8a"}}>
@@ -1019,7 +1087,7 @@ export function Home() {
               <button onClick={()=>setRightOpen(false)} className="rounded-xl p-1.5 transition text-white/50 hover:text-white" style={{background:"rgba(255,255,255,0.08)"}} title="Close"><X size={16}/></button>
             </div>
             <div className="flex-1 overflow-auto p-4 space-y-3">
-              <ReportBuilder selectedLocation={selectedLocation} selectedRow={selectedRow} geoLabel={geoLabel} poiLoading={poiLoading} poiData={poiData} poiRadiusKm={poiRadiusKm} onChangePoiRadius={onChangePoiRadius} idealBusinessText={idealBusinessText} setIdealBusinessText={setIdealBusinessText} areaDescription={areaDescription} mapContainerId="map-container" autoPreview={autoPreview} />
+              <ReportBuilder selectedLocation={selectedLocation} selectedRow={selectedRow} geoLabel={geoLabel} poiLoading={poiLoading} poiData={poiData} poiRadiusKm={poiRadiusKm} onChangePoiRadius={onChangePoiRadius} idealBusinessText={idealBusinessText} setIdealBusinessText={setIdealBusinessText} areaDescription={areaDescription} mapContainerId="map-container" autoPreview={autoPreview} landAreaSqm={landArea} landPerimeterM={landMetrics.perimeterM || null} landZonalApplies={!(drawDistanceM != null && drawDistanceM > 1000)} />
             </div>
           </div>
         )}
