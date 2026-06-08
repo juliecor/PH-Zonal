@@ -132,6 +132,7 @@ export default function GMap({
   const drawClickListenerRef = useRef<any>(null);
   const drawnPolygonRef = useRef<any>(null);
   const drawMarkersRef = useRef<any[]>([]);
+  const drawEdgeLabelsRef = useRef<any[]>([]);
   const drawPointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
   const drawEditListenersRef = useRef<boolean>(false);
   const onAreaMeasuredRef = useRef<typeof onAreaMeasured | null>(null);
@@ -309,7 +310,57 @@ export default function GMap({
       return Math.abs((total * R * R) / 2);
     };
 
+    const segLenM = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+      const R = 6371000;
+      const toRad = (d: number) => (d * Math.PI) / 180;
+      const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+    };
+
+    const clearEdgeLabels = () => {
+      for (const o of drawEdgeLabelsRef.current) { try { o.setMap(null); } catch {} }
+      drawEdgeLabelsRef.current = [];
+    };
+
+    const renderEdgeLabels = (pts: Array<{ lat: number; lng: number }>) => {
+      clearEdgeLabels();
+      const g = (window as any).google;
+      if (!g?.maps || !mapRef.current || pts.length < 2) return;
+      // A small white pill at each edge midpoint showing its length in meters.
+      class EdgeLabel extends g.maps.OverlayView {
+        position: any; text: string; div: HTMLDivElement | null = null;
+        constructor(position: any, text: string) { super(); this.position = position; this.text = text; }
+        onAdd() {
+          const d = document.createElement("div");
+          d.style.cssText = "position:absolute;transform:translate(-50%,-50%);background:rgba(255,255,255,0.95);border:1px solid #1e3a8a;color:#1e3a8a;font-size:11px;font-weight:700;padding:0 6px;border-radius:9999px;white-space:nowrap;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.3);line-height:16px";
+          d.textContent = this.text;
+          this.div = d;
+          (this as any).getPanes().overlayLayer.appendChild(d);
+        }
+        draw() {
+          const proj = (this as any).getProjection?.();
+          if (!proj || !this.div) return;
+          const p = proj.fromLatLngToDivPixel(this.position);
+          if (p) { this.div.style.left = `${p.x}px`; this.div.style.top = `${p.y}px`; }
+        }
+        onRemove() { if (this.div) { this.div.remove(); this.div = null; } }
+      }
+      const n = pts.length;
+      const edges = n >= 3 ? n : n - 1; // closed polygon vs single open segment
+      for (let i = 0; i < edges; i++) {
+        const a = pts[i], b = pts[(i + 1) % n];
+        const mid = new g.maps.LatLng((a.lat + b.lat) / 2, (a.lng + b.lng) / 2);
+        const len = segLenM(a, b);
+        const text = len < 1000 ? `${Math.round(len)} m` : `${(len / 1000).toFixed(2)} km`;
+        const o = new EdgeLabel(mid, text);
+        o.setMap(mapRef.current);
+        drawEdgeLabelsRef.current.push(o);
+      }
+    };
+
     const emitFromPoints = (pts: Array<{ lat: number; lng: number }>) => {
+      renderEdgeLabels(pts);
       if (!pts || pts.length < 3) { onAreaMeasuredRef.current?.(null); return; }
       onAreaMeasuredRef.current?.({ areaSqm: sphericalArea(pts), path: pts });
     };
@@ -431,6 +482,8 @@ export default function GMap({
     }
     for (const m of drawMarkersRef.current) { try { m.setMap(null); } catch {} }
     drawMarkersRef.current = [];
+    for (const o of drawEdgeLabelsRef.current) { try { o.setMap(null); } catch {} }
+    drawEdgeLabelsRef.current = [];
     drawPointsRef.current = [];
     drawEditListenersRef.current = false;
     onAreaMeasuredRef.current?.(null);

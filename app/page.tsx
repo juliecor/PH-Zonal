@@ -253,6 +253,42 @@ export function Home() {
     return `${m.toLocaleString("en-PH", { maximumFractionDigits: 1 })} m`;
   }
 
+  // Whole-barangay comparables from the stats endpoint (preferred over the
+  // loaded-page sample below).
+  const [barangayStats, setBarangayStats] = useState<{ min: number; max: number; median: number; mean: number; count: number } | null>(null);
+
+  useEffect(() => {
+    if (!selectedRow) { setBarangayStats(null); return; }
+    const c = String(selectedRow["City-"] ?? "").trim();
+    const b = String(selectedRow["Barangay-"] ?? "").trim();
+    if (!c || !b) { setBarangayStats(null); return; }
+    let cancelled = false;
+    setBarangayStats(null);
+    (async () => {
+      try {
+        const res = await fetch(`/api/zonal-stats?domain=${encodeURIComponent(domain)}&city=${encodeURIComponent(c)}&barangay=${encodeURIComponent(b)}`);
+        const data = await res.json().catch(() => null);
+        if (!cancelled && data?.ok && data.stats) setBarangayStats(data.stats);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [selectedRow, domain]);
+
+  // Fallback: comparables computed from the currently loaded same-barangay rows.
+  const compStats = useMemo(() => {
+    const vals = rows
+      .map((r) => parseZonalValueToNumber(r["ZonalValuepersqm.-"]))
+      .filter((n): n is number => n != null && n > 0);
+    if (vals.length < 2) return null;
+    const sorted = [...vals].sort((a, b) => a - b);
+    const min = sorted[0];
+    const max = sorted[sorted.length - 1];
+    const mid = sorted.length % 2
+      ? sorted[(sorted.length - 1) / 2]
+      : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+    return { min, max, median: mid, count: vals.length };
+  }, [rows]);
+
   function startAreaCardDrag(e: React.PointerEvent) {
     const parent = (e.currentTarget as HTMLElement).parentElement;
     if (!parent || typeof window === "undefined") return;
@@ -864,6 +900,10 @@ export function Home() {
                 <ChevronLeft size={12} /> Back to Dashboard
               </button>
               </div>
+              {/* Mobile-only: close the full-width drawer (the side toggle is off-screen on phones) */}
+              <button onClick={()=>setLeftOpen(false)} className="sm:hidden shrink-0 rounded-lg p-1.5 text-white/80 hover:text-white transition" style={{background:"rgba(255,255,255,0.12)"}} title="Close panel" aria-label="Close panel">
+                <X size={18} />
+              </button>
               {/* Token pill + request (hidden for admin) */}
               {!isAdmin && (
               <div className="hidden sm:flex items-center gap-2">
@@ -1133,6 +1173,38 @@ export function Home() {
                       </div>
                     )}
                   </div>
+
+                  {/* Nearby zonal comparables (whole-barangay stats, with loaded sample as fallback) */}
+                  {(() => {
+                    const stats = barangayStats ?? compStats;
+                    if (!stats) return null;
+                    const whole = !!barangayStats;
+                    const sel = parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"]);
+                    const diffPct = sel && stats.median ? (sel / stats.median - 1) * 100 : null;
+                    const brgyName = String(selectedRow["Barangay-"] ?? "").trim() || "this area";
+                    return (
+                      <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden">
+                        <div className="px-3 py-1.5 flex items-center gap-1.5" style={{background:"#f5f0eb",borderBottom:"1px solid #e8e0d8"}}>
+                          <Coins size={12} style={{color:"#9a7a20"}}/>
+                          <span className="text-[11px] font-bold uppercase tracking-wide" style={{color:"#1e3a8a"}}>Nearby Zonal Values</span>
+                          <span className="text-[10px] text-gray-500 ml-auto">{stats.count} {whole ? "in" : "loaded for"} {brgyName}</span>
+                        </div>
+                        <div className="p-3">
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div><div className="text-[9px] font-bold uppercase text-gray-400">Low</div><div className="text-sm font-black" style={{color:"#1e3a8a"}}>{fmtPesoNumber(stats.min)}</div></div>
+                            <div><div className="text-[9px] font-bold uppercase text-gray-400">Median</div><div className="text-sm font-black" style={{color:"#1e3a8a"}}>{fmtPesoNumber(stats.median)}</div></div>
+                            <div><div className="text-[9px] font-bold uppercase text-gray-400">High</div><div className="text-sm font-black" style={{color:"#1e3a8a"}}>{fmtPesoNumber(stats.max)}</div></div>
+                          </div>
+                          {diffPct != null && Number.isFinite(diffPct) && (
+                            <div className="mt-2 text-center text-[11px] font-semibold" style={{color: Math.abs(diffPct) < 1 ? "#6b7280" : diffPct > 0 ? "#9a3412" : "#15803d"}}>
+                              This property is {Math.abs(diffPct) < 1 ? "at the barangay median" : `${Math.abs(diffPct).toFixed(0)}% ${diffPct > 0 ? "above" : "below"} the barangay median`}
+                            </div>
+                          )}
+                          <div className="mt-1.5 text-[9px] text-gray-400 text-center leading-snug">Based on BIR zonal values across {brgyName} — not market/listing prices.</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
                     <button

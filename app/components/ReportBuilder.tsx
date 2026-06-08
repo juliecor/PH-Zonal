@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Building2, Briefcase, MapPin, Phone } from "lucide-react";
 // use plain <img> for local assets to avoid any Next Image config/caching issues
 import type { LatLng, PoiData, PoiItem, Row } from "../lib/types";
 import PdfPreviewModal from "./PdfPreviewModal";
@@ -780,14 +781,14 @@ export default function ReportBuilder(props: {
           SIDEBAR
       ══════════════════════════════════════════════════════ */}
       <aside className="w-full border-l border-gray-200 bg-white p-4 sm:p-5 overflow-auto">
-        <h3 className="text-lg font-bold text-gray-900 mb-5">Real Estate Assessment</h3>
+        <h3 className="text-lg font-bold mb-5" style={{color:"#1e3a8a"}}>Real Estate Assessment</h3>
 
         <div className="space-y-4">
 
           {/* Business & Market Opportunity */}
           <div>
-            <label className="block text-sm font-bold uppercase tracking-wide text-gray-900 mb-3 flex items-center gap-2">
-              <span className="text-lg">🏢</span> Business &amp; Market Opportunity
+            <label className="text-sm font-bold uppercase tracking-wide text-gray-900 mb-3 flex items-center gap-2">
+              <Building2 size={16} style={{color:"#c9a84c"}} /> Business &amp; Market Opportunity
             </label>
             <div
               className={`w-full rounded-lg border border-gray-300 px-4 py-3 leading-relaxed bg-gray-50 text-gray-800 transition-all ${
@@ -803,7 +804,8 @@ export default function ReportBuilder(props: {
             {areaDescription && (
               <button
                 onClick={() => setExpandedAnalysis(!expandedAnalysis)}
-                className="text-blue-600 hover:text-blue-800 text-sm font-semibold mt-2 transition"
+                className="text-sm font-semibold mt-2 transition hover:opacity-80"
+                style={{color:"#1e3a8a"}}
               >
                 {expandedAnalysis ? "See Less ▲" : "See More ▼"}
               </button>
@@ -812,11 +814,11 @@ export default function ReportBuilder(props: {
 
           {/* Recommended Business Uses */}
           <div>
-            <label className="block text-sm font-bold uppercase tracking-wide text-gray-900 mb-3 flex items-center gap-2">
-              <span className="text-lg">💼</span> Recommended Business Uses
+            <label className="text-sm font-bold uppercase tracking-wide text-gray-900 mb-3 flex items-center gap-2">
+              <Briefcase size={16} style={{color:"#c9a84c"}} /> Recommended Business Uses
             </label>
             <textarea
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#1e3a8a] focus:border-transparent resize-none"
               value={idealBusinessText}
               onChange={(e) => setIdealBusinessText(e.target.value)}
               placeholder={"• Retail Store\n• Food & Beverage\n• Personal Services\n• Professional Office"}
@@ -840,7 +842,7 @@ export default function ReportBuilder(props: {
                   }
                 }}
                 placeholder="Add more business uses (press Enter)..."
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a8a] focus:border-transparent"
               />
               <button
                 onClick={() => {
@@ -852,7 +854,8 @@ export default function ReportBuilder(props: {
                   }
                 }}
                 disabled={!newBusinessUse.trim()}
-                className="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+                className="rounded-lg text-white px-4 py-2 text-sm font-medium hover:opacity-90 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+                style={!newBusinessUse.trim() ? undefined : {background:"#1e3a8a"}}
               >
                 Add
               </button>
@@ -860,7 +863,8 @@ export default function ReportBuilder(props: {
 
             <button
               onClick={() => setExpandedBusinessUses(!expandedBusinessUses)}
-              className="text-blue-600 hover:text-blue-800 text-sm font-semibold mt-2 transition"
+              className="text-sm font-semibold mt-2 transition hover:opacity-80"
+              style={{color:"#1e3a8a"}}
             >
               {expandedBusinessUses ? "Collapse ▲" : "Expand ▼"}
             </button>
@@ -870,7 +874,8 @@ export default function ReportBuilder(props: {
           <button
             onClick={generatePdfPreview}
             disabled={pdfLoading || !selectedLocation}
-            className="w-full rounded-lg bg-blue-600 text-white px-4 py-3 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+            className="w-full rounded-lg text-white px-4 py-3 text-sm font-bold hover:opacity-90 disabled:opacity-50 transition"
+            style={{background:"#1e3a8a"}}
           >
             {pdfLoading ? "Generating PDF…" : "Preview PDF Report"}
           </button>
@@ -936,7 +941,7 @@ export default function ReportBuilder(props: {
             {/* Facilities Header */}
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs">📍</span>
+                <span className="w-8 h-8 rounded-lg flex items-center justify-center text-white" style={{background:"#1e3a8a"}}><MapPin size={15} /></span>
                 Nearby Facilities ({poiRadiusKm}km)
               </h4>
               <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
@@ -1080,8 +1085,8 @@ export default function ReportBuilder(props: {
                                             {formatDistance(d)}
                                           </span>
                                         )}
-                                        {x.phone   && <span>☎ {x.phone}</span>}
-                                        {x.website && <a href={x.website} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Website</a>}
+                                        {x.phone   && <span className="inline-flex items-center gap-1"><Phone size={11} /> {x.phone}</span>}
+                                        {x.website && <a href={x.website} target="_blank" rel="noreferrer" className="hover:underline" style={{color:"#1e3a8a"}}>Website</a>}
                                       </div>
                                     </div>
                                   </li>
