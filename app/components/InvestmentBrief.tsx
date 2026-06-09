@@ -75,7 +75,7 @@ export default function InvestmentBrief({
         {/* Header */}
         <div className="px-4 py-3 flex items-center justify-between sticky top-0 z-10" style={{ background: "#1e3a8a" }}>
           <div className="flex items-center gap-2 text-[#f5f0eb] font-bold text-sm">
-            <Sparkles size={16} style={{ color: "#c9a84c" }} /> AI Investment Brief
+            <Sparkles size={16} style={{ color: "#c9a84c" }} /> AI Property Brief
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-white/60 hover:text-white transition" title="Close"><X size={16} /></button>
         </div>
