@@ -25,6 +25,8 @@ import {
   ChevronDown,
   Coins,
   Calculator,
+  Sparkles,
+  Camera,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiMe } from "./lib/authClient";
@@ -34,6 +36,8 @@ import { normalizePH, suggestBusinesses } from "./lib/zonal-util";
 import ReportBuilder from "./components/ReportBuilder";
 import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
 import PropertyCalculator from "./components/PropertyCalculator";
+import InvestmentBrief from "./components/InvestmentBrief";
+import StreetViewModal from "./components/StreetViewModal";
 
 // ─── Golden house icon (cobalt bg + gold house) ───────────────────────────────
 function ZonalHouseIcon({ size = 30, onClick }: { size?: number; onClick?: () => void }) {
@@ -213,6 +217,9 @@ export function Home() {
   const [landPath, setLandPath] = useState<Array<{ lat: number; lng: number }> | null>(null);
   const [areaUnit, setAreaUnit] = useState<"sqm" | "ha" | "sqft">("sqm");
   const [calcOpen, setCalcOpen] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [streetViewOpen, setStreetViewOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [areaCardPos, setAreaCardPos] = useState<{ x: number; y: number } | null>(null);
   const [areaCardMin, setAreaCardMin] = useState(false);
 
@@ -1209,38 +1216,72 @@ export function Home() {
                     );
                   })()}
 
-                  <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
-                    <button
-                      onClick={async()=>{
-                        if(!selectedRow) return; setDetailsErr("");
-                        if(showStreetHighlight){setShowStreetHighlight(false);setStreetGeo(null);return;}
-                        const data = await fetchStreetGeometryFromSelectedRow(selectedRow);
-                        if(data?.geojson&&Array.isArray((data.geojson as any).features)&&(data.geojson as any).features.length>0){setStreetGeo(data.geojson);setShowStreetHighlight(true);}
-                        else{setStreetGeo(null);setShowStreetHighlight(false);setDetailsErr("Street line not found near this pin.");}
-                      }}
-                      disabled={streetGeoLoading}
-                      className="shrink-0 rounded-full border px-4 py-2 text-xs font-bold transition disabled:opacity-50"
-                      style={showStreetHighlight?{borderColor:"#c9a84c",background:"#f5f0eb",color:"#1e3a8a"}:{borderColor:"#e2d9d0",background:"#fff",color:"#374151"}}
-                    >
-                      {streetGeoLoading?"Finding…":showStreetHighlight?"Hide Street":"Highlight Street"}
-                    </button>
-                    <button onClick={()=>setRightOpen(true)} className="shrink-0 rounded-full px-4 py-2 text-xs font-bold transition text-[#f5f0eb]" style={{background:"#1e3a8a"}}>Open Report</button>
-                    <button
-                      onClick={()=>{ if(drawMode){ setDrawMode(false); } else { setLandArea(null); setClearDrawSignal(n=>n+1); setAreaCardMin(false); setMapType("satellite"); setDrawMode(true); if(typeof window!=="undefined"&&window.innerWidth<640){ setBottomOpen(false); } } }}
-                      className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-bold transition"
-                      style={drawMode?{borderColor:"#c9a84c",background:"#c9a84c",color:"#1e3a8a"}:{borderColor:"#c9a84c",background:"#fff",color:"#1e3a8a"}}
-                      title="Draw your land boundary on the map to estimate its area and value"
-                    >
-                      <Ruler size={13}/> {drawMode?"Drawing…":"Measure Land"}
-                    </button>
-                    <button
-                      onClick={()=>setCalcOpen(true)}
-                      className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-bold transition"
-                      style={{borderColor:"#e2d9d0",background:"#fff",color:"#1e3a8a"}}
-                      title="Estimate taxes, fees, and monthly loan payment — all in one"
-                    >
-                      <Calculator size={13}/> Cost Calculator
-                    </button>
+                  <div className="mt-3 flex items-center gap-2">
+                    {/* Primary actions (scrollable) */}
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-1 min-w-0">
+                      <button onClick={()=>setRightOpen(true)} className="shrink-0 rounded-full px-4 py-2 text-xs font-bold transition text-[#f5f0eb]" style={{background:"#1e3a8a"}}>Open Report</button>
+                      <button
+                        onClick={()=>{ if(drawMode){ setDrawMode(false); } else { setLandArea(null); setClearDrawSignal(n=>n+1); setAreaCardMin(false); setMapType("satellite"); setDrawMode(true); if(typeof window!=="undefined"&&window.innerWidth<640){ setBottomOpen(false); } } }}
+                        className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-bold transition"
+                        style={drawMode?{borderColor:"#c9a84c",background:"#c9a84c",color:"#1e3a8a"}:{borderColor:"#c9a84c",background:"#fff",color:"#1e3a8a"}}
+                        title="Draw your land boundary on the map to estimate its area and value"
+                      >
+                        <Ruler size={13}/> {drawMode?"Drawing…":"Measure Land"}
+                      </button>
+                      <button
+                        onClick={()=>setBriefOpen(true)}
+                        className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition text-white"
+                        style={{background:"linear-gradient(135deg,#1e3a8a,#1e40af)"}}
+                        title="Generate an AI investment brief for this property"
+                      >
+                        <Sparkles size={13}/> AI Brief
+                      </button>
+                    </div>
+
+                    {/* Tools menu (opens upward, outside the scroll area so it isn't clipped) */}
+                    <div className="relative shrink-0">
+                      <button
+                        onClick={()=>setToolsOpen(v=>!v)}
+                        className="inline-flex items-center gap-1 rounded-full border px-3 py-2 text-xs font-bold transition"
+                        style={toolsOpen?{borderColor:"#c9a84c",background:"#f5f0eb",color:"#1e3a8a"}:{borderColor:"#e2d9d0",background:"#fff",color:"#1e3a8a"}}
+                        title="More tools"
+                      >
+                        Tools <ChevronDown size={13} style={{transform: toolsOpen?"rotate(180deg)":"none", transition:"transform .2s"}}/>
+                      </button>
+                      {toolsOpen && (
+                        <>
+                          <div className="fixed inset-0 z-[55]" onClick={()=>setToolsOpen(false)} />
+                          <div className="absolute right-0 bottom-full mb-2 z-[56] w-52 rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
+                            <button
+                              onClick={async()=>{
+                                setToolsOpen(false);
+                                if(!selectedRow) return; setDetailsErr("");
+                                if(showStreetHighlight){setShowStreetHighlight(false);setStreetGeo(null);return;}
+                                const data = await fetchStreetGeometryFromSelectedRow(selectedRow);
+                                if(data?.geojson&&Array.isArray((data.geojson as any).features)&&(data.geojson as any).features.length>0){setStreetGeo(data.geojson);setShowStreetHighlight(true);}
+                                else{setStreetGeo(null);setShowStreetHighlight(false);setDetailsErr("Street line not found near this pin.");}
+                              }}
+                              disabled={streetGeoLoading}
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f5f0eb] transition border-b border-gray-100 disabled:opacity-50"
+                            >
+                              <MapPin size={14} style={{color:"#1e3a8a"}}/> {streetGeoLoading?"Finding…":showStreetHighlight?"Hide Street":"Highlight Street"}
+                            </button>
+                            <button
+                              onClick={()=>{ setToolsOpen(false); setCalcOpen(true); }}
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f5f0eb] transition border-b border-gray-100"
+                            >
+                              <Calculator size={14} style={{color:"#1e3a8a"}}/> Cost Calculator
+                            </button>
+                            <button
+                              onClick={()=>{ setToolsOpen(false); setStreetViewOpen(true); }}
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f5f0eb] transition"
+                            >
+                              <Camera size={14} style={{color:"#1e3a8a"}}/> Street View
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mt-3 space-y-2">
@@ -1260,6 +1301,41 @@ export function Home() {
         open={calcOpen}
         onClose={()=>setCalcOpen(false)}
         defaultValue={landArea && parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]) ? landArea * parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"])! : null}
+        locationLabel={selectedTitle}
+      />
+
+      {/* AI INVESTMENT BRIEF */}
+      <InvestmentBrief
+        open={briefOpen}
+        onClose={()=>setBriefOpen(false)}
+        locationLabel={selectedTitle}
+        payload={(()=>{
+          const z = parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]);
+          const landValue = landArea && z ? landArea * z : null;
+          let monthly = 0;
+          if (landValue) { const p = landValue*0.8, r = 6.5/100/12, n = 240, f = Math.pow(1+r,n); monthly = p*r*f/(f-1); }
+          return {
+            city: String(selectedRow?.["City-"] ?? ""),
+            barangay: String(selectedRow?.["Barangay-"] ?? ""),
+            province: String(selectedRow?.["Province-"] ?? ""),
+            classification: String(selectedRow?.["Classification-"] ?? ""),
+            zonalValue: String(selectedRow?.["ZonalValuepersqm.-"] ?? ""),
+            landAreaSqm: landArea,
+            landValue,
+            comps: barangayStats ?? compStats,
+            poiCounts: poiData?.counts ?? null,
+            monthly: monthly || null,
+            downPct: 20,
+          };
+        })()}
+      />
+
+      {/* STREET VIEW */}
+      <StreetViewModal
+        open={streetViewOpen}
+        onClose={()=>setStreetViewOpen(false)}
+        lat={selectedLocation?.lat ?? null}
+        lon={selectedLocation?.lon ?? null}
         locationLabel={selectedTitle}
       />
     </main>
