@@ -1340,7 +1340,7 @@ export function Home() {
       />
     </main>
   );
-}
+}''
 
 export function HomePage() {
   // The full-screen map view (Home) renders its own header with the home icon

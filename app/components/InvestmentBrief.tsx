@@ -105,14 +105,9 @@ export default function InvestmentBrief({
             </div>
           )}
 
-          <div className="flex items-center gap-2">
-            <button onClick={generate} disabled={loading} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full border px-3 py-2 text-xs font-bold transition disabled:opacity-50" style={{ borderColor: "#e2d9d0", background: "#fff", color: "#1e3a8a" }}>
-              <RefreshCw size={13} /> Regenerate
-            </button>
-            <button onClick={copy} disabled={loading || !text} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold text-white transition disabled:opacity-50" style={{ background: "#1e3a8a" }}>
-              <Copy size={13} /> Copy
-            </button>
-          </div>
+          <button onClick={copy} disabled={loading || !text} className="w-full inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold text-white transition disabled:opacity-50" style={{ background: "#1e3a8a" }}>
+            <Copy size={13} /> Copy
+          </button>
 
           <div className="text-[10px] text-gray-400 leading-snug">AI-generated estimate from the data on screen. Not a formal appraisal or financial advice.</div>
         </div>
