@@ -24,6 +24,8 @@ import {
   FileText,
   ChevronDown,
   Coins,
+  Receipt,
+  Landmark,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiMe } from "./lib/authClient";
@@ -32,6 +34,8 @@ import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "./lib
 import { normalizePH, suggestBusinesses } from "./lib/zonal-util";
 import ReportBuilder from "./components/ReportBuilder";
 import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
+import TaxEstimator from "./components/TaxEstimator";
+import LoanCalculator from "./components/LoanCalculator";
 
 // ─── Golden house icon (cobalt bg + gold house) ───────────────────────────────
 function ZonalHouseIcon({ size = 30, onClick }: { size?: number; onClick?: () => void }) {
@@ -210,6 +214,8 @@ export function Home() {
   const [clearDrawSignal, setClearDrawSignal] = useState(0);
   const [landPath, setLandPath] = useState<Array<{ lat: number; lng: number }> | null>(null);
   const [areaUnit, setAreaUnit] = useState<"sqm" | "ha" | "sqft">("sqm");
+  const [taxOpen, setTaxOpen] = useState(false);
+  const [loanOpen, setLoanOpen] = useState(false);
   const [areaCardPos, setAreaCardPos] = useState<{ x: number; y: number } | null>(null);
   const [areaCardMin, setAreaCardMin] = useState(false);
 
@@ -1230,6 +1236,22 @@ export function Home() {
                     >
                       <Ruler size={13}/> {drawMode?"Drawing…":"Measure Land"}
                     </button>
+                    <button
+                      onClick={()=>setTaxOpen(true)}
+                      className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-bold transition"
+                      style={{borderColor:"#e2d9d0",background:"#fff",color:"#1e3a8a"}}
+                      title="Estimate the taxes and transfer fees for this property"
+                    >
+                      <Receipt size={13}/> Taxes &amp; Fees
+                    </button>
+                    <button
+                      onClick={()=>setLoanOpen(true)}
+                      className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-bold transition"
+                      style={{borderColor:"#e2d9d0",background:"#fff",color:"#1e3a8a"}}
+                      title="Estimate the monthly loan payment for this property"
+                    >
+                      <Landmark size={13}/> Loan
+                    </button>
                   </div>
 
                   <div className="mt-3 space-y-2">
@@ -1242,7 +1264,24 @@ export function Home() {
             </div>
           )}
         </div>
-      </div> 
+      </div>
+
+      {/* TAXES & FEES ESTIMATOR */}
+      <TaxEstimator
+        open={taxOpen}
+        onClose={()=>setTaxOpen(false)}
+        defaultBase={landArea && parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]) ? landArea * parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"])! : null}
+        zonalPerSqm={parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"])}
+        locationLabel={selectedTitle}
+      />
+
+      {/* LOAN CALCULATOR */}
+      <LoanCalculator
+        open={loanOpen}
+        onClose={()=>setLoanOpen(false)}
+        defaultPrice={landArea && parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]) ? landArea * parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"])! : null}
+        locationLabel={selectedTitle}
+      />
     </main>
   );
 }
