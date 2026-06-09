@@ -27,6 +27,7 @@ import {
   Calculator,
   Sparkles,
   Camera,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiMe } from "./lib/authClient";
@@ -38,6 +39,7 @@ import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
 import PropertyCalculator from "./components/PropertyCalculator";
 import InvestmentBrief from "./components/InvestmentBrief";
 import StreetViewModal from "./components/StreetViewModal";
+import PropertySnapshot from "./components/PropertySnapshot";
 
 // ─── Golden house icon (cobalt bg + gold house) ───────────────────────────────
 function ZonalHouseIcon({ size = 30, onClick }: { size?: number; onClick?: () => void }) {
@@ -220,6 +222,7 @@ export function Home() {
   const [briefOpen, setBriefOpen] = useState(false);
   const [streetViewOpen, setStreetViewOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [areaCardPos, setAreaCardPos] = useState<{ x: number; y: number } | null>(null);
   const [areaCardMin, setAreaCardMin] = useState(false);
 
@@ -1274,9 +1277,15 @@ export function Home() {
                             </button>
                             <button
                               onClick={()=>{ setToolsOpen(false); setStreetViewOpen(true); }}
-                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f5f0eb] transition"
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f5f0eb] transition border-b border-gray-100"
                             >
                               <Camera size={14} style={{color:"#1e3a8a"}}/> Street View
+                            </button>
+                            <button
+                              onClick={()=>{ setToolsOpen(false); setSnapshotOpen(true); }}
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f5f0eb] transition"
+                            >
+                              <ImageIcon size={14} style={{color:"#1e3a8a"}}/> Save Image
                             </button>
                           </div>
                         </>
@@ -1337,6 +1346,32 @@ export function Home() {
         lat={selectedLocation?.lat ?? null}
         lon={selectedLocation?.lon ?? null}
         locationLabel={selectedTitle}
+      />
+
+      {/* PROPERTY SNAPSHOT (shareable image) */}
+      <PropertySnapshot
+        open={snapshotOpen}
+        onClose={()=>setSnapshotOpen(false)}
+        data={(()=>{
+          const z = parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]);
+          const landValue = landArea && z ? landArea * z : null;
+          let monthly = 0;
+          if (landValue) { const p = landValue*0.8, r = 6.5/100/12, n = 240, f = Math.pow(1+r,n); monthly = p*r*f/(f-1); }
+          return {
+            barangay: String(selectedRow?.["Barangay-"] ?? ""),
+            city: String(selectedRow?.["City-"] ?? ""),
+            province: String(selectedRow?.["Province-"] ?? ""),
+            classification: String(selectedRow?.["Classification-"] ?? ""),
+            zonal: z,
+            landAreaSqm: landArea,
+            landValue,
+            comps: barangayStats ?? compStats,
+            monthly: monthly || null,
+            poiCounts: poiData?.counts ?? null,
+            dateLabel: new Date().toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }),
+            path: landPath,
+          };
+        })()}
       />
     </main>
   );
