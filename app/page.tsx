@@ -797,7 +797,7 @@ export function Home() {
         return (
           <div
             className="absolute z-50 w-[88vw] sm:w-[340px]"
-            style={areaCardPos ? { left: areaCardPos.x, top: areaCardPos.y } : { top: 16, left: "50%", transform: "translateX(-50%)" }}
+            style={areaCardPos ? { left: areaCardPos.x, top: areaCardPos.y } : { top: 16, left: 16 }}
           >
             <div className="rounded-2xl border-2 border-[#c9a84c] bg-white/98 backdrop-blur shadow-2xl overflow-hidden">
               <div
