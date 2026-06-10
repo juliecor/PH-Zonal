@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { coastalNote } from "../../lib/coastal";
 
 export const runtime = "nodejs";
 
@@ -291,8 +292,14 @@ export async function POST(req: Request) {
     const classification = String(body.classification ?? "").trim();
     const zonalValuePerSqm = String(body.zonalValuePerSqm ?? "").trim();
     const poiCounts = body.poiCounts ?? null;
+    const lat = Number(body.lat);
+    const lon = Number(body.lon);
 
     const loc = [barangay, city, province].filter(Boolean).join(", ") || "the selected area";
+
+    // Real coastal/beach detection so tourism businesses are only suggested when valid.
+    const gKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || "";
+    const coastalText = await coastalNote(lat, lon, gKey);
     
     // Enhanced POI Analysis
     const poiAnalysis = (() => {
@@ -362,13 +369,14 @@ Context: ${contextHints}
   ${isUpland || isAgricultural || density === "low" ? `- Allowed examples only: ${allowedForUpland.join("; ")}
   - Avoid: ${avoidUrban.join("; ")}
   - Emphasize essentials and agri-adjacent services; must be feasible for limited foot traffic and road access.` : `- Urban context allowed but keep realistic to density and access.`}
+  ${coastalText ? `- COASTAL: ${coastalText} You MAY recommend beach/resort, beachfront dining, water-sports rental, and homestay/Airbnb where suitable.` : `- No beach detected nearby — do NOT suggest beach/resort/tourism businesses.`}
 
-💼 Key Business Opportunities:
+Key Business Opportunities:
 • [Business Type 1] – [why it works here & who needs it]
 • [Business Type 2] – [why it works here & target market]
 • [Business Type 3] – [why it works here & customer base]
 
-⭐ Best Overall Recommendation:
+Best Overall Recommendation:
 • [Single best business type for this location]
 • [Key reason why]
 
@@ -393,7 +401,7 @@ LENGTH: Keep entire response under 150 words.
         {
           role: "system",
           content:
-            "You are a Philippine business consultant. Provide location-specific business recommendations in BULLET-POINT ONLY format  with emojis. For mountain/rural areas, only suggest practical, accessible businesses. NO urban chains for upland areas. Be concise and professional.",
+            "You are a Philippine business consultant. Provide location-specific business recommendations in clean BULLET-POINT format with NO emojis. For mountain/rural areas, only suggest practical, accessible businesses. NO urban chains for upland areas. Only suggest beach/resort/tourism businesses if the data says the location is coastal. Be concise and professional.",
         },
         { role: "user", content: userPrompt },
       ],

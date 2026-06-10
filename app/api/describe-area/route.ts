@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { coastalNote } from "../../lib/coastal";
 
 export const runtime = "nodejs";
 
@@ -25,9 +26,15 @@ export async function POST(req: Request) {
     const classification = String(body.classification ?? "").trim();
     const zonalValue = String(body.zonalValue ?? "").trim();
     const poiCounts = body.poiCounts ?? null;
+    const lat = Number(body.lat);
+    const lon = Number(body.lon);
 
     const locationBits = [barangay, city, province].filter(Boolean).join(", ");
     const loc = locationBits || geoLabel || "the selected area";
+
+    // Real coastal/beach detection (one Places lookup) — grounds tourism mentions.
+    const gKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || "";
+    const coastalText = await coastalNote(lat, lon, gKey);
 
     // Derive location profile and constraints for accuracy
     const totalPOI = poiCounts && typeof poiCounts === "object"
@@ -86,27 +93,28 @@ ${poiAnalysis}
  - Avoid: ${avoidUrban.join("; ")}
  - Emphasize essentials, agriculture, and community services.
  - Do NOT mention malls, big-brand cafés, fine dining, or nightlife.` : `- Urban context allowed; still be realistic to density and access.`}
+ ${coastalText ? `- COASTAL: ${coastalText} You MAY mention beach/resort, beachfront dining, water-sports, and tourism/homestay opportunities where suitable.` : `- No beach detected nearby — do NOT mention beach/resort or tourism potential.`}
 
 ---
 
-PROVIDE ANALYSIS IN BULLET-POINT FORMAT ONLY:
+PROVIDE ANALYSIS IN BULLET-POINT FORMAT ONLY (NO emojis):
 
-📍 Location Overview:
+Location Overview:
 • [Key characteristic of this area]
 • [Economic/residential profile]
 
-💼 Key Business Opportunities (must follow the STRICT RULES above):
+Key Business Opportunities (must follow the STRICT RULES above):
 • [Business Type 1] – [why it works here]
 • [Business Type 2] – [why it works here]
 • [Business Type 3] – [why it works here]
 
-⭐ Overall Assessment:
+Overall Assessment:
 • [Best business type for this location]
 • [Primary success factor]
 
 ---
 
-TONE: Professional, bullet-point only (no paragraphs).
+TONE: Professional, bullet-point only (no paragraphs, no emojis).
 SPECIFIC TO: THIS location characteristics.
 LENGTH: Keep entire response under 200 words.
 `.trim();
@@ -119,7 +127,7 @@ LENGTH: Keep entire response under 200 words.
         {
           role: "system",
           content:
-            "You are a Philippine real estate and business analyst. Provide location-specific business assessments USING BULLET POINTS ONLY. Use professional format with emojis and bullets. No paragraphs. Be practical and realistic.",
+            "You are a Philippine real estate and business analyst. Provide location-specific business assessments USING BULLET POINTS ONLY, with NO emojis. Use a clean professional format. No paragraphs. Only mention beach/resort/tourism if the data says the location is coastal. Be practical and realistic.",
         },
         { role: "user", content: userPrompt },
       ],

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { coastalNote } from "../../lib/coastal";
 
 export const runtime = "nodejs";
 
@@ -23,8 +24,14 @@ export async function POST(req: Request) {
     const poiCounts = b.poiCounts ?? null;
     const monthly = Number(b.monthly) || 0;
     const downPct = Number(b.downPct) || 20;
+    const lat = Number(b.lat);
+    const lon = Number(b.lon);
 
     const loc = [barangay, city, province].filter(Boolean).join(", ") || "the selected area";
+
+    // Real coastal/beach detection (one Places lookup) so tourism suggestions are grounded.
+    const gKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || "";
+    const coastalSignal = await coastalNote(lat, lon, gKey);
 
     let compLine = "";
     if (comps?.median && zonalValue) {
@@ -48,38 +55,55 @@ export async function POST(req: Request) {
     const isAgricultural = /agri|agricultural|farm/i.test(classification);
     const ruralLike = isUpland || isAgricultural || density === "low";
 
-    const userPrompt = `Write a concise, professional PROPERTY BRIEF for an agent advising both a HOME BUYER and a BUSINESS INVESTOR.
+    const userPrompt = `Analyze the location: ${loc}
 
-LOCATION: ${loc}
-Classification: ${classification || "Unclassified"}
-Zonal value: ₱${zonalValue || "-"}/sqm
-${landAreaSqm ? `Measured land: ${Math.round(landAreaSqm).toLocaleString()} sqm ≈ ₱${Math.round(landValue).toLocaleString()} at zonal value` : ""}
-${compLine}
-${poiText ? `Nearby facilities: ${poiText}` : ""}
-${monthly ? `Indicative financing: about ₱${Math.round(monthly).toLocaleString()}/month at ${downPct}% down (20-yr, ~6.5%)` : ""}
-
-LOCATION TYPE: ${isUpland ? "Upland/rural. " : ""}${isUrban ? "Urban/town-center. " : ""}${isAgricultural ? "Agricultural zoning. " : ""}POI density: ${density.toUpperCase()}.
+KNOWN DATA (ground your analysis in these; use realistic estimates only where exact data is missing):
+- Classification (BIR): ${classification || "Unclassified"}
+- BIR zonal value: ₱${zonalValue || "-"}/sqm
+${landAreaSqm ? `- Measured land: ${Math.round(landAreaSqm).toLocaleString()} sqm ≈ ₱${Math.round(landValue).toLocaleString()} at zonal value` : ""}
+${compLine ? `- ${compLine}` : ""}
+${poiText ? `- Nearby establishments (counts within radius): ${poiText}` : ""}
+${monthly ? `- Indicative financing: about ₱${Math.round(monthly).toLocaleString()}/month at ${downPct}% down (20-yr, ~6.5%)` : ""}
+${coastalSignal ? `- Coastal: ${coastalSignal} You MAY recommend beach/resort, beachfront dining, water-sports, short-stay/Airbnb, and tourism businesses where appropriate.` : "- Coastal: no beach detected nearby — do NOT assume beach/resort potential."}
+- Location signals: ${isUpland ? "upland/rural; " : ""}${isUrban ? "urban/town-center; " : ""}${isAgricultural ? "agricultural zoning; " : ""}POI density: ${density}.
 ${ruralLike
-  ? "BUSINESS RULES: suggest only essentials & community services (sari-sari, carinderia, water refilling, farm supply, hardware, vulcanizing, rice retail, laundry, e-wallet/remittance). Do NOT suggest malls, big-brand cafés, fine dining, BPO, or nightlife."
-  : "BUSINESS RULES: urban context allowed, but stay realistic to the density and access."}
+  ? "REALISM RULE: This is a low-density/rural/upland/agricultural area. Keep business recommendations realistic — essentials, agriculture, and community services. Do NOT recommend malls, big-brand cafés, fine dining, BPO/co-working, or nightlife."
+  : "This is an urban-leaning area; recommend realistically to its density and access."}
 
-Format EXACTLY these four short labeled sections (1-2 sentences each):
-Living Conditions: what it is like to live here — environment, access to schools/hospitals/markets, residential suitability.
-Business Opportunities: 2-3 suitable business types for this exact location and why (follow the BUSINESS RULES).
-Valuation: the value vs the barangay median and affordability.
-Best Use & Outlook: the single best use (home vs business) and a realistic outlook.
+Create a CONCISE, premium location brief with EXACTLY these markdown sections (keep it tight — no filler):
 
-Be specific to THIS data, professional and realistic — no hype, no guaranteed returns. Under 180 words total. Do not invent figures not given.`;
+# Executive Summary
+Overall Rating: X/10
+Business Suitability: X%
+Residential Suitability: X%
+Investment Potential: X%
+Recommended Use: [primary land use]
+Zonal Classification: [Prime Commercial Hub / Mixed-Use Urban District / Residential Growth Area / Institutional Zone / Tourism Zone / Emerging Investment Corridor / Industrial Area]
+Growth Outlook: [Excellent / Strong / Moderate / Emerging]
+
+# Overview
+2-3 sentences on the area's character, strategic advantages, and attractiveness.
+
+# Scores
+One line each, format "Metric: XX/100 — short reason": Business Potential; Residential Suitability; Accessibility; Commercial Activity; Investment Potential; Lifestyle & Convenience; Safety & Community Appeal; Future Growth.
+
+# Top Business Opportunities
+The top 5 best-suited businesses. One line each: "1. Type — Suitability XX%, Demand High/Medium/Low — brief reason". Keep realistic to the location type above.
+
+# Living & Best Use
+1-2 sentences: what living here is like, and the single best use (home vs business) with a realistic outlook.
+
+Rules: explain WHY scores are assigned (briefly); professional, authoritative, data-driven tone; NO generic filler; Philippine real-estate context; do not invent figures that contradict the KNOWN DATA. Keep the whole report under ~220 words.`;
 
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.6,
-      max_tokens: 420,
+      max_tokens: 700,
       messages: [
         {
           role: "system",
           content:
-            "You are a senior Philippine real estate analyst advising both home buyers and business investors. Write sharp, professional, realistic briefs grounded ONLY in the data provided. Match business and living suggestions to the location type and density. Never exaggerate or promise returns. Keep it concise.",
+            "You are an expert Urban Planning Analyst, Real Estate Consultant, GIS Specialist, and Business Location Strategist for the Philippine market. Produce premium, data-driven, investor-focused location intelligence reports. Ground every assessment in the provided data and realistic Philippine context; explain WHY each score is assigned. Keep business and lifestyle recommendations realistic to the location type and density (never suggest malls/BPO/fine-dining in rural or low-density areas). Write in a polished, authoritative tone using clean markdown.",
         },
         { role: "user", content: userPrompt },
       ],

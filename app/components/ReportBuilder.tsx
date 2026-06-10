@@ -114,6 +114,8 @@ export default function ReportBuilder(props: {
   landPerimeterM?: number | null;
   /** false when the parcel was drawn far from the selected property (zonal may not apply) */
   landZonalApplies?: boolean;
+  /** drawn parcel polygon — used to render the parcel map in the PDF */
+  landPath?: Array<{ lat: number; lng: number }> | null;
 }) {
   const {
     selectedLocation,
@@ -130,6 +132,7 @@ export default function ReportBuilder(props: {
     landAreaSqm = null,
     landPerimeterM = null,
     landZonalApplies = true,
+    landPath = null,
   } = props;
   const autoPreview = props.autoPreview ?? false;
 
@@ -271,18 +274,8 @@ export default function ReportBuilder(props: {
     };
   }, [pdfPreviewUrl]);
 
-  async function buildPdfBlob(mapDataUrl: string) {
+  async function buildPdfBlob(mapDataUrl: string, parcelDataUrl?: string | null, aiReportText?: string | null, preparedBy?: string) {
     const { jsPDF } = await import("jspdf");
-
-    const locationLine = selectedRow
-      ? `Location: ${toTitleSafe(selectedRow["Street/Subdivision-"])} - ${toTitleSafe(
-          selectedRow["Barangay-"]
-        )}, ${toTitleSafe(selectedRow["City-"])}`
-      : `Location: ${geoLabel || "Selected location"}`;
-
-    const classLine = selectedRow
-      ? `Classification: ${toTitleSafe(selectedRow["Classification-"])}`
-      : `Classification: -`;
 
     const zonalText = selectedRow
       ? formatMoneyLikeSample(String(selectedRow["ZonalValuepersqm.-"] ?? ""))
@@ -298,146 +291,156 @@ export default function ReportBuilder(props: {
 
     const hasHurricane = await tryRegisterHurricaneFont(pdf);
 
-    // ══ PAGE 1 ══════════════════════════════════════════════════════════
-    if (headerLogo) {
-      pdf.addImage(headerLogo, "PNG", (pageW - 260) / 2, 28, 260, 60);
-    } else {
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(18);
-      pdf.text("FILIPINO HOMES", pageW / 2, 60, { align: "center" });
-    }
+    // ══ PAGE 1 — branded cover (snapshot style) ═════════════════════════
+    const NAVY: [number, number, number] = [30, 58, 138];
+    const GOLD: [number, number, number] = [201, 168, 76];
+    const reportDate = new Date().toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
 
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(18);
-    pdf.text(zonalText, pageW / 2, 125, { align: "center" });
-
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
-    pdf.text(locationLine, pageW / 2, 145, { align: "center" });
-    pdf.text(classLine,    pageW / 2, 158, { align: "center" });
-
-    // Measured land (from the Measure Land tool), if the user drew a parcel
     const zonalNum = Number(String(selectedRow?.["ZonalValuepersqm.-"] ?? "").replace(/[^0-9.]/g, "")) || 0;
     const estLandValue = landAreaSqm && zonalNum ? landAreaSqm * zonalNum : 0;
-    let mapY = 190;
+    const locStr = selectedRow
+      ? [toTitleSafe(selectedRow["Barangay-"]), toTitleSafe(selectedRow["City-"]), toTitleSafe(selectedRow["Province-"])].filter(Boolean).join(", ")
+      : (geoLabel || "Selected location");
+    const classText = selectedRow ? toTitleSafe(selectedRow["Classification-"]) : "";
+
+    // Header band
+    pdf.setFillColor(NAVY[0], NAVY[1], NAVY[2]); pdf.rect(0, 0, pageW, 86, "F");
+    pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "bold"); pdf.setFontSize(20);
+    pdf.text("FH Zonal Finder", margin, 42);
+    pdf.setTextColor(GOLD[0], GOLD[1], GOLD[2]); pdf.setFont("helvetica", "bold"); pdf.setFontSize(9.5);
+    pdf.text("BIR ZONAL PROPERTY REPORT", margin, 60);
+    pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9);
+    pdf.text(reportDate, pageW - margin, 58, { align: "right" });
+    pdf.setTextColor(0, 0, 0);
+
+    let cy = 112;
+    pdf.setTextColor(120, 120, 120); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+    pdf.text("LOCATION", margin, cy);
+    pdf.setTextColor(25, 25, 25); pdf.setFont("helvetica", "bold"); pdf.setFontSize(14);
+    pdf.text(pdf.splitTextToSize(locStr, pageW - 2 * margin)[0], margin, cy + 16);
+    cy += 32;
+
+    // Zonal value box
+    pdf.setFillColor(NAVY[0], NAVY[1], NAVY[2]); pdf.roundedRect(margin, cy, pageW - 2 * margin, 56, 10, 10, "F");
+    pdf.setTextColor(GOLD[0], GOLD[1], GOLD[2]); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+    pdf.text("ZONAL VALUE", margin + 14, cy + 18);
+    pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "bold"); pdf.setFontSize(20);
+    pdf.text(zonalText, margin + 14, cy + 42);
+    if (classText) {
+      pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "normal"); pdf.setFontSize(10);
+      pdf.text(classText, pageW - margin - 14, cy + 34, { align: "right" });
+    }
+    pdf.setTextColor(0, 0, 0);
+    cy += 56 + 16;
+
+    // Big map (drawn parcel if available, else the live map)
+    const mainMap = parcelDataUrl || mapDataUrl;
+    const bigW = pageW - 2 * margin;
+    const bigH = parcelDataUrl ? Math.round((bigW * 440) / 600) : 300;
+    if (mainMap) { try { pdf.addImage(mainMap, "PNG", margin, cy, bigW, bigH); } catch {} }
+    pdf.setDrawColor(GOLD[0], GOLD[1], GOLD[2]); pdf.setLineWidth(1.5);
+    pdf.roundedRect(margin, cy, bigW, bigH, 8, 8, "S");
+    pdf.setDrawColor(0, 0, 0);
+    if (parcelDataUrl) {
+      pdf.setFillColor(NAVY[0], NAVY[1], NAVY[2]); pdf.roundedRect(margin + 8, cy + 8, 134, 17, 4, 4, "F");
+      pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+      pdf.text("Drawn parcel (approx.)", margin + 15, cy + 20);
+      pdf.setTextColor(0, 0, 0);
+    }
+    cy += bigH + 14;
+
+    // Measured land box
     if (landAreaSqm && landAreaSqm > 0) {
-      const ha = landAreaSqm / 10000;
-      const areaStr = `${Math.round(landAreaSqm).toLocaleString()} sqm (${ha.toFixed(3)} ha)`;
-      const periStr = landPerimeterM ? `, perimeter ${Math.round(landPerimeterM).toLocaleString()} m` : "";
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(10);
-      pdf.text(`Measured Land: ${areaStr}${periStr}`, pageW / 2, 174, { align: "center" });
+      const boxH = 56;
+      pdf.setFillColor(245, 240, 235); pdf.setDrawColor(GOLD[0], GOLD[1], GOLD[2]); pdf.setLineWidth(1.5);
+      pdf.roundedRect(margin, cy, bigW, boxH, 10, 10, "FD");
+      pdf.setTextColor(154, 122, 32); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+      pdf.text("MEASURED LAND", margin + 14, cy + 18);
+      pdf.setTextColor(NAVY[0], NAVY[1], NAVY[2]); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13);
+      pdf.text(`${Math.round(landAreaSqm).toLocaleString()} sqm (${(landAreaSqm / 10000).toFixed(3)} ha)`, margin + 14, cy + 40);
       if (estLandValue > 0) {
-        const caveat = landZonalApplies ? "" : " (zonal may not apply to this location)";
-        pdf.text(`Estimated Land Value: PHP ${Math.round(estLandValue).toLocaleString()}${caveat}`, pageW / 2, 188, { align: "center" });
+        pdf.setTextColor(154, 122, 32); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+        pdf.text("EST. LAND VALUE", pageW - margin - 14, cy + 18, { align: "right" });
+        pdf.setTextColor(NAVY[0], NAVY[1], NAVY[2]); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13);
+        pdf.text(`PHP ${Math.round(estLandValue).toLocaleString()}`, pageW - margin - 14, cy + 40, { align: "right" });
       }
-      mapY = 206; // push the map down so it doesn't overlap the land lines
+      pdf.setDrawColor(0, 0, 0); pdf.setTextColor(0, 0, 0);
+      cy += boxH + 12;
     }
 
-    const mapX = margin;
-    const mapW = 240;
-    const mapH = 240;
-    const rightX = mapX + mapW + 36;
-    const contentBottom = pageH - 150;
-
-    pdf.setDrawColor(140);
-    pdf.setLineWidth(1);
-    pdf.roundedRect(mapX, mapY, mapW, mapH, 10, 10);
-    pdf.addImage(mapDataUrl, "PNG", mapX + 8, mapY + 8, mapW - 16, mapH - 16);
-
-    let y = mapY + 10;
-
-    const bulletsFromText = (t: string) =>
-      String(t || "")
-        .split("\n")
-        .map((x: string) => x.replace(/^([•\-*]\s*)/, "").trim())
-        .filter(Boolean)
-        .map((x: string) => toPdfAscii(x));
-
-    // Business & Market Opportunity
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(12);
-    pdf.text("Business & Market Opportunity", rightX, y);
-    y += 16;
-
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(9.5);
-    const descText = String(areaDescription || "").trim() || "(No description yet.)";
-    const wrappedDesc = pdf.splitTextToSize(toPdfAscii(descText), pageW - rightX - margin);
-    for (const line of wrappedDesc) {
-      if (y > contentBottom) break;
-      pdf.text(toPdfAscii(line), rightX, y);
-      y += 11;
-    }
-
-    // Recommended Business Uses
-    y += 14;
-    if (y < contentBottom - 10) {
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(12);
-      pdf.text("Recommended Business Uses", rightX, y);
-      y += 16;
-
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(9.5);
-
-      const hbuItems = bulletsFromText(idealBusinessText);
-      const bulletIndent  = 10;
-      const availableW    = pageW - rightX - margin - bulletIndent;
-      let   hbuCount      = 0;
-
-      for (const item of hbuItems.length ? hbuItems : ["(Add items)"]) {
-        if (y > contentBottom || hbuCount >= 100) break;
-        const wrapped = pdf.splitTextToSize(`• ${toPdfAscii(item)}`, availableW);
-        for (let i = 0; i < wrapped.length; i++) {
-          if (y > contentBottom) break;
-          pdf.text(wrapped[i], rightX + bulletIndent + (i > 0 ? 10 : 0), y);
-          y += 11;
-        }
-        hbuCount++;
+    // Signatures (only if there's room on the cover)
+    {
+      const sigBaseY = pageH - 86;
+      if (cy < sigBaseY - 12) {
+        const fullName = (preparedBy && preparedBy.trim())
+          || (creator?.name && String(creator.name).trim())
+          || [creator?.first_name, creator?.middle_name, creator?.last_name].filter(Boolean).join(" ").trim()
+          || "Filipino Homes Agent";
+        pdf.setDrawColor(60); pdf.setLineWidth(1);
+        const sigX = pageW - margin - 220;
+        pdf.line(sigX, sigBaseY, sigX + 220, sigBaseY);
+        pdf.line(margin, sigBaseY, margin + 220, sigBaseY);
+        if (hasHurricane) { pdf.setFont("Hurricane", "normal"); pdf.setFontSize(24); }
+        else { pdf.setFont("times", "italic"); pdf.setFontSize(18); }
+        pdf.setTextColor(0, 0, 0);
+        pdf.text("Anthony Gerard Leuterio", sigX, sigBaseY - 6);
+        pdf.text(String(fullName), margin, sigBaseY - 6);
+        pdf.setFont("helvetica", "normal"); pdf.setFontSize(10);
+        pdf.text("CEO / Founder, Filipino Homes", sigX, sigBaseY + 20);
+        pdf.text("Prepared by", margin, sigBaseY + 20);
       }
     }
 
-    // Signature
-    const sigBaseY = pageH - 110;
-    const sigX     = pageW - margin - 240;
-    pdf.setDrawColor(60);
-    pdf.setLineWidth(1);
-    pdf.line(sigX, sigBaseY, sigX + 220, sigBaseY);
+    // ══ ANALYSIS PAGES — business sections + AI Location Report ══════════
+    const newFlowPage = (title: string) => {
+      pdf.addPage();
+      pdf.setFillColor(NAVY[0], NAVY[1], NAVY[2]); pdf.rect(0, 0, pageW, 48, "F");
+      pdf.setTextColor(255, 255, 255); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13);
+      pdf.text(title, margin, 31);
+      pdf.setTextColor(0, 0, 0);
+      return 72;
+    };
+    let ay = newFlowPage("Property Analysis");
+    const ensureFlow = (need: number) => { if (ay + need > pageH - 60) ay = newFlowPage("Property Analysis (cont.)"); };
+    const flowHeading = (t: string) => {
+      ensureFlow(30);
+      pdf.setFont("helvetica", "bold"); pdf.setFontSize(12); pdf.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+      pdf.text(toPdfAscii(t), margin, ay); ay += 5;
+      pdf.setDrawColor(GOLD[0], GOLD[1], GOLD[2]); pdf.setLineWidth(1); pdf.line(margin, ay, pageW - margin, ay); ay += 14;
+      pdf.setTextColor(0, 0, 0); pdf.setDrawColor(0, 0, 0);
+    };
+    const flowPara = (t: string) => {
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.5); pdf.setTextColor(40, 40, 40);
+      const lines = pdf.splitTextToSize(toPdfAscii(t), pageW - 2 * margin);
+      for (const ln of lines) { ensureFlow(12); pdf.text(ln, margin, ay); ay += 12; }
+      ay += 3; pdf.setTextColor(0, 0, 0);
+    };
+    const flowBullet = (t: string) => {
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.5); pdf.setTextColor(40, 40, 40);
+      const lines = pdf.splitTextToSize(`- ${toPdfAscii(t)}`, pageW - 2 * margin - 10);
+      lines.forEach((ln: string, i: number) => { ensureFlow(12); pdf.text(ln, margin + (i > 0 ? 10 : 0), ay); ay += 12; });
+      pdf.setTextColor(0, 0, 0);
+    };
+    const renderFlowBlock = (text: string) => {
+      const lines = String(text || "").split("\n");
+      for (const raw of lines) {
+        const s = raw.replace(/\*\*/g, "").trim();
+        if (!s) { ay += 3; continue; }
+        if (/^#{1,6}\s+/.test(s)) flowHeading(s.replace(/^#{1,6}\s+/, ""));
+        else if (/^[•\-*]\s+/.test(s)) flowBullet(s.replace(/^[•\-*]\s+/, ""));
+        else flowPara(s);
+      }
+    };
 
-    if (hasHurricane) {
-      pdf.setFont("Hurricane", "normal");
-      pdf.setFontSize(26);
-      pdf.text("Anthony Gerard Leuterio", sigX, sigBaseY - 8);
-    } else {
-      pdf.setFont("times", "italic");
-      pdf.setFontSize(18);
-      pdf.text("Anthony Gerard Leuterio", sigX, sigBaseY - 10);
+    flowHeading("Business & Market Opportunity");
+    renderFlowBlock(areaDescription || "(No assessment generated.)");
+    flowHeading("Recommended Business Uses");
+    renderFlowBlock(idealBusinessText || "(No suggestions generated.)");
+    if (aiReportText && aiReportText.trim()) {
+      ay += 8;
+      flowHeading("AI Location Report");
+      renderFlowBlock(aiReportText);
     }
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(11);
-    pdf.text("CEO / Founder of Filipino Homes", sigX, sigBaseY + 24);
-
-    // Prepared by (creator) signature-styled block on the left side
-    const fullName = (creator?.name && String(creator.name).trim())
-      || [creator?.first_name, creator?.middle_name, creator?.last_name].filter(Boolean).join(" ")
-      || "—";
-    const userSigX = margin;
-    pdf.setDrawColor(60);
-    pdf.setLineWidth(1);
-    pdf.line(userSigX, sigBaseY, userSigX + 220, sigBaseY);
-    if (hasHurricane) {
-      pdf.setFont("Hurricane", "normal");
-      pdf.setFontSize(26);
-      pdf.text(String(fullName), userSigX, sigBaseY - 8);
-    } else {
-      pdf.setFont("times", "italic");
-      pdf.setFontSize(18);
-      pdf.text(String(fullName), userSigX, sigBaseY - 10);
-    }
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(11);
-    pdf.text("Prepared by", userSigX, sigBaseY + 24);
 
     const disclaimerText =
       "The Zonal Value information provided in this report is intended for informational purposes only. It is not an official appraisal report. The values presented are based on our data-driven analysis of Filipino homes and should not be used as the sole basis for property valuation, legal, or financial decisions. For official appraisal, please consult a licensed appraiser or the appropriate government authority (e.g., BIR).";
@@ -666,7 +669,66 @@ export default function ReportBuilder(props: {
       setPdfStage("Composing report pages…");
       setPdfStep(3);
 
-      const { blob, filename } = await buildPdfBlob(mapDataUrl);
+      // If a parcel was drawn, render it as a satellite map (gold outline) for the PDF.
+      let parcelDataUrl: string | null = null;
+      if (Array.isArray(landPath) && landPath.length >= 3) {
+        try {
+          const res = await fetch("/api/parcel-map", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ points: landPath }),
+          });
+          if (res.ok) {
+            const blob = await res.blob();
+            parcelDataUrl = await new Promise<string>((resolve) => {
+              const r = new FileReader();
+              r.onload = () => resolve(String(r.result));
+              r.readAsDataURL(blob);
+            });
+          }
+        } catch {}
+      }
+
+      // Generate the AI Location Report so it travels inside the PDF.
+      setPdfStage("Generating AI analysis…");
+      let aiReportText: string | null = null;
+      try {
+        const z = Number(String(selectedRow?.["ZonalValuepersqm.-"] ?? "").replace(/[^0-9.]/g, "")) || 0;
+        const landVal = landAreaSqm && z ? landAreaSqm * z : 0;
+        let monthly = 0;
+        if (landVal) { const p = landVal * 0.8, r = 6.5 / 100 / 12, n = 240, f = Math.pow(1 + r, n); monthly = (p * r * f) / (f - 1); }
+        const aiRes = await fetch("/api/investment-brief", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            city: String(selectedRow?.["City-"] ?? ""),
+            barangay: String(selectedRow?.["Barangay-"] ?? ""),
+            province: String(selectedRow?.["Province-"] ?? ""),
+            classification: String(selectedRow?.["Classification-"] ?? ""),
+            zonalValue: String(selectedRow?.["ZonalValuepersqm.-"] ?? ""),
+            landAreaSqm: landAreaSqm ?? null,
+            landValue: landVal || null,
+            poiCounts: poiData?.counts ?? null,
+            monthly: monthly || null,
+            downPct: 20,
+            lat: selectedLocation?.lat ?? null,
+            lon: selectedLocation?.lon ?? null,
+          }),
+        });
+        const aiData = await aiRes.json().catch(() => null);
+        if (aiRes.ok && aiData?.ok) aiReportText = String(aiData.text || "").trim();
+      } catch {}
+
+      // Resolve "Prepared by" — fetch the user if it hasn't loaded yet (avoids a blank signature).
+      let me2: any = creator;
+      if (!me2) { try { me2 = await apiMe(); if (me2) setCreator(me2); } catch {} }
+      const preparedBy =
+        (me2?.name && String(me2.name).trim()) ||
+        [me2?.first_name, me2?.middle_name, me2?.last_name].filter(Boolean).join(" ").trim() ||
+        (me2?.email ? String(me2.email).split("@")[0] : "") ||
+        "Filipino Homes Agent";
+
+      const { blob, filename } = await buildPdfBlob(mapDataUrl, parcelDataUrl, aiReportText, preparedBy);
       setPdfStage("Finalizing preview…");
       setPdfStep(4);
       pdfFilenameRef.current = filename;

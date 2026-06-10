@@ -16,6 +16,8 @@ export type BriefPayload = {
   poiCounts?: any;
   monthly?: number | null;
   downPct?: number;
+  lat?: number | null;
+  lon?: number | null;
 };
 
 export default function InvestmentBrief({
@@ -75,7 +77,7 @@ export default function InvestmentBrief({
         {/* Header */}
         <div className="px-4 py-3 flex items-center justify-between sticky top-0 z-10" style={{ background: "#1e3a8a" }}>
           <div className="flex items-center gap-2 text-[#f5f0eb] font-bold text-sm">
-            <Sparkles size={16} style={{ color: "#c9a84c" }} /> AI Property Brief
+            <Sparkles size={16} style={{ color: "#c9a84c" }} /> AI Location Report
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-white/60 hover:text-white transition" title="Close"><X size={16} /></button>
         </div>
@@ -100,8 +102,8 @@ export default function InvestmentBrief({
           ) : err ? (
             <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{err}</div>
           ) : (
-            <div className="text-[13px] text-gray-800 leading-relaxed whitespace-pre-line rounded-xl p-3" style={{ background: "#f8f7f5", border: "1px solid #eee" }}>
-              {text || "No brief generated."}
+            <div className="rounded-xl p-3" style={{ background: "#f8f7f5", border: "1px solid #eee" }}>
+              {text ? renderBrief(text) : <span className="text-[13px] text-gray-500">No report generated.</span>}
             </div>
           )}
 
@@ -114,4 +116,56 @@ export default function InvestmentBrief({
       </div>
     </div>
   );
+}
+
+// Inline bold (**text**) → <strong>
+function renderInline(s: string, keyBase: string) {
+  const parts = s.split(/\*\*(.+?)\*\*/g);
+  return parts.map((p, i) =>
+    i % 2 === 1 ? <strong key={`${keyBase}-b${i}`} style={{ color: "#1e3a8a" }}>{p}</strong> : <span key={`${keyBase}-t${i}`}>{p}</span>
+  );
+}
+
+// Lightweight markdown renderer for the report (headings, bullets, bold).
+function renderBrief(text: string) {
+  const lines = String(text).replace(/\r/g, "").split("\n");
+  const out: React.ReactNode[] = [];
+  let bullets: string[] = [];
+
+  const flushBullets = (key: string) => {
+    if (!bullets.length) return;
+    out.push(
+      <ul key={key} className="list-disc pl-5 space-y-0.5 my-1">
+        {bullets.map((b, i) => (
+          <li key={`${key}-${i}`} className="text-[12.5px] text-gray-800 leading-relaxed">{renderInline(b, `${key}-${i}`)}</li>
+        ))}
+      </ul>
+    );
+    bullets = [];
+  };
+
+  lines.forEach((raw, idx) => {
+    const line = raw.trimEnd();
+    const key = `l${idx}`;
+    if (/^#{1,6}\s+/.test(line)) {
+      flushBullets(`${key}-pre`);
+      const heading = line.replace(/^#{1,6}\s+/, "");
+      out.push(
+        <div key={key} className="text-[13px] font-black uppercase tracking-wide mt-3 mb-1 pb-1" style={{ color: "#1e3a8a", borderBottom: "1px solid #e8e0d8" }}>
+          {heading}
+        </div>
+      );
+    } else if (/^\s*([-*•])\s+/.test(line)) {
+      bullets.push(line.replace(/^\s*([-*•])\s+/, ""));
+    } else if (line.trim() === "") {
+      flushBullets(`${key}-blank`);
+    } else {
+      flushBullets(`${key}-pre`);
+      out.push(
+        <p key={key} className="text-[12.5px] text-gray-800 leading-relaxed my-1">{renderInline(line, key)}</p>
+      );
+    }
+  });
+  flushBullets("end");
+  return <div>{out}</div>;
 }

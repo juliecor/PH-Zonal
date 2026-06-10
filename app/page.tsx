@@ -464,9 +464,9 @@ export function Home() {
     const where = [brgyx, cityx, provx].filter(Boolean).join(", ") || payload.label || "Selected location";
     const counts = payload.poi?.counts;
     const lines: string[] = [];
-    lines.push(`📍 ${where}`);
-    if (cls) lines.push(`📋 ${cls}`);
-    if (zv && zv > 0) lines.push(`💰 ₱${zv.toLocaleString()}/sqm (BIR Assessed)`);
+    lines.push(`Location: ${where}`);
+    if (cls) lines.push(`Classification: ${cls}`);
+    if (zv && zv > 0) lines.push(`Zonal Value: ₱${zv.toLocaleString()}/sqm (BIR Assessed)`);
     if (counts) {
       const healthcare = (counts.hospitals||0)+(counts.clinics||0); const education = counts.schools||0;
       const security = (counts.policeStations||0)+(counts.fireStations||0); const services = counts.pharmacies||0;
@@ -476,10 +476,10 @@ export function Home() {
       if (education>0)  infraItems.push(`${education} schools`);
       if (security>0)   infraItems.push(`${security} security`);
       if (services>0)   infraItems.push(`${services} services`);
-      if (infraItems.length>0) lines.push(`🏢 Nearby: ${infraItems.join(", ")}`);
+      if (infraItems.length>0) lines.push(`Nearby: ${infraItems.join(", ")}`);
       let grade = "Limited";
       if (total>=20) grade="Excellent"; else if (total>=13) grade="Strong"; else if (total>=8) grade="Moderate"; else if (total>0) grade="Emerging";
-      lines.push(`⭐ Investment Grade: ${grade}`);
+      lines.push(`Investment Grade: ${grade}`);
     }
     return lines.join("\n");
   }
@@ -628,7 +628,7 @@ export function Home() {
       const poi = await fetchPoi(selectedLocation.lat, selectedLocation.lon, newKm);
       if (myId!==reqIdRef.current) return; setPoiData({counts:poi.counts,items:poi.items});
       try {
-        const aiRes = await fetch("/api/ideal-business",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({city:String(selectedRow?.["City-"]??""),barangay:String(selectedRow?.["Barangay-"]??""),province:String(selectedRow?.["Province-"]??""),classification:String(selectedRow?.["Classification-"]??""),zonalValuePerSqm:String(selectedRow?.["ZonalValuepersqm.-"]??""),poiCounts:poi.counts})});
+        const aiRes = await fetch("/api/ideal-business",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({city:String(selectedRow?.["City-"]??""),barangay:String(selectedRow?.["Barangay-"]??""),province:String(selectedRow?.["Province-"]??""),classification:String(selectedRow?.["Classification-"]??""),zonalValuePerSqm:String(selectedRow?.["ZonalValuepersqm.-"]??""),poiCounts:poi.counts,lat:selectedLocation?.lat??null,lon:selectedLocation?.lon??null})});
         const aiData = await aiRes.json().catch(()=>null);
         if (myId!==reqIdRef.current) return;
         if (aiRes.ok&&aiData?.ok&&Array.isArray(aiData.businesses)&&aiData.businesses.length) {
@@ -693,7 +693,7 @@ export function Home() {
       const poi = await fetchPoi(lat,lon); if (myId!==reqIdRef.current) return;
       setPoiData({counts:poi.counts,items:poi.items});
       try {
-        const aiRes = await fetch("/api/ideal-business",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({city:String(row?.["City-"]??""),barangay:String(row?.["Barangay-"]??""),province:String(row?.["Province-"]??""),classification:String(row?.["Classification-"]??""),zonalValuePerSqm:String(row?.["ZonalValuepersqm.-"]??""),poiCounts:poi.counts})});
+        const aiRes = await fetch("/api/ideal-business",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({city:String(row?.["City-"]??""),barangay:String(row?.["Barangay-"]??""),province:String(row?.["Province-"]??""),classification:String(row?.["Classification-"]??""),zonalValuePerSqm:String(row?.["ZonalValuepersqm.-"]??""),poiCounts:poi.counts,lat,lon})});
         const aiData = await aiRes.json().catch(()=>null);
         if (myId!==reqIdRef.current) return;
         if (aiRes.ok&&aiData?.ok&&Array.isArray(aiData.businesses)&&aiData.businesses.length) {
@@ -873,7 +873,17 @@ export function Home() {
                     <div className="text-[10px] text-gray-400 leading-snug">Approximate estimate from your drawing — not a substitute for a licensed survey or formal appraisal.</div>
                   </div>
                 )}
-                <div className="mt-3 flex items-center gap-2">
+                {landArea != null && (
+                  <button
+                    onClick={()=>{ setDrawMode(false); setAutoPreview(true); setRightOpen(true); }}
+                    className="w-full mt-3 inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-2.5 text-xs font-bold text-white transition hover:opacity-90"
+                    style={{background:"linear-gradient(135deg,#1e3a8a,#1e40af)"}}
+                    title="Generate the PDF report — includes this drawn parcel map"
+                  >
+                    <FileText size={14}/> Generate PDF Report
+                  </button>
+                )}
+                <div className="mt-2 flex items-center gap-2">
                   <button onClick={()=>{ setLandArea(null); setClearDrawSignal(n=>n+1); setDrawMode(true); }} className="flex-1 rounded-full border px-3 py-2 text-xs font-bold transition" style={{borderColor:"#e2d9d0",background:"#fff",color:"#374151"}}>Clear & Redraw</button>
                   <button onClick={()=>setDrawMode(false)} className="flex-1 rounded-full px-3 py-2 text-xs font-bold transition text-[#f5f0eb]" style={{background:"#1e3a8a"}}>Done</button>
                 </div>
@@ -1140,7 +1150,7 @@ export function Home() {
               <button onClick={()=>setRightOpen(false)} className="rounded-xl p-1.5 transition text-white/50 hover:text-white" style={{background:"rgba(255,255,255,0.08)"}} title="Close"><X size={16}/></button>
             </div>
             <div className="flex-1 overflow-auto p-4 space-y-3">
-              <ReportBuilder selectedLocation={selectedLocation} selectedRow={selectedRow} geoLabel={geoLabel} poiLoading={poiLoading} poiData={poiData} poiRadiusKm={poiRadiusKm} onChangePoiRadius={onChangePoiRadius} idealBusinessText={idealBusinessText} setIdealBusinessText={setIdealBusinessText} areaDescription={areaDescription} mapContainerId="map-container" autoPreview={autoPreview} landAreaSqm={landArea} landPerimeterM={landMetrics.perimeterM || null} landZonalApplies={!(drawDistanceM != null && drawDistanceM > 1000)} />
+              <ReportBuilder selectedLocation={selectedLocation} selectedRow={selectedRow} geoLabel={geoLabel} poiLoading={poiLoading} poiData={poiData} poiRadiusKm={poiRadiusKm} onChangePoiRadius={onChangePoiRadius} idealBusinessText={idealBusinessText} setIdealBusinessText={setIdealBusinessText} areaDescription={areaDescription} mapContainerId="map-container" autoPreview={autoPreview} landAreaSqm={landArea} landPerimeterM={landMetrics.perimeterM || null} landZonalApplies={!(drawDistanceM != null && drawDistanceM > 1000)} landPath={landPath} />
             </div>
           </div>
         )}
@@ -1222,7 +1232,7 @@ export function Home() {
                   <div className="mt-3 flex items-center gap-2">
                     {/* Primary actions (scrollable) */}
                     <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-1 min-w-0">
-                      <button onClick={()=>setRightOpen(true)} className="shrink-0 rounded-full px-4 py-2 text-xs font-bold transition text-[#f5f0eb]" style={{background:"#1e3a8a"}}>Open Report</button>
+                      <button onClick={()=>{ setAutoPreview(false); setRightOpen(true); }} className="shrink-0 rounded-full px-4 py-2 text-xs font-bold transition text-[#f5f0eb]" style={{background:"#1e3a8a"}}>Open Report</button>
                       <button
                         onClick={()=>{ if(drawMode){ setDrawMode(false); } else { setLandArea(null); setClearDrawSignal(n=>n+1); setAreaCardMin(false); setMapType("satellite"); setDrawMode(true); if(typeof window!=="undefined"&&window.innerWidth<640){ setBottomOpen(false); } } }}
                         className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-bold transition"
@@ -1335,6 +1345,8 @@ export function Home() {
             poiCounts: poiData?.counts ?? null,
             monthly: monthly || null,
             downPct: 20,
+            lat: selectedLocation?.lat ?? null,
+            lon: selectedLocation?.lon ?? null,
           };
         })()}
       />
