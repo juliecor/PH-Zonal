@@ -189,7 +189,7 @@ export default function PropertySnapshot({
 
                 {/* Footer */}
                 <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: 9, color: "#9ca3af" }}>zonal.leuteriorealty.com</div>
+                  <div style={{ fontSize: 9, color: "#9ca3af" }}>zonalvalue.ph</div>
                   <div style={{ fontSize: 9, color: "#9ca3af" }}>{data.dateLabel || ""}</div>
                 </div>
                 <div style={{ fontSize: 8, color: "#c4c4c4", marginTop: 4, lineHeight: 1.4 }}>Estimates from BIR zonal values — not a market price or formal appraisal.</div>

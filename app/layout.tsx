@@ -12,7 +12,7 @@ const outfit = Outfit({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
 });
 
-const SITE_URL = "https://zonal.leuteriorealty.com";
+const SITE_URL = "https://zonalvalue.ph";
 const SITE_DESCRIPTION =
   "Look up BIR zonal values street-by-street for every province, city, and barangay in the Philippines. Map-based search, nearby facilities, land-area measurement, and instant PDF reports — by Filipino Homes & Leuterio Realty.";
 

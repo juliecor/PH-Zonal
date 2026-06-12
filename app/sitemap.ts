@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = "https://zonal.leuteriorealty.com";
+const SITE_URL = "https://zonalvalue.ph";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();

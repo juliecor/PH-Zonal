@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     title: "Zonal Value Finder — BIR Zonal Values Across the Philippines",
     description:
       "Precise BIR zonal values street-by-street for every province, city, and barangay in the Philippines.",
-    url: "https://zonal.leuteriorealty.com/welcome",
+    url: "https://zonalvalue.ph/welcome",
   },
 };
 
