@@ -74,9 +74,17 @@ export async function GET(req: Request) {
         (!classification || looseEq(r["Classification-"], classification))
     );
 
-    const vals = matched
-      .map((r: any) => parseVal(r.__zonal_raw, r["ZonalValuepersqm.-"]))
-      .filter((n: any): n is number => n != null);
+    // Keep each value together with its street + classification so we can report
+    // WHICH street is the most/least expensive (not just the numbers).
+    const valued = matched
+      .map((r: any) => ({
+        v: parseVal(r.__zonal_raw, r["ZonalValuepersqm.-"]),
+        street: String(r["Street/Subdivision-"] ?? r["Vicinity-"] ?? "").trim(),
+        cls: String(r["Classification-"] ?? "").trim(),
+      }))
+      .filter((x: any): x is { v: number; street: string; cls: string } => x.v != null);
+
+    const vals = valued.map((x) => x.v);
 
     if (vals.length < 2) {
       const payload = { ok: true, stats: null, count: vals.length };
@@ -84,7 +92,8 @@ export async function GET(req: Request) {
       return NextResponse.json(payload);
     }
 
-    const sorted = [...vals].sort((a, b) => a - b);
+    const sortedRows = [...valued].sort((a, b) => a.v - b.v);
+    const sorted = sortedRows.map((x) => x.v);
     const min = sorted[0];
     const max = sorted[sorted.length - 1];
     const median = sorted.length % 2
@@ -92,7 +101,23 @@ export async function GET(req: Request) {
       : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
     const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
 
-    const payload = { ok: true, stats: { min, max, median, mean, count: vals.length } };
+    const lowest = sortedRows[0];
+    const highest = sortedRows[sortedRows.length - 1];
+
+    const payload = {
+      ok: true,
+      stats: {
+        min,
+        max,
+        median,
+        mean,
+        count: vals.length,
+        minStreet: lowest.street,
+        minClass: lowest.cls,
+        maxStreet: highest.street,
+        maxClass: highest.cls,
+      },
+    };
     CACHE.set(key, { ts: Date.now(), payload });
     return NextResponse.json(payload, { headers: { "Cache-Control": "public, max-age=300" } });
   } catch (e: any) {

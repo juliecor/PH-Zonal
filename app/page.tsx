@@ -38,6 +38,7 @@ import ReportBuilder from "./components/ReportBuilder";
 import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
 import PropertyCalculator from "./components/PropertyCalculator";
 import InvestmentBrief from "./components/InvestmentBrief";
+import ZonalAssistant from "./components/ZonalAssistant";
 import StreetViewModal from "./components/StreetViewModal";
 import PropertySnapshot from "./components/PropertySnapshot";
 
@@ -1384,6 +1385,19 @@ export function Home() {
             path: landPath,
           };
         })()}
+      />
+
+      {/* ZONAL AI ASSISTANT (bottom-right chat) */}
+      <ZonalAssistant
+        domain={domain}
+        context={selectedRow ? {
+          street: String(selectedRow["Street/Subdivision-"] ?? ""),
+          barangay: String(selectedRow["Barangay-"] ?? ""),
+          city: String(selectedRow["City-"] ?? ""),
+          province: String(selectedRow["Province-"] ?? ""),
+          classification: String(selectedRow["Classification-"] ?? ""),
+          zonalValue: String(selectedRow["ZonalValuepersqm.-"] ?? ""),
+        } : null}
       />
     </main>
   );
