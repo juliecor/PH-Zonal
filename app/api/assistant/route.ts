@@ -151,8 +151,13 @@ function provinceMentioned(qNorm: string, province: string): boolean {
 
 // Distinctive tokens of a stored city name (handles "Barangay, City" and
 // slash-joined alternates like "General Santos City/Gen. Santos City").
+// IMPORTANT: drop the province word, because many cities are stored as
+// "MUNICIPALITY, CEBU" — otherwise "CEBU" would match every Cebu city. We keep
+// the province word only if it's the city's whole name (e.g. "Cebu City").
 function cityTokensOf(cityName: string): string[] {
-  return placeTokensOf(cityName);
+  const all = placeTokensOf(cityName);
+  const distinctive = all.filter((t) => !isProvinceWord(t));
+  return distinctive.length ? distinctive : all;
 }
 
 // True if the question mentions any distinctive token of this city name.

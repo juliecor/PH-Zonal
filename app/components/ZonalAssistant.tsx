@@ -44,12 +44,11 @@ export default function ZonalAssistant({
   }, [messages, loading]);
 
   const send = async (text?: string) => {
-    const question = String(text ?? input).trim();
-    if (!question || loading) return;
+    const display = String(text ?? input).trim();
+    if (!display || loading) return;
     const myId = ++reqRef.current;
 
-    const nextMessages = [...messages, { role: "user", content: question } as Msg];
-    setMessages(nextMessages);
+    setMessages((m) => [...m, { role: "user", content: display } as Msg]);
     setInput("");
     setLoading(true);
 
@@ -58,7 +57,7 @@ export default function ZonalAssistant({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          question,
+          question: display,
           domain,
           context: context ?? null,
           history: messages.slice(-12), // remember the last ~6 turns
