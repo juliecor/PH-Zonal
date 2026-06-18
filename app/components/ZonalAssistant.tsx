@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, Send, Sparkles, Copy, Check } from "lucide-react";
+import { X, Send, Sparkles, Copy, Check, Mic } from "lucide-react";
 
 export type AssistantContext = {
   street?: string;
@@ -42,8 +42,45 @@ export default function ZonalAssistant({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
+  const [listening, setListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const reqRef = useRef(0);
+  const recogRef = useRef<any>(null);
+
+  useEffect(() => {
+    setVoiceSupported(
+      typeof window !== "undefined" &&
+        Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
+    );
+  }, []);
+
+  const toggleVoice = () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    if (listening) {
+      recogRef.current?.stop();
+      return;
+    }
+    const r = new SR();
+    recogRef.current = r;
+    r.lang = "en-PH";
+    r.interimResults = true;
+    r.continuous = false;
+    r.onresult = (e: any) => {
+      let txt = "";
+      for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+      setInput(txt);
+    };
+    r.onend = () => setListening(false);
+    r.onerror = () => setListening(false);
+    setListening(true);
+    try {
+      r.start();
+    } catch {
+      setListening(false);
+    }
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -266,7 +303,7 @@ export default function ZonalAssistant({
 
                 {m.role === "assistant" && m.content && (
                   <div className="pl-11">
-                    <CopyBtn text={m.content} />
+                    <MsgActions text={m.content} />
                   </div>
                 )}
 
@@ -327,9 +364,19 @@ export default function ZonalAssistant({
                 }
               }}
               rows={1}
-              placeholder="Ask about a zonal value…"
+              placeholder={listening ? "Listening…" : "Ask about a zonal value…"}
               className="za-textarea max-h-24 flex-1 resize-none px-4 py-2.5 text-[13px] outline-none"
             />
+            {voiceSupported && (
+              <button
+                onClick={toggleVoice}
+                className={`za-mic flex h-10 w-10 shrink-0 items-center justify-center ${listening ? "za-mic-on" : ""}`}
+                title={listening ? "Stop listening" : "Speak your question"}
+                aria-label="Voice input"
+              >
+                <Mic size={17} />
+              </button>
+            )}
             <button
               onClick={() => send()}
               disabled={loading || !input.trim()}
@@ -448,6 +495,24 @@ export default function ZonalAssistant({
               transform: translateY(-1px) scale(1.05);
               box-shadow: 0 8px 18px -4px rgba(30, 58, 138, 0.8);
             }
+            .za-mic {
+              border-radius: 9999px;
+              color: ${NAVY};
+              background: rgba(30, 58, 138, 0.08);
+              transition: all 0.18s ease;
+            }
+            .za-mic:hover {
+              background: rgba(30, 58, 138, 0.16);
+            }
+            .za-mic-on {
+              color: #fff;
+              background: #e11d48;
+              animation: za-mic-pulse 1.2s ease-in-out infinite;
+            }
+            @keyframes za-mic-pulse {
+              0%, 100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.5); }
+              70% { box-shadow: 0 0 0 8px rgba(225, 29, 72, 0); }
+            }
             @keyframes za-rise {
               from { opacity: 0; transform: translateY(16px) scale(0.98); }
               to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -526,21 +591,24 @@ function MarkdownText({ text }: { text: string }) {
   return <>{out}</>;
 }
 
-function CopyBtn({ text }: { text: string }) {
-  const [done, setDone] = useState(false);
+function MsgActions({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {}
+  };
+
   return (
     <button
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setDone(true);
-          setTimeout(() => setDone(false), 1500);
-        } catch {}
-      }}
+      onClick={copy}
       className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-400 transition hover:text-[#1e3a8a]"
       title="Copy answer"
     >
-      {done ? (
+      {copied ? (
         <>
           <Check size={12} /> Copied
         </>
