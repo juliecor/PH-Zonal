@@ -72,7 +72,7 @@ export default function ZonalAssistant({
         {
           role: "assistant",
           content: String(data.text ?? "").trim(),
-          suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 4) : [],
+          suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 8) : [],
         },
       ]);
     } catch (e: any) {

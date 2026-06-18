@@ -45,9 +45,103 @@ function parseVal(raw: any, formatted: any): number | null {
   return Number.isFinite(p) && p > 0 ? p : null;
 }
 
+// --- DB (Laravel) backend union: include rows that exist ONLY in the database ---
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "";
+
+function domainToProvince(domain: string): string | null {
+  const host = String(domain || "").trim().toLowerCase();
+  const sub = host.split(".")[0] || host;
+  if (!sub) return null;
+  if (sub.includes("negrosoriental-siquijor")) return "NEGROS ORIENTAL";
+  if (sub.includes("cebu")) return "CEBU";
+  if (sub.includes("bohol")) return "BOHOL";
+  if (sub.includes("iloilo")) return "ILOILO";
+  if (sub.includes("davaodelsur")) return "DAVAO DEL SUR";
+  if (sub.includes("davaodelnorte-samal-compostelavalley")) return "DAVAO DEL NORTE";
+  if (sub.includes("zamboangadelsur")) return "ZAMBOANGA DEL SUR";
+  if (sub.includes("agusandelnorte")) return "AGUSAN DEL NORTE";
+  if (sub.includes("ncr1stdistrict")) return "NCR";
+  if (sub.includes("benguet")) return "BENGUET";
+  if (sub.includes("cagayan-batanes")) return "CAGAYAN";
+  if (sub.includes("abra")) return "ABRA";
+  if (sub.includes("misamisoriental-camiguin")) return "CAMIGUIN-MISAMISORIENTAL";
+  if (sub.includes("agusandelsur")) return "AGUSAN DEL SUR";
+  if (sub.includes("kalinga-apayao")) return "KALINGA";
+  if (sub.includes("aklan")) return "AKLAN";
+  if (sub.includes("aurora")) return "AURORA";
+  if (sub.includes("laguna")) return "LAGUNA";
+  if (sub.includes("lanaodelsur")) return "LANAO DEL SUR";
+  if (sub.includes("leyte-bilaran")) return "LEYTE";
+  if (sub.includes("mtprovince")) return "MOUNTAIN PROVINCE";
+  if (sub.includes("northernsamar")) return "NORTHERN SAMAR";
+  if (sub.includes("nuevavizcaya")) return "NUEVA VIZCAYA";
+  if (sub.includes("quirino")) return "QUIRINO";
+  if (sub.includes("southcotabato")) return "SOUTH COTABATO";
+  if (sub.includes("tawitawi")) return "TAWI-TAWI";
+  if (sub.includes("zamboangadelnorte")) return "ZAMBOANGA DEL NORTE";
+  if (sub.includes("zamboangasibugay")) return "ZAMBOANGA SIBUGAY";
+  return null;
+}
+
+type ValuedRow = { v: number; street: string; cls: string };
+
+// Pull ALL matching rows for a barangay from the DB (paginated). Note: each
+// /zonal-values request may deduct a user token — this is why zonal-stats caches
+// its result for 30 minutes (so the DB is hit at most once per barangay per TTL).
+async function fetchDbValued(args: {
+  province: string;
+  city: string;
+  barangay: string;
+  classification: string;
+  token: string;
+}): Promise<ValuedRow[]> {
+  if (!BACKEND_URL) return [];
+  const { province, city, barangay, classification, token } = args;
+  const out: ValuedRow[] = [];
+  let page = 1;
+  const MAX_PAGES = 10;
+  while (page <= MAX_PAGES) {
+    const params = new URLSearchParams({ province, page: String(page), per_page: "100" });
+    if (city) params.set("city", city);
+    if (barangay) params.set("barangay", barangay);
+    if (classification && /^[A-Z0-9-]{1,5}$/.test(classification)) {
+      params.set("classification_code", classification);
+    }
+    const url = `${BACKEND_URL.replace(/\/$/, "")}/api/zonal-values?${params.toString()}`;
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    let j: any;
+    try {
+      const res = await fetch(url, { headers });
+      if (!res.ok) break;
+      j = await res.json();
+    } catch {
+      break;
+    }
+    const data = Array.isArray(j?.data) ? j.data : [];
+    for (const r of data) {
+      const v = Number(r?.value_per_sqm);
+      if (Number.isFinite(v) && v > 0) {
+        out.push({
+          v,
+          street: String(r?.street_location ?? r?.vicinity ?? "").trim(),
+          cls: String(r?.classification_code ?? "").trim(),
+        });
+      }
+    }
+    const last = Number(j?.last_page ?? 1);
+    if (!data.length || page >= last) break;
+    page++;
+  }
+  return out;
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
+    const cookieHeader = req.headers.get("cookie") || "";
+    const tokenMatch = cookieHeader.match(/(?:^|;\s*)authToken=([^;]+)/);
+    const authToken = tokenMatch ? decodeURIComponent(tokenMatch[1]) : "";
     const domain = String(searchParams.get("domain") ?? "").trim();
     const city = String(searchParams.get("city") ?? "").trim();
     const barangay = String(searchParams.get("barangay") ?? "").trim();
@@ -82,7 +176,26 @@ export async function GET(req: Request) {
         street: String(r["Street/Subdivision-"] ?? r["Vicinity-"] ?? "").trim(),
         cls: String(r["Classification-"] ?? "").trim(),
       }))
-      .filter((x: any): x is { v: number; street: string; cls: string } => x.v != null);
+      .filter((x: any): x is ValuedRow => x.v != null);
+
+    // UNION the DB (Laravel) rows — these may include values that exist ONLY in the
+    // database and are missing from the spreadsheet. Deduped by street|class|value.
+    const province = domainToProvince(domain);
+    if (province && BACKEND_URL) {
+      const dbRows = await fetchDbValued({ province, city, barangay, classification, token: authToken });
+      if (dbRows.length) {
+        const seen = new Set(
+          valued.map((x) => `${norm(x.street)}|${norm(x.cls)}|${x.v}`)
+        );
+        for (const r of dbRows) {
+          const k = `${norm(r.street)}|${norm(r.cls)}|${r.v}`;
+          if (!seen.has(k)) {
+            seen.add(k);
+            valued.push(r);
+          }
+        }
+      }
+    }
 
     const vals = valued.map((x) => x.v);
 

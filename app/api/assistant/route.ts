@@ -111,6 +111,72 @@ function phraseInText(text: string, phrase: string): boolean {
   return new RegExp(`(^|[^\\p{L}\\p{N}])${esc}([^\\p{L}\\p{N}]|$)`, "u").test(text);
 }
 
+// Province / region words — never treat these as a street search term.
+const PROVINCE_WORDS = new Set([
+  "cebu", "bohol", "iloilo", "davao", "negros", "oriental", "occidental", "siquijor",
+  "zamboanga", "sur", "norte", "del", "agusan", "ncr", "benguet", "cagayan", "batanes",
+  "abra", "misamis", "camiguin", "kalinga", "apayao", "aklan", "aurora", "laguna",
+  "lanao", "leyte", "samar", "nueva", "vizcaya", "ecija", "quirino", "cotabato",
+  "tawitawi", "sibugay", "pampanga", "batangas", "bulacan", "cavite", "rizal",
+  "pangasinan", "tarlac", "bataan", "zambales", "quezon", "albay", "sorsogon",
+  "antique", "capiz", "guimaras", "leyte", "biliran", "marinduque", "romblon",
+  "palawan", "mindoro", "province", "philippines", "ph",
+]);
+
+function isProvinceWord(t: string) {
+  return PROVINCE_WORDS.has(String(t || "").toLowerCase());
+}
+
+// Generic place qualifiers that don't identify a province on their own.
+const GENERIC_PLACE = new Set([
+  "NORTH", "SOUTH", "EAST", "WEST", "CENTRAL", "CITY", "MUNICIPALITY", "DEL", "DE",
+  "PROVINCE", "OF", "ST", "DISTRICT",
+]);
+
+// Split a stored place name into distinctive tokens. The master data uses
+// slash/pipe/comma to join ALTERNATE names ("South Cotabato/Sarangani",
+// "General Santos City/Gen. Santos City", "Binondo, Manila"), so we must treat
+// those as SEPARATORS — otherwise "Cotabato/Sarangani" glues into one token.
+function placeTokensOf(name: string): string[] {
+  return normLoose(String(name || "").replace(/[\/\\|,]/g, " "))
+    .split(/\s+/)
+    .filter((t) => t.length >= 4 && !GENERIC_PLACE.has(t));
+}
+
+// Loose province match: "pampanga" should match a stored "NORTH PAMPANGA" /
+// "SOUTH PAMPANGA"; "sarangani" should match "South Cotabato/Sarangani", etc.
+function provinceMentioned(qNorm: string, province: string): boolean {
+  return placeTokensOf(province).some((t) => phraseInText(qNorm, t));
+}
+
+// Distinctive tokens of a stored city name (handles "Barangay, City" and
+// slash-joined alternates like "General Santos City/Gen. Santos City").
+function cityTokensOf(cityName: string): string[] {
+  return placeTokensOf(cityName);
+}
+
+// True if the question mentions any distinctive token of this city name.
+function cityMentioned(qNorm: string, cityName: string): boolean {
+  const toks = cityTokensOf(cityName);
+  return toks.length > 0 && toks.some((t) => phraseInText(qNorm, t));
+}
+
+// Guard against wild fuzzy matches (e.g. "aborlan" -> "tabuelan"). A real typo
+// keeps the first letter and a similar length.
+function plausibleTypo(token: string, candidate: string): boolean {
+  const a = String(token || "").toUpperCase();
+  const b = String(candidate || "").toUpperCase();
+  if (!a || !b) return false;
+  if (a[0] !== b[0]) return false;
+  if (Math.abs(a.length - b.length) > 2) return false;
+  return true;
+}
+
+// Fuzzy match limited to plausible typos only.
+function fuzzyTypos(token: string, candidates: string[]): string[] {
+  return fuzzyMatchStreets(token, candidates, 2).filter((c) => plausibleTypo(token, c));
+}
+
 // City matching core: drop "CITY"/"MUNICIPALITY" so "cebu" matches "CEBU CITY".
 function cityCore(c: string) {
   return normLoose(c)
@@ -172,6 +238,93 @@ async function zonalQuery(
   return { rows, total };
 }
 
+// Figure out WHICH province/domain a place belongs to, so the assistant can answer
+// about anywhere — not just the province the site currently has loaded. Uses the
+// same master city→domain resolver the app's search box uses (/api/regions).
+type ResolveResult = { domain: string | null; strong: boolean; suggestions: string[] };
+
+// Cache domain resolution so repeated/similar questions skip the network hops
+// (city-search + regions). Keyed by the place tokens + current domain.
+const RESOLVE_CACHE: Map<string, { ts: number; result: ResolveResult }> =
+  (globalThis as any).__ASSISTANT_RESOLVE_CACHE__ ?? new Map();
+(globalThis as any).__ASSISTANT_RESOLVE_CACHE__ = RESOLVE_CACHE;
+const RESOLVE_TTL_MS = 1000 * 60 * 30; // 30 minutes
+
+async function resolveDomain(
+  baseUrl: string,
+  question: string,
+  currentDomain: string
+): Promise<ResolveResult> {
+  const qNorm = normLoose(question);
+  // Keep province words too — the master sheet maps province→domain most reliably
+  // when you search by the province name (e.g. "palawan" -> palawan.zonalvalue.com).
+  const tokens = tokensOf(question)
+    .filter((t) => t.length >= 3 && !STOP.has(t))
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 3); // cap lookups
+  if (!tokens.length) return { domain: null, strong: false, suggestions: [] };
+
+  // Cache hit? (key = sorted place tokens + current domain)
+  const cacheKey = `${currentDomain}|${[...tokens].sort().join(" ")}`;
+  const cached = RESOLVE_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.ts < RESOLVE_TTL_MS) return cached.result;
+
+  const strong: string[] = []; // city AND province both appear → most confident
+  const weak: string[] = []; // only the city name appears
+  const provinceOnly: string[] = []; // only the province appears (still resolves the domain)
+  const fuzzy = new Map<string, string>(); // "City, Province" -> domain (typo suggestions)
+
+  // Mirror the search box: try the fast in-memory city index first, then the
+  // broad master sheet. Stop as soon as we get a usable hit.
+  for (const source of ["city-search", "regions"] as const) {
+    for (const t of tokens) {
+      const data = await getJson(`${baseUrl}/api/${source}?q=${encodeURIComponent(t)}`, "");
+      const matches: any[] = Array.isArray(data?.matches) ? data.matches : [];
+      for (const m of matches) {
+        if (!m?.domain) continue;
+        const cityHit = m.city && cityMentioned(qNorm, m.city);
+        const provHit = m.province && provinceMentioned(qNorm, m.province);
+        if (cityHit && provHit) strong.push(m.domain);
+        else if (cityHit) weak.push(m.domain);
+        else if (provHit) provinceOnly.push(m.domain); // province named → domain is known
+        else if (m.city) {
+          // fuzzy (typo): query token close to one of the city's tokens
+          const close = cityTokensOf(m.city).some((ct) => fuzzyTypos(t, [ct]).length);
+          if (close) {
+            const label = `${m.city}${m.province ? `, ${m.province}` : ""}`;
+            if (!fuzzy.has(label)) fuzzy.set(label, m.domain);
+          }
+        }
+      }
+      if (strong.length) break;
+    }
+    if (strong.length || weak.length || provinceOnly.length) break; // got a usable hit
+  }
+
+  // Pick: city+province wins, then city-only, then province-only. For a bare city
+  // name, prefer staying on the current province if that city exists there.
+  let pick: string | null = null;
+  let isStrong = false;
+  if (strong.length) {
+    pick = strong[0];
+    isStrong = true;
+  } else if (weak.length) {
+    pick = weak.includes(currentDomain) ? currentDomain : weak[0];
+  } else if (provinceOnly.length) {
+    pick = provinceOnly.includes(currentDomain) ? currentDomain : provinceOnly[0];
+    isStrong = true; // the province was explicitly named
+  }
+
+  let result: ResolveResult;
+  if (pick && pick !== currentDomain) result = { domain: pick, strong: isStrong, suggestions: [] };
+  else if (pick === currentDomain) result = { domain: null, strong: false, suggestions: [] };
+  // No confident hit — offer the closest real "City, Province" matches as suggestions.
+  else result = { domain: null, strong: false, suggestions: Array.from(fuzzy.keys()).slice(0, 4) };
+
+  RESOLVE_CACHE.set(cacheKey, { ts: Date.now(), result });
+  return result;
+}
+
 // Resolve the place in the question into city / barangay / street, then look up
 // the matching zonal rows from OUR data. Uses the free facet endpoints to learn
 // the real city & barangay names, then ONE structured zonal query (= 1 token).
@@ -187,14 +340,54 @@ async function lookupZonal(baseUrl: string, cookie: string, domain: string, ques
     cookie
   );
   const cities: string[] = Array.isArray(citiesData?.cities) ? citiesData.cities : [];
+  let cityAmbiguous: string[] = []; // close city names when the user mistyped
   if (cities.length) {
-    let bestLen = 0;
-    for (const c of cities) {
-      const core = cityCore(c);
-      if (core.length >= 3 && phraseInText(qNorm, core) && core.length > bestLen) {
-        city = c;
-        bestLen = core.length;
+    // Token-based match (handles "Binondo, Manila" when user types "manila").
+    const matched = cities.filter((c) => cityMentioned(qNorm, c));
+    if (matched.length) {
+      // Prefer the city sharing the MOST tokens with the question
+      // (so "binondo manila" picks "Binondo, Manila", not every "*, Manila").
+      const scored = matched.map((c) => ({
+        c,
+        hits: cityTokensOf(c).filter((t) => phraseInText(qNorm, t)).length,
+      }));
+      const maxHits = Math.max(...scored.map((s) => s.hits));
+      const top = scored.filter((s) => s.hits === maxHits).map((s) => s.c);
+      if (top.length === 1) {
+        city = top[0];
+      } else {
+        // Tie: many entries share one city token (e.g. all "*, Manila"). Use that
+        // shared token as a loose city filter so we return the whole city.
+        const distinct = placeTokens
+          .filter((t) => t.length >= 4 && !isProvinceWord(t))
+          .map((t) => t.toUpperCase());
+        let bestTok = "";
+        let bestCount = 0;
+        for (const up of distinct) {
+          const cnt = top.filter((c) => phraseInText(normLoose(c), up)).length;
+          if (cnt > bestCount) {
+            bestCount = cnt;
+            bestTok = up;
+          }
+        }
+        city = bestTok || top[0];
       }
+    }
+    // fuzzy fallback for a mistyped city (e.g. "mandawe" -> "MANDAUE CITY")
+    if (!city) {
+      const cores = cities
+        .map((c) => ({ full: c, toks: cityTokensOf(c) }))
+        .filter((x) => x.toks.length);
+      const hits = new Set<string>();
+      for (const t of placeTokens) {
+        if (t.length < 4 || isProvinceWord(t)) continue;
+        for (const x of cores) {
+          if (x.toks.some((ct) => fuzzyTypos(t, [ct]).length)) hits.add(x.full);
+        }
+      }
+      const list = Array.from(hits);
+      if (list.length === 1) city = list[0];
+      else if (list.length > 1) cityAmbiguous = list.slice(0, 8);
     }
   }
 
@@ -224,31 +417,33 @@ async function lookupZonal(baseUrl: string, cookie: string, domain: string, ques
         const hits = new Set<string>();
         for (const t of placeTokens) {
           if (t.length < 4) continue;
-          for (const m of fuzzyMatchStreets(t, barangays, 2)) hits.add(m);
+          for (const m of fuzzyTypos(t, barangays)) hits.add(m);
         }
         const list = Array.from(hits);
         if (list.length === 1) {
           barangay = list[0];
         } else if (list.length > 1) {
           // e.g. typed "sambag" -> matches Sambag I, II, III: ask instead of guessing
-          ambiguous = list.slice(0, 4);
+          ambiguous = list.slice(0, 8);
         }
       }
     }
   }
 
-  // 3) Street query = the most distinctive leftover token (drop city/barangay words).
+  // 3) Street query = the most distinctive leftover token (drop city/barangay AND
+  //    province words, so "pampanga" is never mistaken for a street search term).
   const used = new Set<string>([
     ...tokensOf(cityCore(city)),
     ...tokensOf(normLoose(barangay)),
   ]);
-  const streetTokens = placeTokens.filter((t) => !used.has(t));
+  const streetTokens = placeTokens.filter((t) => !used.has(t) && !isProvinceWord(t));
   const streetQ = streetTokens.sort((a, b) => b.length - a.length)[0] || "";
 
-  // 4) ONE structured query, with at most one looser retry on a miss.
+  // 4) Structured queries, most reliable first. When a barangay is resolved we query
+  //    city+barangay FIRST (returns the whole barangay) before trying a street term.
   const attempts: { city?: string; barangay?: string; q?: string }[] = [];
-  if (city && barangay && streetQ) attempts.push({ city, barangay, q: streetQ });
   if (city && barangay) attempts.push({ city, barangay });
+  if (city && barangay && streetQ) attempts.push({ city, barangay, q: streetQ });
   if (city && streetQ) attempts.push({ city, q: streetQ });
   if (city) attempts.push({ city });
   if (streetQ) attempts.push({ q: streetQ });
@@ -268,8 +463,8 @@ async function lookupZonal(baseUrl: string, cookie: string, domain: string, ques
   // resolved a real city, or the message clearly has location/value intent.
   const hasIntent = looksLikeLocationQuery(question);
   if (!city && !hasIntent) planned = [];
-  // If the barangay is ambiguous, don't guess (and don't waste a token) — ask first.
-  if (ambiguous.length) planned = [];
+  // If the barangay or city is ambiguous, don't guess (and don't waste a token) — ask.
+  if (ambiguous.length || cityAmbiguous.length) planned = [];
 
   let rows: Row[] = [];
   let total = 0;
@@ -283,23 +478,27 @@ async function lookupZonal(baseUrl: string, cookie: string, domain: string, ques
   // 5) On a miss, build "did you mean…?" suggestions from the closest real names.
   //    (Free — these come from the cached facet lists, no extra zonal token.)
   //    Only when the user actually sought a place (not greetings / small talk).
+  const MAX_SUGG = 8;
   let suggestions: string[] = [];
-  if (ambiguous.length) {
+  if (cityAmbiguous.length) {
+    // Mistyped/ambiguous city — offer the close city names to choose from.
+    suggestions = cityAmbiguous.slice(0, MAX_SUGG);
+  } else if (ambiguous.length) {
     // Surface the close barangay names so the model can ask "Did you mean …?"
-    suggestions = ambiguous.map((b) => (city ? `${b}, ${city}` : b));
+    suggestions = ambiguous.map((b) => (city ? `${b}, ${city}` : b)).slice(0, MAX_SUGG);
   } else if (!rows.length && (city || hasIntent)) {
     const pool = city && barangays.length ? barangays : cities;
     const seenSugg = new Set<string>();
     for (const t of placeTokens) {
       if (t.length < 3) continue;
-      const m = fuzzyMatchStreets(t, pool, 3).slice(0, 3);
+      const m = fuzzyMatchStreets(t, pool, 3).slice(0, 5);
       for (const name of m) {
         const label = city && barangays.length ? `${name}, ${city}` : name;
         if (!seenSugg.has(label)) { seenSugg.add(label); suggestions.push(label); }
       }
-      if (suggestions.length >= 4) break;
+      if (suggestions.length >= MAX_SUGG) break;
     }
-    suggestions = suggestions.slice(0, 4);
+    suggestions = suggestions.slice(0, MAX_SUGG);
   }
 
   // 6) When a barangay is resolved, also pull its value stats (min/max/median +
@@ -315,7 +514,17 @@ async function lookupZonal(baseUrl: string, cookie: string, domain: string, ques
     if (sd?.ok && sd.stats) stats = sd.stats;
   }
 
-  return { rows, total, city, barangay, streetQ, suggestions, stats };
+  return {
+    rows,
+    total,
+    city,
+    barangay,
+    streetQ,
+    suggestions,
+    stats,
+    cityResolved: Boolean(city),
+    barangayList: barangays, // full list for "what/how many barangays" questions
+  };
 }
 
 export async function POST(req: Request) {
@@ -350,11 +559,39 @@ export async function POST(req: Request) {
     const baseUrl = `${proto}://${host}`;
     const cookie = req.headers.get("cookie") || "";
 
-    // 1) Look up matching zonal rows from OUR data (grounding).
-    const { rows, total, suggestions, stats } = domain
-      ? await lookupZonal(baseUrl, cookie, domain, question)
-      : { rows: [] as Row[], total: 0, suggestions: [] as string[], stats: null };
+    // 1) Decide the target province/domain FROM THE QUESTION FIRST (province-
+    //    independent, like the search box). This is critical: if we looked up the
+    //    current province first, a loose fuzzy match could wrongly "find" a place
+    //    there (e.g. "aborlan" → Cebu's "Tabuelan") and never reach the real one.
+    let targetDomain = domain;
+    let resolvedSuggestions: string[] = [];
+    if (domain && looksLikeLocationQuery(question)) {
+      const resolved = await resolveDomain(baseUrl, question, domain);
+      if (resolved.domain) targetDomain = resolved.domain; // place belongs to another province
+      else resolvedSuggestions = resolved.suggestions; // possible typo → "did you mean"
+    }
+
+    // 2) Look up on the resolved domain.
+    let look: any = domain
+      ? await lookupZonal(baseUrl, cookie, targetDomain, question)
+      : { rows: [] as Row[], total: 0, suggestions: [] as string[], stats: null, cityResolved: false };
+
+    if (!look.rows.length && !look.suggestions.length && resolvedSuggestions.length) {
+      look = { ...look, suggestions: resolvedSuggestions };
+    }
+
+    const { rows, total, suggestions, stats, city: resolvedCity, barangayList } = look;
     const dataLines = rows.slice(0, MAX_ROWS_IN_PROMPT).map(rowToLine);
+
+    // Full barangay list for the resolved city, so the AI can answer "what/how many
+    // barangays are in X" accurately (these are free facet names, no search token).
+    const brgyNames: string[] = Array.isArray(barangayList) ? barangayList : [];
+    const barangayListBlock =
+      resolvedCity && brgyNames.length
+        ? `\n\nBARANGAYS IN ${String(resolvedCity).toUpperCase()} (${brgyNames.length} total` +
+          (brgyNames.length > 60 ? `, first 60 shown` : ``) +
+          `): ${brgyNames.slice(0, 60).join(", ")}`
+        : "";
 
     // 2) Include the currently selected property, if the user asks about "this".
     let selectedBlock = "";
@@ -377,7 +614,7 @@ export async function POST(req: Request) {
     const suggestionBlock =
       dataLines.length === 0 && suggestions && suggestions.length
         ? `\n\nCLOSEST MATCHING PLACES IN OUR DATA (the user may have misspelled — offer these as "Did you mean …?"):\n` +
-          suggestions.map((s) => `- ${s}`).join("\n")
+          suggestions.map((s: string) => `- ${s}`).join("\n")
         : "";
 
     // Stats block — covers ALL records for the barangay (not just the sample), so
@@ -394,8 +631,8 @@ export async function POST(req: Request) {
     const dataBlock =
       dataLines.length > 0
         ? `TOTAL MATCHING RECORDS IN OUR DATABASE: ${total}${shownNote}\n\n` +
-          `SAMPLE OF MATCHING ZONAL RECORDS:\n${dataLines.join("\n")}${statsBlock}`
-        : `TOTAL MATCHING RECORDS IN OUR DATABASE: 0\n(none found for this query)${suggestionBlock}`;
+          `SAMPLE OF MATCHING ZONAL RECORDS:\n${dataLines.join("\n")}${statsBlock}${barangayListBlock}`
+        : `TOTAL MATCHING RECORDS IN OUR DATABASE: 0\n(none found for this query)${suggestionBlock}${barangayListBlock}`;
 
     const system =
       "You are the Zonal AI Assistant, a friendly helper inside a Philippine zonal-value app. " +
@@ -410,6 +647,7 @@ export async function POST(req: Request) {
       "(1) Quote the exact ₱/sqm value and location from the records — never make up a number. " +
       "(2) For 'how many' / counting questions, use TOTAL MATCHING RECORDS as the exact count — do NOT count only the sample rows (the sample is just a preview). " +
       "(2b) For 'most expensive / highest / cheapest / lowest / average / range' questions, use VALUE STATS FOR THIS BARANGAY (it covers ALL records) — name the exact street and value. Do NOT pick the max from the small sample list, since the sample is only alphabetical and may miss the priciest street. " +
+      "(2c) For 'what / which / how many barangays' questions about a city, use the BARANGAYS IN <CITY> list (it is the complete list) — give the count and list them. " +
       "(3) If several records match (e.g. multiple classifications on one street), give the range or list a few, and mention the total count. " +
       "(4) If no record is provided but CLOSEST MATCHING PLACES are listed, the user likely misspelled it — politely ask 'Did you mean …?' and list those exact suggestions. If there are none, say you don't have a record for that exact location and suggest picking it on the map or checking the spelling. Either way, do NOT guess a number. " +
       "(5) Keep replies short and friendly — a sentence or two (a few more only when listing). No emojis except a friendly greeting. " +
