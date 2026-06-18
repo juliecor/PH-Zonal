@@ -182,6 +182,26 @@ function fuzzyTypos(token: string, candidates: string[]): string[] {
   return fuzzyMatchStreets(token, candidates, 2).filter((c) => plausibleTypo(token, c));
 }
 
+// Parse a money value like "15,000.00" → 15000.
+function parseMoney(v: any): number | null {
+  const n = Number(String(v ?? "").replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function fmtPeso(n: number): string {
+  return "₱" + Number(n).toLocaleString("en-PH", { maximumFractionDigits: 2 });
+}
+
+// Detect a land area in the question (square meters or hectares) for the
+// land-value calculator. Returns the area in square meters, or null.
+function parseAreaSqm(q: string): number | null {
+  const s = String(q || "").toLowerCase();
+  let m = s.match(/(\d+(?:\.\d+)?)\s*(?:hectares?|has\b|ha\b)/);
+  if (m) return parseFloat(m[1]) * 10000;
+  m = s.match(/(\d[\d,]*(?:\.\d+)?)\s*(?:sq\.?\s*m\.?|sqm|square\s*met(?:er|re)s?|sq\s*met(?:er|re)s?|m2|m²)/);
+  if (m) return parseFloat(m[1].replace(/,/g, ""));
+  return null;
+}
+
 // City matching core: drop "CITY"/"MUNICIPALITY" so "cebu" matches "CEBU CITY".
 function cityCore(c: string) {
   return normLoose(c)
@@ -585,7 +605,7 @@ export async function POST(req: Request) {
       look = { ...look, suggestions: resolvedSuggestions };
     }
 
-    const { rows, total, suggestions, stats, city: resolvedCity, barangayList } = look;
+    const { rows, total, suggestions, stats, city: resolvedCity, barangay: resolvedBarangay, barangayList } = look;
     const dataLines = rows.slice(0, MAX_ROWS_IN_PROMPT).map(rowToLine);
 
     // Full barangay list for the resolved city, so the AI can answer "what/how many
@@ -633,16 +653,53 @@ export async function POST(req: Request) {
         `- Median: ${peso(stats.median)}/sqm · Average: ${peso(stats.mean)}/sqm`
       : "";
 
+    // Land-value calculator: if the user mentioned an area, compute the estimate
+    // server-side (accurate) so the AI just reports it.
+    const area = parseAreaSqm(question);
+    let landBlock = "";
+    if (area && area > 0) {
+      const areaStr = area.toLocaleString("en-PH");
+      const ctxVal = parseMoney(context?.zonalValue);
+      if (ctxVal) {
+        landBlock = `\n\nLAND VALUE ESTIMATE (selected property): ${areaStr} sqm × ${fmtPeso(ctxVal)}/sqm = ${fmtPeso(area * ctxVal)}.`;
+      } else if (stats) {
+        landBlock =
+          `\n\nLAND VALUE ESTIMATE for ${areaStr} sqm here: about ${fmtPeso(area * stats.min)} (low) to ` +
+          `${fmtPeso(area * stats.max)} (high), typical ~${fmtPeso(area * stats.median)} (based on this barangay's zonal values).`;
+      } else if (rows.length) {
+        const v = parseMoney(getVal(rows[0], "ZonalValuepersqm.-"));
+        if (v) {
+          const loc = [getVal(rows[0], "Street/Subdivision-"), getVal(rows[0], "Barangay-"), getVal(rows[0], "City-")]
+            .filter(Boolean)
+            .join(", ");
+          landBlock = `\n\nLAND VALUE ESTIMATE: ${areaStr} sqm × ${fmtPeso(v)}/sqm = ${fmtPeso(area * v)} (based on ${loc}).`;
+        }
+      }
+    }
+
     const dataBlock =
       dataLines.length > 0
         ? `TOTAL MATCHING RECORDS IN OUR DATABASE: ${total}${shownNote}\n\n` +
-          `SAMPLE OF MATCHING ZONAL RECORDS:\n${dataLines.join("\n")}${statsBlock}${barangayListBlock}`
+          `SAMPLE OF MATCHING ZONAL RECORDS:\n${dataLines.join("\n")}${statsBlock}${landBlock}${barangayListBlock}`
         : `TOTAL MATCHING RECORDS IN OUR DATABASE: 0\n(none found for this query)${suggestionBlock}${barangayListBlock}`;
+
+    // Follow-up quick-replies (tappable) after a successful location answer.
+    let followups: string[] = [];
+    if (rows.length && resolvedCity) {
+      const cleanCity = String(resolvedCity).split(",")[0].trim();
+      const placeLabel = resolvedBarangay ? `${resolvedBarangay}, ${cleanCity}` : cleanCity;
+      followups = [
+        `Most expensive in ${placeLabel}`,
+        `Cheapest in ${placeLabel}`,
+        `Land value for 100 sqm in ${placeLabel}`,
+      ];
+    }
 
     const system =
       "You are the Zonal AI Assistant, a friendly helper inside a Philippine zonal-value app. " +
       "You help users find official BIR zonal values (₱ per square meter), organized by province, city, barangay, and street. " +
       "Be warm, natural, and conversational — like a helpful real-estate assistant.\n\n" +
+      "LANGUAGE: Reply in the SAME language the user used — English, Tagalog/Taglish, or Cebuano/Bisaya. Mirror their language naturally.\n\n" +
       "HOW TO RESPOND:\n" +
       "• Greetings / small talk (hi, hello, good morning, salamat, etc.): greet back warmly in one short line and invite them to ask about a zonal value or location. Do NOT say you have no record. " +
       "• Questions about you or the app (who are you, what can you do, how to use this): briefly explain that you answer zonal-value questions from the app's data — they can ask about a city, barangay, or street, or select a property on the map. " +
@@ -656,7 +713,8 @@ export async function POST(req: Request) {
       "(3) If several records match (e.g. multiple classifications on one street), give the range or list a few, and mention the total count. " +
       "(4) If no record is provided but CLOSEST MATCHING PLACES are listed, the user likely misspelled it — politely ask 'Did you mean …?' and list those exact suggestions. If there are none, say you don't have a record for that exact location and suggest picking it on the map or checking the spelling. Either way, do NOT guess a number. " +
       "(5) Keep replies short and friendly — a sentence or two (a few more only when listing). No emojis except a friendly greeting. " +
-      "(6) Politely steer fully off-topic questions (not about zonal values, locations, or this app) back to what you can help with.\n\n" +
+      "(6) Politely steer fully off-topic questions (not about zonal values, locations, or this app) back to what you can help with. " +
+      "(7) LAND VALUE: if a LAND VALUE ESTIMATE is provided, present it clearly (area × ₱/sqm = total) and note it's an estimate based on the zonal value, not the market price.\n\n" +
       selectedBlock +
       dataBlock;
 
@@ -684,6 +742,7 @@ export async function POST(req: Request) {
       text,
       matched: dataLines.length,
       suggestions: dataLines.length === 0 ? suggestions ?? [] : [],
+      followups,
     });
   } catch (e: any) {
     console.error("assistant error:", e);

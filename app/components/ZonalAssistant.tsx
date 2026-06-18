@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, Send, Sparkles } from "lucide-react";
+import { X, Send, Sparkles, Copy, Check } from "lucide-react";
 
 export type AssistantContext = {
   street?: string;
@@ -12,9 +12,15 @@ export type AssistantContext = {
   zonalValue?: string;
 } | null;
 
-type Msg = { role: "user" | "assistant"; content: string; suggestions?: string[] };
+type Msg = {
+  role: "user" | "assistant";
+  content: string;
+  suggestions?: string[];
+  followups?: string[];
+};
 
 const LOGO = "/pictures/zonal%20ai-Photoroom.png";
+const STORAGE_KEY = "zonalAssistantChatV1";
 
 const SUGGESTIONS = [
   "What's the zonal value of this property?",
@@ -42,6 +48,24 @@ export default function ZonalAssistant({
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
+
+  // Load saved chat history once.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setMessages(parsed);
+      }
+    } catch {}
+  }, []);
+
+  // Persist chat history (keep it bounded).
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-40)));
+    } catch {}
+  }, [messages]);
 
   const send = async (text?: string) => {
     const display = String(text ?? input).trim();
@@ -72,6 +96,7 @@ export default function ZonalAssistant({
           role: "assistant",
           content: String(data.text ?? "").trim(),
           suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 8) : [],
+          followups: Array.isArray(data.followups) ? data.followups.slice(0, 4) : [],
         },
       ]);
     } catch (e: any) {
@@ -180,14 +205,30 @@ export default function ZonalAssistant({
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => setOpen(false)}
-                className="rounded-full p-1.5 text-white/70 transition hover:bg-white/15 hover:text-white"
-                title="Close"
-                aria-label="Close"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-1">
+                {messages.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setMessages([]);
+                      try {
+                        localStorage.removeItem(STORAGE_KEY);
+                      } catch {}
+                    }}
+                    className="rounded-full px-2 py-1 text-[11px] font-semibold text-white/70 transition hover:bg-white/15 hover:text-white"
+                    title="Clear conversation"
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  onClick={() => setOpen(false)}
+                  className="rounded-full p-1.5 text-white/70 transition hover:bg-white/15 hover:text-white"
+                  title="Close"
+                  aria-label="Close"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -218,8 +259,17 @@ export default function ZonalAssistant({
             )}
 
             {messages.map((m, i) => (
-              <div key={i} className="space-y-2">
-                <Bubble role={m.role}>{m.content}</Bubble>
+              <div key={i} className="space-y-1.5">
+                <Bubble role={m.role}>
+                  {m.role === "assistant" ? <MarkdownText text={m.content} /> : m.content}
+                </Bubble>
+
+                {m.role === "assistant" && m.content && (
+                  <div className="pl-11">
+                    <CopyBtn text={m.content} />
+                  </div>
+                )}
+
                 {m.role === "assistant" && m.suggestions && m.suggestions.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pl-11">
                     {m.suggestions.map((s) => (
@@ -234,6 +284,24 @@ export default function ZonalAssistant({
                     ))}
                   </div>
                 )}
+
+                {m.role === "assistant" &&
+                  (!m.suggestions || m.suggestions.length === 0) &&
+                  m.followups &&
+                  m.followups.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pl-11">
+                      {m.followups.map((f) => (
+                        <button
+                          key={f}
+                          onClick={() => send(f)}
+                          className="za-suggest text-[12px] font-semibold"
+                          title={f}
+                        >
+                          {f}
+                        </button>
+                      ))}
+                    </div>
+                  )}
               </div>
             ))}
 
@@ -401,6 +469,89 @@ export default function ZonalAssistant({
 }
 
 /* ── Small presentational pieces ── */
+
+// Lightweight markdown: **bold**, bullet lists, and highlighted ₱ amounts.
+function renderInline(s: string, keyBase: string) {
+  const parts = s.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) => {
+    if (/^\*\*[^*]+\*\*$/.test(p)) {
+      return (
+        <strong key={`${keyBase}-b${i}`} style={{ color: NAVY }}>
+          {p.slice(2, -2)}
+        </strong>
+      );
+    }
+    const sub = p.split(/(₱[\d,]+(?:\.\d+)?)/g);
+    return sub.map((x, j) =>
+      /^₱[\d,]/.test(x) ? (
+        <strong key={`${keyBase}-${i}-${j}`} style={{ color: NAVY }}>
+          {x}
+        </strong>
+      ) : (
+        <span key={`${keyBase}-${i}-${j}`}>{x}</span>
+      )
+    );
+  });
+}
+
+function MarkdownText({ text }: { text: string }) {
+  const lines = String(text).replace(/\r/g, "").split("\n");
+  const out: React.ReactNode[] = [];
+  let bullets: string[] = [];
+  const flush = (k: string) => {
+    if (!bullets.length) return;
+    out.push(
+      <ul key={k} className="my-1 list-disc space-y-0.5 pl-4">
+        {bullets.map((b, i) => (
+          <li key={`${k}-${i}`}>{renderInline(b, `${k}-${i}`)}</li>
+        ))}
+      </ul>
+    );
+    bullets = [];
+  };
+  lines.forEach((raw, idx) => {
+    const line = raw.trim();
+    if (/^[-*•]\s+/.test(line)) bullets.push(line.replace(/^[-*•]\s+/, ""));
+    else if (line === "") flush(`b${idx}`);
+    else {
+      flush(`p${idx}`);
+      out.push(
+        <p key={`p${idx}`} className="my-1">
+          {renderInline(line, `p${idx}`)}
+        </p>
+      );
+    }
+  });
+  flush("end");
+  return <>{out}</>;
+}
+
+function CopyBtn({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setDone(true);
+          setTimeout(() => setDone(false), 1500);
+        } catch {}
+      }}
+      className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-400 transition hover:text-[#1e3a8a]"
+      title="Copy answer"
+    >
+      {done ? (
+        <>
+          <Check size={12} /> Copied
+        </>
+      ) : (
+        <>
+          <Copy size={12} /> Copy
+        </>
+      )}
+    </button>
+  );
+}
 
 function Avatar() {
   return (
