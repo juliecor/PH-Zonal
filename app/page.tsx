@@ -39,6 +39,7 @@ import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
 import PropertyCalculator from "./components/PropertyCalculator";
 import InvestmentBrief from "./components/InvestmentBrief";
 import ZonalAssistant from "./components/ZonalAssistant";
+import MapTools, { type ScanResult } from "./components/MapTools";
 import StreetViewModal from "./components/StreetViewModal";
 import PropertySnapshot from "./components/PropertySnapshot";
 
@@ -126,6 +127,11 @@ export function Home() {
 
   const [selectedRow, setSelectedRow] = useState<Row | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<LatLng | null>(null);
+  const [nearMePoints, setNearMePoints] = useState<Array<{ lat: number; lon: number; label: string; info?: string }>>([]);
+  const [scanMode, setScanMode] = useState(false);
+  const [scanResults, setScanResults] = useState<ScanResult[]>([]);
+  const [scanLoading, setScanLoading] = useState(false);
+  const boundsReqRef = useRef(0);
   const [anchorLocation, setAnchorLocation] = useState<LatLng | null>(null);
   const [boundary, setBoundary] = useState<Boundary | null>(null);
   const [mapType, setMapType] = useState<MapType>("street");
@@ -663,11 +669,11 @@ export function Home() {
     finally { if (myId===filterPinpointRef.current) setGeoLoading(false); }
   }
 
-  async function geocodeWithZonalData(args: { query:string; street?:string; barangay?:string; city?:string; province?:string; baseLatLon?:{lat:number;lon:number}|null }) {
+  async function geocodeWithZonalData(args: { query:string; street?:string; barangay?:string; city?:string; province?:string; baseLatLon?:{lat:number;lon:number}|null; valuePerSqm?:number|null; classification?:string }) {
     const qx = normalizePH(args.query);
     const key = `${qx}|${args.street}|${args.barangay}|${args.city}|${args.province}|${args.baseLatLon?.lat??""},${args.baseLatLon?.lon??""}`.toLowerCase();
     const cached = centerCacheRef.current.get(key); if (cached) return cached;
-    const res = await fetch("/api/geocode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:qx,street:args.street??"",hintBarangay:args.barangay??"",hintCity:args.city??"",hintProvince:args.province??"",baseLatLon:args.baseLatLon??null})});
+    const res = await fetch("/api/geocode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:qx,street:args.street??"",hintBarangay:args.barangay??"",hintCity:args.city??"",hintProvince:args.province??"",baseLatLon:args.baseLatLon??null,valuePerSqm:args.valuePerSqm??null,classification:args.classification??""})});
     const data = await res.json().catch(()=>null);
     if (!res.ok||!data?.ok) return null;
     const payload = {lat:Number(data.lat),lon:Number(data.lon),label:String(data.displayName??qx),boundary:(data.boundary as Boundary|null)??null};
@@ -675,6 +681,38 @@ export function Home() {
     const bag = lsLoad<Record<string,{ts:number;lat:number;lon:number;label:string;boundary?:Boundary|null}>>(GEO_LS_KEY,{});
     bag[key]={ts:Date.now(),lat:payload.lat,lon:payload.lon,label:payload.label,boundary:payload.boundary??null};
     lsSave(GEO_LS_KEY,bag); return payload;
+  }
+
+  // Scan tool: the user drew a box → load ONLY the cached zonal values inside it
+  // (free DB query, no Google). Shows pins + a clickable results list.
+  async function onScanComplete(b: { minLat:number; maxLat:number; minLon:number; maxLon:number }) {
+    setScanMode(false); // exit draw mode so the map is interactive again
+    setScanLoading(true);
+    setScanResults([]);
+    setNearMePoints([]);
+    const myId = ++boundsReqRef.current;
+    try {
+      const res = await fetch(`/api/zonal-in-bounds?minLat=${b.minLat}&maxLat=${b.maxLat}&minLon=${b.minLon}&maxLon=${b.maxLon}&limit=300`);
+      const data = await res.json().catch(()=>null);
+      if (myId !== boundsReqRef.current) return;
+      const raw: any[] = data?.ok && Array.isArray(data.points) ? data.points : [];
+      const found = raw.filter((p)=>p?.lat&&p?.lon&&p?.value_per_sqm);
+      const esc = (s:any)=>String(s??"").replace(/[<>&]/g,(c)=>({"<":"&lt;",">":"&gt;","&":"&amp;"} as any)[c]);
+      const pts = found.map((p)=>{
+        const peso = "₱"+Number(p.value_per_sqm).toLocaleString("en-PH");
+        const info = `<div style="font-family:system-ui,sans-serif;max-width:230px;padding:2px 4px">`+
+          `<div style="font-weight:800;color:#1e3a8a;font-size:15px">${peso}<span style="font-size:11px;color:#6b7280;font-weight:600">/sqm</span></div>`+
+          (p.street?`<div style="font-weight:600;font-size:12px;color:#374151;margin-top:2px">${esc(p.street)}</div>`:"")+
+          `<div style="font-size:11px;color:#6b7280">${esc([p.barangay,p.city,p.province].filter(Boolean).join(", "))}</div>`+
+          (p.classification_code?`<div style="font-size:11px;color:#9ca3af;margin-top:2px">${esc(p.classification_code)}</div>`:"")+
+          `</div>`;
+        return { lat:Number(p.lat), lon:Number(p.lon), label:peso, info };
+      });
+      setNearMePoints(pts);
+      setScanResults(found as ScanResult[]);
+    } catch {} finally {
+      if (myId === boundsReqRef.current) setScanLoading(false);
+    }
   }
 
   async function describeArea(payload: { lat:number; lon:number; label:string; row?:Row|null; poi?:PoiData|null }) {
@@ -729,7 +767,7 @@ export function Home() {
       const isAllAreas = /^(all\s*areas?|all)$/i.test(rawStreet)||/^(all\s*areas?|all)$/i.test(rawRowBarangay);
       const brgy = (rawRowBarangay&&!/^(all\s*areas?|all)$/i.test(rawRowBarangay))?rawRowBarangay:(barangay||rawRowBarangay);
       const cty = normalizeCityHint(String(r["City-"]??""),String(r["Province-"]??"")); const prov = r["Province-"];
-      const location = await geocodeWithZonalData({query:(isAllAreas||!street?[brgy,cty,prov]:[street,brgy,cty,prov]).filter(Boolean).join(", "),street:!isAllAreas&&street?street:undefined,barangay:brgy||undefined,city:cty||undefined,province:prov||undefined,baseLatLon});
+      const location = await geocodeWithZonalData({query:(isAllAreas||!street?[brgy,cty,prov]:[street,brgy,cty,prov]).filter(Boolean).join(", "),street:!isAllAreas&&street?street:undefined,barangay:brgy||undefined,city:cty||undefined,province:prov||undefined,baseLatLon,valuePerSqm:parseZonalValueToNumber(r["ZonalValuepersqm.-"])??null,classification:String(r["Classification-"]??"")});
       if (myId!==reqIdRef.current) return;
       const finalLoc = location||baseLatLon||{lat:10.3085,lon:123.8906};
       setSelectedLocation({lat:finalLoc.lat,lon:finalLoc.lon});
@@ -764,7 +802,7 @@ export function Home() {
       <ZonalSearchIndicator visible={loading} />
 
       <div className="absolute inset-0">
-        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
+        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
       </div>
 
       {/* Brand pill */}
@@ -1398,6 +1436,16 @@ export function Home() {
           classification: String(selectedRow["Classification-"] ?? ""),
           zonalValue: String(selectedRow["ZonalValuepersqm.-"] ?? ""),
         } : null}
+      />
+
+      {/* MAP TOOLS: "Near me" (GPS) + "Scan area" (draw a box → zonal values inside) */}
+      <MapTools
+        onLocate={(lat, lon) => setSelectedLocation({ lat, lon })}
+        scanActive={scanMode}
+        onScanToggle={() => { setScanMode((v) => !v); setScanResults([]); setNearMePoints([]); }}
+        scanResults={scanResults}
+        scanLoading={scanLoading}
+        onPickResult={(r) => setSelectedLocation({ lat: r.lat, lon: r.lon })}
       />
     </main>
   );

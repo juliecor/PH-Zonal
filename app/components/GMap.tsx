@@ -26,6 +26,10 @@ interface GMapProps {
   streetGeojson?: GeoJSON.FeatureCollection | null;
   streetGeojsonEnabled?: boolean;
   areaLabels?: Array<{ lat: number; lon: number; name: string }>; // optional labels for villages/subdivisions
+  valuePoints?: Array<{ lat: number; lon: number; label: string; info?: string }>; // zonal value price-tags (info = hover HTML)
+  onBoundsChange?: (b: { minLat: number; maxLat: number; minLon: number; maxLon: number; zoom: number }) => void;
+  scanMode?: boolean; // when true, dragging draws a box to scan zonal values
+  onScanComplete?: (b: { minLat: number; maxLat: number; minLon: number; maxLon: number }) => void;
 
   // ✅ land drawing / area measurement
   drawingMode?: boolean;
@@ -113,6 +117,10 @@ export default function GMap({
   streetGeojson,
   streetGeojsonEnabled,
   areaLabels,
+  valuePoints,
+  onBoundsChange,
+  scanMode = false,
+  onScanComplete,
   drawingMode = false,
   onAreaMeasured,
   clearDrawingSignal = 0,
@@ -125,6 +133,14 @@ export default function GMap({
   const streetCasingRef = useRef<any>(null);
   const streetLineRef = useRef<any>(null);
   const labelMarkersRef = useRef<any[]>([]);
+  const valueMarkersRef = useRef<any[]>([]);
+  const infoWindowRef = useRef<any>(null);
+  const onBoundsChangeRef = useRef<typeof onBoundsChange | null>(null);
+  useEffect(() => { onBoundsChangeRef.current = onBoundsChange ?? null; }, [onBoundsChange]);
+  const scanRectRef = useRef<any>(null);
+  const scanListenersRef = useRef<any[]>([]);
+  const onScanCompleteRef = useRef<typeof onScanComplete | null>(null);
+  useEffect(() => { onScanCompleteRef.current = onScanComplete ?? null; }, [onScanComplete]);
   const onPickRef = useRef<typeof onPickOnMap | null>(null);
   const canPickRef = useRef<boolean>(true);
 
@@ -171,6 +187,23 @@ export default function GMap({
         if (!onPickRef.current) return;
         if (!canPickRef.current) return;
         onPickRef.current(e.latLng.lat(), e.latLng.lng());
+      });
+      // Report the visible bounds after each pan/zoom (so the page can load only
+      // the zonal pins the user can actually see — keeps the frontend light).
+      map.addListener("idle", () => {
+        const cb = onBoundsChangeRef.current;
+        if (!cb) return;
+        const b = map.getBounds();
+        if (!b) return;
+        const ne = b.getNorthEast();
+        const sw = b.getSouthWest();
+        cb({
+          minLat: sw.lat(),
+          maxLat: ne.lat(),
+          minLon: sw.lng(),
+          maxLon: ne.lng(),
+          zoom: map.getZoom() || 0,
+        });
       });
       mapRef.current = map;
     });
@@ -286,6 +319,111 @@ export default function GMap({
       labelMarkersRef.current.push(marker);
     }
   }, [areaLabels]);
+
+  // Render zonal value points as price-tag pins (a navy dot + the ₱ value),
+  // with a hover tooltip showing the full zonal info.
+  useEffect(() => {
+    const map = mapRef.current; if (!map) return;
+    for (const m of valueMarkersRef.current) { try { m.setMap(null); } catch {} }
+    valueMarkersRef.current = [];
+    if (!infoWindowRef.current) {
+      infoWindowRef.current = new google.maps.InfoWindow({ disableAutoPan: true });
+    }
+    if (!Array.isArray(valuePoints) || valuePoints.length === 0) {
+      try { infoWindowRef.current.close(); } catch {}
+      return;
+    }
+    for (const p of valuePoints) {
+      // anchor dot (hoverable)
+      const dot = new google.maps.Marker({
+        map,
+        position: { lat: p.lat, lng: p.lon },
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 6.5,
+          fillColor: "#1e3a8a",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+        } as any,
+        zIndex: 8,
+      });
+      // Show the value (and details) on hover — keeps the map clean.
+      const content = p.info || `<div style="font-weight:800;color:#1e3a8a">${p.label}</div>`;
+      dot.addListener("mouseover", () => {
+        const iw = infoWindowRef.current;
+        if (!iw) return;
+        iw.setContent(content);
+        iw.setPosition({ lat: p.lat, lng: p.lon });
+        iw.open(map);
+      });
+      dot.addListener("mouseout", () => {
+        try { infoWindowRef.current?.close(); } catch {}
+      });
+      valueMarkersRef.current.push(dot);
+    }
+  }, [valuePoints]);
+
+  // Scan tool: drag on the map to draw a box; on release, report its bounds.
+  useEffect(() => {
+    const map = mapRef.current; if (!map) return;
+
+    const cleanup = () => {
+      for (const l of scanListenersRef.current) { try { google.maps.event.removeListener(l); } catch {} }
+      scanListenersRef.current = [];
+      if (scanRectRef.current) { try { scanRectRef.current.setMap(null); } catch {} scanRectRef.current = null; }
+      try { map.setOptions({ draggable: true, draggableCursor: null }); } catch {}
+    };
+
+    if (!scanMode) { cleanup(); return; }
+
+    // Drawing mode: disable panning so a drag draws the box instead.
+    map.setOptions({ draggable: false, draggableCursor: "crosshair" });
+    let start: { lat: number; lng: number } | null = null;
+
+    const down = map.addListener("mousedown", (e: any) => {
+      if (!e?.latLng) return;
+      start = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      if (scanRectRef.current) { try { scanRectRef.current.setMap(null); } catch {} }
+      scanRectRef.current = new google.maps.Rectangle({
+        map,
+        bounds: { north: start.lat, south: start.lat, east: start.lng, west: start.lng },
+        fillColor: "#1e3a8a",
+        fillOpacity: 0.08,
+        strokeColor: "#1e3a8a",
+        strokeWeight: 2,
+        clickable: false,
+      });
+    });
+    const move = map.addListener("mousemove", (e: any) => {
+      if (!start || !e?.latLng || !scanRectRef.current) return;
+      const cur = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      scanRectRef.current.setBounds({
+        north: Math.max(start.lat, cur.lat),
+        south: Math.min(start.lat, cur.lat),
+        east: Math.max(start.lng, cur.lng),
+        west: Math.min(start.lng, cur.lng),
+      });
+    });
+    const up = map.addListener("mouseup", () => {
+      if (!start) return;
+      const b = scanRectRef.current?.getBounds?.();
+      start = null;
+      if (b) {
+        const ne = b.getNorthEast();
+        const sw = b.getSouthWest();
+        onScanCompleteRef.current?.({
+          minLat: sw.lat(),
+          maxLat: ne.lat(),
+          minLon: sw.lng(),
+          maxLon: ne.lng(),
+        });
+      }
+    });
+    scanListenersRef.current = [down, move, up];
+
+    return cleanup;
+  }, [scanMode]);
 
   // ✅ Land drawing / area measurement
   // NOTE: google.maps.drawing.DrawingManager was removed in Maps JS API v3.65,

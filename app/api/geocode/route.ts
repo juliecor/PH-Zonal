@@ -14,6 +14,65 @@ if (!GOOGLE_API_KEY) {
   console.warn("⚠️ WARNING: GOOGLE_MAPS_API_KEY not set!");
 }
 
+// ── Durable geocode cache in the Laravel DB (saves repeated Google calls) ──
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "";
+
+// Look up a saved coordinate. Returns it only if present AND still fresh
+// (the backend applies the 30-day rule and sets `stale`).
+async function dbCacheGet(key: string): Promise<any | null> {
+  if (!BACKEND_URL) return null;
+  try {
+    const res = await fetch(
+      `${BACKEND_URL.replace(/\/$/, "")}/api/geocode-cache?key=${encodeURIComponent(key)}`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!res.ok) return null;
+    const j = await res.json().catch(() => null);
+    return j?.found && !j?.stale ? j : null;
+  } catch {
+    return null;
+  }
+}
+
+// Save a coordinate (and optional zonal value) for next time.
+async function dbCacheSave(key: string, payload: any, extra?: any): Promise<void> {
+  if (!BACKEND_URL) return;
+  try {
+    await fetch(`${BACKEND_URL.replace(/\/$/, "")}/api/geocode-cache`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key,
+        lat: payload.lat,
+        lon: payload.lon,
+        label: payload.label,
+        value_per_sqm: extra?.valuePerSqm ?? null,
+        classification_code: extra?.classification ?? null,
+        province: extra?.province ?? null,
+        city: extra?.city ?? null,
+        barangay: extra?.barangay ?? null,
+        street: extra?.street ?? null,
+        source: "google",
+      }),
+    });
+  } catch {
+    /* caching is best-effort; never block the response */
+  }
+}
+
+// Cache (memory + DB) then respond. Used by every geocode success path.
+async function cacheAndRespond(cacheKey: string, payload: any, extra?: any) {
+  GEO_CACHE.set(cacheKey, payload);
+  await dbCacheSave(cacheKey, payload, extra);
+  return NextResponse.json({
+    ok: true,
+    lat: payload.lat,
+    lon: payload.lon,
+    displayName: payload.label,
+    boundary: payload.boundary ?? null,
+  });
+}
+
 // ============================================================================
 // SMART STREET-LEVEL PINPOINTING (NEW APPROACH)
 // ============================================================================
@@ -111,6 +170,9 @@ export async function POST(req: Request) {
     const hintProvince = String(body?.hintProvince ?? "").trim();
     const street = String(body?.street ?? "").trim();
     const vicinity = String(body?.vicinity ?? "").trim();
+    // Optional: store the zonal value alongside the coordinate.
+    const valuePerSqm = body?.valuePerSqm != null ? Number(body.valuePerSqm) : null;
+    const classification = String(body?.classification ?? "").trim() || null;
 
     // NEW: Accept base coordinates from zonal data
     const baseLatLon =
@@ -135,6 +197,16 @@ export async function POST(req: Request) {
 
     const cacheKey = `${query}|${hintBarangay}|${hintCity}|${hintProvince}|${baseLatLon?.lat ?? ""},${baseLatLon?.lon ?? ""}|${street}|${vicinity}`.toLowerCase();
 
+    // What we store alongside the coordinate (for the geo-indexed map later).
+    const extra = {
+      valuePerSqm,
+      classification,
+      province: hintProvince,
+      city: hintCity,
+      barangay: hintBarangay,
+      street: street || query,
+    };
+
     // Check memory cache
     const cached = GEO_CACHE.get(cacheKey);
     if (cached && Date.now() - cached.ts < GEO_TTL) {
@@ -145,6 +217,21 @@ export async function POST(req: Request) {
         lon: cached.lon,
         displayName: cached.label,
         boundary: cached.boundary ?? null,
+      });
+    }
+
+    // Check durable DB cache (saves a Google call across restarts & users)
+    const dbHit = await dbCacheGet(cacheKey);
+    if (dbHit) {
+      const payload = { ts: Date.now(), lat: dbHit.lat, lon: dbHit.lon, label: dbHit.label, boundary: null };
+      GEO_CACHE.set(cacheKey, payload);
+      console.log(`[DB CACHE HIT] ${query}`);
+      return NextResponse.json({
+        ok: true,
+        lat: dbHit.lat,
+        lon: dbHit.lon,
+        displayName: dbHit.label,
+        boundary: null,
       });
     }
 
@@ -170,14 +257,7 @@ export async function POST(req: Request) {
           label: `${snap.name}, ${hintBarangay}, ${hintCity}`,
           boundary: null,
         };
-        GEO_CACHE.set(cacheKey, payload);
-        return NextResponse.json({
-          ok: true,
-          lat: payload.lat,
-          lon: payload.lon,
-          displayName: payload.label,
-          boundary: null,
-        });
+        return await cacheAndRespond(cacheKey, payload, extra);
       }
     }
 
@@ -216,15 +296,8 @@ export async function POST(req: Request) {
               label: result.formatted_address || address,
               boundary: null,
             };
-            GEO_CACHE.set(cacheKey, payload);
             console.log(`[STRATEGY 2] ✓ ${payload.label}`);
-            return NextResponse.json({
-              ok: true,
-              lat: payload.lat,
-              lon: payload.lon,
-              displayName: payload.label,
-              boundary: null,
-            });
+            return await cacheAndRespond(cacheKey, payload, extra);
           }
         } catch (e: any) {
           console.log(`[STRATEGY 2] Reverse geocode failed: ${e?.message}`);
@@ -239,15 +312,8 @@ export async function POST(req: Request) {
         label: [street, hintBarangay, hintCity, hintProvince].filter(Boolean).join(", "),
         boundary: null,
       };
-      GEO_CACHE.set(cacheKey, payload);
       console.log(`[STRATEGY 2] Using base coords directly`);
-      return NextResponse.json({
-        ok: true,
-        lat: payload.lat,
-        lon: payload.lon,
-        displayName: payload.label,
-        boundary: null,
-      });
+      return await cacheAndRespond(cacheKey, payload, extra);
     }
 
     // ========================================================================
@@ -296,15 +362,8 @@ export async function POST(req: Request) {
             label: result.formatted_address || address,
             boundary: null,
           };
-          GEO_CACHE.set(cacheKey, payload);
           console.log(`[STRATEGY 3] ✓ ${result.formatted_address}`);
-          return NextResponse.json({
-            ok: true,
-            lat: payload.lat,
-            lon: payload.lon,
-            displayName: payload.label,
-            boundary: null,
-          });
+          return await cacheAndRespond(cacheKey, payload, extra);
         }
       } catch (e: any) {
         console.log(`[STRATEGY 3] Error: ${e?.message}`);
@@ -345,8 +404,9 @@ export async function POST(req: Request) {
         label: best.display_name || query,
         boundary: null,
       };
-
+      // OSM result — cache it too (OSM allows permanent caching).
       GEO_CACHE.set(cacheKey, payload);
+      await dbCacheSave(cacheKey, payload, extra);
       return NextResponse.json({
         ok: true,
         lat: payload.lat,
