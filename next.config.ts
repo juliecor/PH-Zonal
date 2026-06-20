@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
     "/api/flood-tile/[z]/[x]/[y]": ["./flood-data/**"],
     "/api/flood-at": ["./flood-data/**"],
     "/api/flood-overlay": ["./flood-data/**"],
+    "/api/landslide-tile/[z]/[x]/[y]": ["./landslide-data/**"],
+    "/api/landslide-at": ["./landslide-data/**"],
   },
 };
 

@@ -33,6 +33,7 @@ interface GMapProps {
   floodOverlay?: { url: string; north: number; south: number; east: number; west: number } | null;
   scanFloodOverlay?: { url: string; north: number; south: number; east: number; west: number } | null;
   floodTilesOn?: boolean; // crisp NOAH-style flood tile layer
+  landslideTilesOn?: boolean; // crisp landslide hazard tile layer
 
   // ✅ land drawing / area measurement
   drawingMode?: boolean;
@@ -127,6 +128,7 @@ export default function GMap({
   floodOverlay,
   scanFloodOverlay,
   floodTilesOn = false,
+  landslideTilesOn = false,
   drawingMode = false,
   onAreaMeasured,
   clearDrawingSignal = 0,
@@ -146,6 +148,7 @@ export default function GMap({
   const floodOverlayRef = useRef<any>(null);
   const scanFloodOverlayRef = useRef<any>(null);
   const floodTileTypeRef = useRef<any>(null);
+  const landslideTileTypeRef = useRef<any>(null);
   const scanRectRef = useRef<any>(null);
   const scanListenersRef = useRef<any[]>([]);
   const onScanCompleteRef = useRef<typeof onScanComplete | null>(null);
@@ -422,6 +425,30 @@ export default function GMap({
     floodTileTypeRef.current = t;
     return remove;
   }, [floodTilesOn]);
+
+  // Crisp landslide tile layer (separate toggle, earthy palette).
+  useEffect(() => {
+    const map = mapRef.current; if (!map) return;
+    const remove = () => {
+      if (!landslideTileTypeRef.current) return;
+      const arr = map.overlayMapTypes;
+      for (let i = arr.getLength() - 1; i >= 0; i--) {
+        if (arr.getAt(i) === landslideTileTypeRef.current) arr.removeAt(i);
+      }
+      landslideTileTypeRef.current = null;
+    };
+    remove();
+    if (!landslideTilesOn) return;
+    const t = new google.maps.ImageMapType({
+      getTileUrl: (coord: any, zoom: number) => `/api/landslide-tile/${zoom}/${coord.x}/${coord.y}?v=2`,
+      tileSize: new google.maps.Size(256, 256),
+      name: "Landslide",
+      opacity: 1,
+    });
+    map.overlayMapTypes.push(t);
+    landslideTileTypeRef.current = t;
+    return remove;
+  }, [landslideTilesOn]);
 
   // Scan tool: drag on the map to draw a box; on release, report its bounds.
   useEffect(() => {

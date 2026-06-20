@@ -133,6 +133,8 @@ export function Home() {
   const [scanLoading, setScanLoading] = useState(false);
   const [floodRisk, setFloodRisk] = useState<{ level: number; label: string } | null>(null);
   const [floodOverlayOn, setFloodOverlayOn] = useState(false);
+  const [landslideRisk, setLandslideRisk] = useState<{ level: number; label: string } | null>(null);
+  const [landslideOverlayOn, setLandslideOverlayOn] = useState(false);
   const [scanFloodOverlay, setScanFloodOverlay] = useState<{ url: string; north: number; south: number; east: number; west: number } | null>(null);
   const boundsReqRef = useRef(0);
 
@@ -152,9 +154,27 @@ export function Home() {
         const d = await res.json().catch(() => null);
         if (cancelled) return;
         if (d?.ok && d.inCoverage) setFloodRisk({ level: d.level, label: d.label });
-        else setFloodRisk(null); // outside Cebu coverage → hide
+        else setFloodRisk(null); // outside coverage → hide
       } catch {
         if (!cancelled) setFloodRisk(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedLocation]);
+
+  // Landslide hazard for the selected location.
+  useEffect(() => {
+    if (!selectedLocation) { setLandslideRisk(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/landslide-at?lat=${selectedLocation.lat}&lon=${selectedLocation.lon}`);
+        const d = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (d?.ok && d.inCoverage) setLandslideRisk({ level: d.level, label: d.label });
+        else setLandslideRisk(null);
+      } catch {
+        if (!cancelled) setLandslideRisk(null);
       }
     })();
     return () => { cancelled = true; };
@@ -725,12 +745,19 @@ export function Home() {
       const raw: any[] = data?.ok && Array.isArray(data.points) ? data.points : [];
       const found = raw.filter((p)=>p?.lat&&p?.lon&&p?.value_per_sqm);
 
-      // Tag every found point with its flood level in ONE batch call (free raster read).
+      // Tag every found point with flood + landslide levels (batch calls, free raster reads).
+      const ptsBody = JSON.stringify({ points: found.map((p)=>({lat:Number(p.lat),lon:Number(p.lon)})) });
       let floods: any[] = [];
+      let slides: any[] = [];
       try {
-        const fr = await fetch("/api/flood-at",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({points:found.map((p)=>({lat:Number(p.lat),lon:Number(p.lon)}))})});
+        const [fr, lr] = await Promise.all([
+          fetch("/api/flood-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
+          fetch("/api/landslide-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
+        ]);
         const fd = await fr.json().catch(()=>null);
+        const ld = await lr.json().catch(()=>null);
         if (fd?.ok && Array.isArray(fd.levels)) floods = fd.levels;
+        if (ld?.ok && Array.isArray(ld.levels)) slides = ld.levels;
       } catch {}
       if (myId !== boundsReqRef.current) return;
       const FCOLOR:any = {0:"#10b981",1:"#ca8a04",2:"#ea580c",3:"#dc2626"};
@@ -749,7 +776,7 @@ export function Home() {
           `</div>`;
         return { lat:Number(p.lat), lon:Number(p.lon), label:peso, info };
       });
-      const results = found.map((p,i)=>({ ...p, floodLevel: floods[i]?.level ?? null, floodLabel: floods[i]?.label ?? null }));
+      const results = found.map((p,i)=>({ ...p, floodLevel: floods[i]?.level ?? null, floodLabel: floods[i]?.label ?? null, landslideLevel: slides[i]?.level ?? null, landslideLabel: slides[i]?.label ?? null }));
       setNearMePoints(pts);
       setScanResults(results as ScanResult[]);
       // Color the flood ONLY inside the scanned box.
@@ -849,7 +876,7 @@ export function Home() {
       <ZonalSearchIndicator visible={loading} />
 
       <div className="absolute inset-0">
-        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} floodTilesOn={floodOverlayOn} scanFloodOverlay={scanFloodOverlay} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
+        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} floodTilesOn={floodOverlayOn} landslideTilesOn={landslideOverlayOn} scanFloodOverlay={scanFloodOverlay} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
       </div>
 
       {/* Brand pill */}
@@ -1290,6 +1317,15 @@ export function Home() {
                         </div>
                       );
                     })()}
+                    {landslideRisk&&(()=>{
+                      const lc=({0:{bg:"#ecfdf5",dot:"#10b981",txt:"No landslide"},1:{bg:"#fef9c3",dot:"#ca8a04",txt:"Low landslide risk"},2:{bg:"#ffedd5",dot:"#9a3412",txt:"Moderate landslide risk"},3:{bg:"#fee2e2",dot:"#78350f",txt:"High landslide risk"}} as any)[landslideRisk.level]||{bg:"#f3f4f6",dot:"#9ca3af",txt:landslideRisk.label};
+                      return (
+                        <div className="px-4 py-1.5 flex items-center gap-2" style={{background:lc.bg,borderTop:"1px solid #e8e0d8"}}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{background:lc.dot}}/>
+                          <span className="text-[11px] font-bold uppercase tracking-wide" style={{color:"#1e3a8a"}}>{lc.txt} · landslide</span>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Nearby zonal comparables (whole-barangay stats, with loaded sample as fallback) */}
@@ -1504,6 +1540,8 @@ export function Home() {
         onPickResult={(r) => setSelectedLocation({ lat: r.lat, lon: r.lon })}
         floodOn={floodOverlayOn}
         onFloodToggle={() => setFloodOverlayOn((v) => !v)}
+        landslideOn={landslideOverlayOn}
+        onLandslideToggle={() => setLandslideOverlayOn((v) => !v)}
       />
     </main>
   );

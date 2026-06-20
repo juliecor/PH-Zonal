@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, X, Loader2, Scan, Waves } from "lucide-react";
+import { MapPin, X, Loader2, Scan, Waves, Mountain } from "lucide-react";
 
 const NAVY = "#1e3a8a";
 const GOLD = "#c9a84c";
@@ -17,9 +17,12 @@ export type ScanResult = {
   province?: string;
   floodLevel?: number | null;
   floodLabel?: string | null;
+  landslideLevel?: number | null;
+  landslideLabel?: string | null;
 };
 
 const FLOOD_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#ea580c", 3: "#dc2626" };
+const LS_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#9a3412", 3: "#78350f" };
 
 export default function MapTools({
   onLocate,
@@ -30,6 +33,8 @@ export default function MapTools({
   onPickResult,
   floodOn,
   onFloodToggle,
+  landslideOn,
+  onLandslideToggle,
 }: {
   onLocate: (lat: number, lon: number) => void;
   scanActive: boolean;
@@ -39,6 +44,8 @@ export default function MapTools({
   onPickResult: (r: ScanResult) => void;
   floodOn: boolean;
   onFloodToggle: () => void;
+  landslideOn: boolean;
+  onLandslideToggle: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -83,14 +90,16 @@ export default function MapTools({
     );
   };
 
-  const pill = "flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-bold shadow-lg transition hover:scale-105 active:scale-95";
+  // Icon-only on phones (label hidden), full label on >= sm. Keeps one tidy row.
+  const pill = "flex items-center gap-1.5 rounded-full p-2.5 sm:px-3.5 sm:py-2 text-[13px] font-bold shadow-lg transition hover:scale-105 active:scale-95";
+  const lbl = "hidden sm:inline";
 
   return (
     <>
       {/* Top-center toolbar */}
-      <div className="fixed left-1/2 top-4 z-[60] flex -translate-x-1/2 items-center gap-2">
-        <button onClick={nearMe} className={`${pill} text-white`} style={{ background: NAVY, border: `2px solid ${GOLD}` }}>
-          <MapPin size={15} style={{ color: GOLD }} /> Near me
+      <div className="fixed left-1/2 top-3 z-[60] flex max-w-[96vw] -translate-x-1/2 items-center gap-1.5 sm:top-4 sm:gap-2">
+        <button onClick={nearMe} className={`${pill} text-white`} style={{ background: NAVY, border: `2px solid ${GOLD}` }} title="Zonal value near me">
+          <MapPin size={15} style={{ color: GOLD }} /> <span className={lbl}>Near me</span>
         </button>
         <button
           onClick={onScanToggle}
@@ -99,7 +108,7 @@ export default function MapTools({
           title="Draw a box on the map to find zonal values inside it"
         >
           <Scan size={15} style={{ color: scanActive ? "#fff" : GOLD }} />{" "}
-          {scanActive ? "Draw a box…" : "Scan area"}
+          <span className={lbl}>{scanActive ? "Draw a box…" : "Scan area"}</span>
         </button>
         <button
           onClick={onFloodToggle}
@@ -107,19 +116,41 @@ export default function MapTools({
           style={{ background: floodOn ? "#0ea5e9" : NAVY, border: `2px solid ${GOLD}` }}
           title="Show/hide the 100-yr flood hazard overlay"
         >
-          <Waves size={15} style={{ color: floodOn ? "#fff" : GOLD }} /> Flood
+          <Waves size={15} style={{ color: floodOn ? "#fff" : GOLD }} /> <span className={lbl}>Flood</span>
+        </button>
+        <button
+          onClick={onLandslideToggle}
+          className={`${pill} text-white`}
+          style={{ background: landslideOn ? "#92400e" : NAVY, border: `2px solid ${GOLD}` }}
+          title="Show/hide the landslide hazard overlay"
+        >
+          <Mountain size={15} style={{ color: landslideOn ? "#fff" : GOLD }} /> <span className={lbl}>Landslide</span>
         </button>
       </div>
 
-      {/* Flood legend (shown when overlay is on) */}
-      {floodOn && (
-        <div className="fixed bottom-24 left-4 z-[60] rounded-xl bg-white/95 px-3 py-2 shadow-lg" style={{ border: `1.5px solid ${GOLD}` }}>
-          <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">100-yr flood</div>
-          {[["#ca8a04", "Low"], ["#ea580c", "Moderate"], ["#dc2626", "High"]].map(([c, t]) => (
-            <div key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-700">
-              <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c as string }} /> {t}
+      {/* Legends (shown when each overlay is on) */}
+      {(floodOn || landslideOn) && (
+        <div className="fixed bottom-44 left-3 z-[60] space-y-2 sm:bottom-24 sm:left-4">
+          {floodOn && (
+            <div className="rounded-xl bg-white/95 px-3 py-2 shadow-lg" style={{ border: `1.5px solid ${GOLD}` }}>
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">100-yr flood</div>
+              {[["#ca8a04", "Low"], ["#ea580c", "Moderate"], ["#dc2626", "High"]].map(([c, t]) => (
+                <div key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-700">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c as string }} /> {t}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
+          {landslideOn && (
+            <div className="rounded-xl bg-white/95 px-3 py-2 shadow-lg" style={{ border: `1.5px solid ${GOLD}` }}>
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">Landslide</div>
+              {[["#ca8a04", "Low"], ["#9a3412", "Moderate"], ["#78350f", "High"]].map(([c, t]) => (
+                <div key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-700">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c as string }} /> {t}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -199,14 +230,18 @@ export default function MapTools({
                     {[r.barangay, r.city].filter(Boolean).join(", ")}
                     {r.classification_code ? ` · ${r.classification_code}` : ""}
                   </div>
-                  {r.floodLabel != null && (
-                    <div className="mt-0.5 inline-flex items-center gap-1 text-[10.5px] font-bold">
-                      <span className="h-1.5 w-1.5 rounded-full" style={{ background: FLOOD_COLOR[r.floodLevel ?? 0] || "#9ca3af" }} />
-                      <span style={{ color: FLOOD_COLOR[r.floodLevel ?? 0] || "#6b7280" }}>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10.5px] font-bold">
+                    {r.floodLabel != null && (
+                      <span className="inline-flex items-center gap-1" style={{ color: FLOOD_COLOR[r.floodLevel ?? 0] || "#6b7280" }}>
                         🌊 {r.floodLabel} flood
                       </span>
-                    </div>
-                  )}
+                    )}
+                    {r.landslideLabel != null && (
+                      <span className="inline-flex items-center gap-1" style={{ color: LS_COLOR[r.landslideLevel ?? 0] || "#6b7280" }}>
+                        ⛰️ {r.landslideLabel} landslide
+                      </span>
+                    )}
+                  </div>
                 </button>
               ))
             )}
