@@ -131,7 +131,34 @@ export function Home() {
   const [scanMode, setScanMode] = useState(false);
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const [scanLoading, setScanLoading] = useState(false);
+  const [floodRisk, setFloodRisk] = useState<{ level: number; label: string } | null>(null);
+  const [floodOverlayOn, setFloodOverlayOn] = useState(false);
+  const [scanFloodOverlay, setScanFloodOverlay] = useState<{ url: string; north: number; south: number; east: number; west: number } | null>(null);
   const boundsReqRef = useRef(0);
+
+  // Static config for the 100-yr flood overlay PNG (bounds from the source raster).
+  const FLOOD_OVERLAY = {
+    url: "/flood/cebu_flood_100yr.png",
+    north: 11.522445, south: 9.411945, east: 124.571104, west: 123.296404,
+  };
+
+  // Flood hazard (100-yr NOAH) for the selected location — instant raster lookup.
+  useEffect(() => {
+    if (!selectedLocation) { setFloodRisk(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/flood-at?lat=${selectedLocation.lat}&lon=${selectedLocation.lon}`);
+        const d = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (d?.ok && d.inCoverage) setFloodRisk({ level: d.level, label: d.label });
+        else setFloodRisk(null); // outside Cebu coverage → hide
+      } catch {
+        if (!cancelled) setFloodRisk(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedLocation]);
   const [anchorLocation, setAnchorLocation] = useState<LatLng | null>(null);
   const [boundary, setBoundary] = useState<Boundary | null>(null);
   const [mapType, setMapType] = useState<MapType>("street");
@@ -697,19 +724,39 @@ export function Home() {
       if (myId !== boundsReqRef.current) return;
       const raw: any[] = data?.ok && Array.isArray(data.points) ? data.points : [];
       const found = raw.filter((p)=>p?.lat&&p?.lon&&p?.value_per_sqm);
+
+      // Tag every found point with its flood level in ONE batch call (free raster read).
+      let floods: any[] = [];
+      try {
+        const fr = await fetch("/api/flood-at",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({points:found.map((p)=>({lat:Number(p.lat),lon:Number(p.lon)}))})});
+        const fd = await fr.json().catch(()=>null);
+        if (fd?.ok && Array.isArray(fd.levels)) floods = fd.levels;
+      } catch {}
+      if (myId !== boundsReqRef.current) return;
+      const FCOLOR:any = {0:"#10b981",1:"#ca8a04",2:"#ea580c",3:"#dc2626"};
+
       const esc = (s:any)=>String(s??"").replace(/[<>&]/g,(c)=>({"<":"&lt;",">":"&gt;","&":"&amp;"} as any)[c]);
-      const pts = found.map((p)=>{
+      const pts = found.map((p,i)=>{
         const peso = "₱"+Number(p.value_per_sqm).toLocaleString("en-PH");
+        const fl = floods[i];
+        const floodLine = fl ? `<div style="font-size:11px;color:${FCOLOR[fl.level]||"#6b7280"};margin-top:2px;font-weight:700">🌊 ${fl.label} (100-yr flood)</div>` : "";
         const info = `<div style="font-family:system-ui,sans-serif;max-width:230px;padding:2px 4px">`+
           `<div style="font-weight:800;color:#1e3a8a;font-size:15px">${peso}<span style="font-size:11px;color:#6b7280;font-weight:600">/sqm</span></div>`+
           (p.street?`<div style="font-weight:600;font-size:12px;color:#374151;margin-top:2px">${esc(p.street)}</div>`:"")+
           `<div style="font-size:11px;color:#6b7280">${esc([p.barangay,p.city,p.province].filter(Boolean).join(", "))}</div>`+
           (p.classification_code?`<div style="font-size:11px;color:#9ca3af;margin-top:2px">${esc(p.classification_code)}</div>`:"")+
+          floodLine+
           `</div>`;
         return { lat:Number(p.lat), lon:Number(p.lon), label:peso, info };
       });
+      const results = found.map((p,i)=>({ ...p, floodLevel: floods[i]?.level ?? null, floodLabel: floods[i]?.label ?? null }));
       setNearMePoints(pts);
-      setScanResults(found as ScanResult[]);
+      setScanResults(results as ScanResult[]);
+      // Color the flood ONLY inside the scanned box.
+      setScanFloodOverlay({
+        url: `/api/flood-overlay?minLat=${b.minLat}&maxLat=${b.maxLat}&minLon=${b.minLon}&maxLon=${b.maxLon}`,
+        north: b.maxLat, south: b.minLat, east: b.maxLon, west: b.minLon,
+      });
     } catch {} finally {
       if (myId === boundsReqRef.current) setScanLoading(false);
     }
@@ -802,7 +849,7 @@ export function Home() {
       <ZonalSearchIndicator visible={loading} />
 
       <div className="absolute inset-0">
-        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
+        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} floodTilesOn={floodOverlayOn} scanFloodOverlay={scanFloodOverlay} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
       </div>
 
       {/* Brand pill */}
@@ -1234,6 +1281,15 @@ export function Home() {
                         <span className="text-[11px] font-bold uppercase tracking-wide" style={{color:"#1e3a8a"}}>{String(selectedRow["Classification-"]??"")}</span>
                       </div>
                     )}
+                    {floodRisk&&(()=>{
+                      const fc=({0:{bg:"#ecfdf5",dot:"#10b981",txt:"No flood"},1:{bg:"#fef9c3",dot:"#ca8a04",txt:"Low flood risk"},2:{bg:"#ffedd5",dot:"#ea580c",txt:"Moderate flood risk"},3:{bg:"#fee2e2",dot:"#dc2626",txt:"High flood risk"}} as any)[floodRisk.level]||{bg:"#f3f4f6",dot:"#9ca3af",txt:floodRisk.label};
+                      return (
+                        <div className="px-4 py-1.5 flex items-center gap-2" style={{background:fc.bg,borderTop:"1px solid #e8e0d8"}}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{background:fc.dot}}/>
+                          <span className="text-[11px] font-bold uppercase tracking-wide" style={{color:"#1e3a8a"}}>{fc.txt} · 100-yr flood</span>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Nearby zonal comparables (whole-barangay stats, with loaded sample as fallback) */}
@@ -1442,10 +1498,12 @@ export function Home() {
       <MapTools
         onLocate={(lat, lon) => setSelectedLocation({ lat, lon })}
         scanActive={scanMode}
-        onScanToggle={() => { setScanMode((v) => !v); setScanResults([]); setNearMePoints([]); }}
+        onScanToggle={() => { setScanMode((v) => !v); setScanResults([]); setNearMePoints([]); setScanFloodOverlay(null); }}
         scanResults={scanResults}
         scanLoading={scanLoading}
         onPickResult={(r) => setSelectedLocation({ lat: r.lat, lon: r.lon })}
+        floodOn={floodOverlayOn}
+        onFloodToggle={() => setFloodOverlayOn((v) => !v)}
       />
     </main>
   );

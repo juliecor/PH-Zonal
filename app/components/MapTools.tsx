@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, X, Loader2, Scan } from "lucide-react";
+import { MapPin, X, Loader2, Scan, Waves } from "lucide-react";
 
 const NAVY = "#1e3a8a";
 const GOLD = "#c9a84c";
@@ -15,7 +15,11 @@ export type ScanResult = {
   barangay?: string;
   city?: string;
   province?: string;
+  floodLevel?: number | null;
+  floodLabel?: string | null;
 };
+
+const FLOOD_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#ea580c", 3: "#dc2626" };
 
 export default function MapTools({
   onLocate,
@@ -24,6 +28,8 @@ export default function MapTools({
   scanResults,
   scanLoading,
   onPickResult,
+  floodOn,
+  onFloodToggle,
 }: {
   onLocate: (lat: number, lon: number) => void;
   scanActive: boolean;
@@ -31,6 +37,8 @@ export default function MapTools({
   scanResults: ScanResult[];
   scanLoading: boolean;
   onPickResult: (r: ScanResult) => void;
+  floodOn: boolean;
+  onFloodToggle: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -93,7 +101,27 @@ export default function MapTools({
           <Scan size={15} style={{ color: scanActive ? "#fff" : GOLD }} />{" "}
           {scanActive ? "Draw a box…" : "Scan area"}
         </button>
+        <button
+          onClick={onFloodToggle}
+          className={`${pill} text-white`}
+          style={{ background: floodOn ? "#0ea5e9" : NAVY, border: `2px solid ${GOLD}` }}
+          title="Show/hide the 100-yr flood hazard overlay"
+        >
+          <Waves size={15} style={{ color: floodOn ? "#fff" : GOLD }} /> Flood
+        </button>
       </div>
+
+      {/* Flood legend (shown when overlay is on) */}
+      {floodOn && (
+        <div className="fixed bottom-24 left-4 z-[60] rounded-xl bg-white/95 px-3 py-2 shadow-lg" style={{ border: `1.5px solid ${GOLD}` }}>
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">100-yr flood</div>
+          {[["#ca8a04", "Low"], ["#ea580c", "Moderate"], ["#dc2626", "High"]].map(([c, t]) => (
+            <div key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-700">
+              <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c as string }} /> {t}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Scan hint */}
       {scanActive && !scanLoading && scanResults.length === 0 && (
@@ -171,6 +199,14 @@ export default function MapTools({
                     {[r.barangay, r.city].filter(Boolean).join(", ")}
                     {r.classification_code ? ` · ${r.classification_code}` : ""}
                   </div>
+                  {r.floodLabel != null && (
+                    <div className="mt-0.5 inline-flex items-center gap-1 text-[10.5px] font-bold">
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ background: FLOOD_COLOR[r.floodLevel ?? 0] || "#9ca3af" }} />
+                      <span style={{ color: FLOOD_COLOR[r.floodLevel ?? 0] || "#6b7280" }}>
+                        🌊 {r.floodLabel} flood
+                      </span>
+                    </div>
+                  )}
                 </button>
               ))
             )}

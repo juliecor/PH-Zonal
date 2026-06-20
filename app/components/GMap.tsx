@@ -30,6 +30,9 @@ interface GMapProps {
   onBoundsChange?: (b: { minLat: number; maxLat: number; minLon: number; maxLon: number; zoom: number }) => void;
   scanMode?: boolean; // when true, dragging draws a box to scan zonal values
   onScanComplete?: (b: { minLat: number; maxLat: number; minLon: number; maxLon: number }) => void;
+  floodOverlay?: { url: string; north: number; south: number; east: number; west: number } | null;
+  scanFloodOverlay?: { url: string; north: number; south: number; east: number; west: number } | null;
+  floodTilesOn?: boolean; // crisp NOAH-style flood tile layer
 
   // ✅ land drawing / area measurement
   drawingMode?: boolean;
@@ -121,6 +124,9 @@ export default function GMap({
   onBoundsChange,
   scanMode = false,
   onScanComplete,
+  floodOverlay,
+  scanFloodOverlay,
+  floodTilesOn = false,
   drawingMode = false,
   onAreaMeasured,
   clearDrawingSignal = 0,
@@ -137,6 +143,9 @@ export default function GMap({
   const infoWindowRef = useRef<any>(null);
   const onBoundsChangeRef = useRef<typeof onBoundsChange | null>(null);
   useEffect(() => { onBoundsChangeRef.current = onBoundsChange ?? null; }, [onBoundsChange]);
+  const floodOverlayRef = useRef<any>(null);
+  const scanFloodOverlayRef = useRef<any>(null);
+  const floodTileTypeRef = useRef<any>(null);
   const scanRectRef = useRef<any>(null);
   const scanListenersRef = useRef<any[]>([]);
   const onScanCompleteRef = useRef<typeof onScanComplete | null>(null);
@@ -363,6 +372,56 @@ export default function GMap({
       valueMarkersRef.current.push(dot);
     }
   }, [valuePoints]);
+
+  // Flood hazard overlay (a single colored PNG ground overlay — loads once, no lag).
+  useEffect(() => {
+    const map = mapRef.current; if (!map) return;
+    if (floodOverlayRef.current) { try { floodOverlayRef.current.setMap(null); } catch {} floodOverlayRef.current = null; }
+    if (!floodOverlay) return;
+    floodOverlayRef.current = new google.maps.GroundOverlay(
+      floodOverlay.url,
+      { north: floodOverlay.north, south: floodOverlay.south, east: floodOverlay.east, west: floodOverlay.west },
+      { opacity: 0.75, clickable: false } as any
+    );
+    floodOverlayRef.current.setMap(map);
+  }, [floodOverlay]);
+
+  // Scan-box flood overlay (colors flood ONLY inside the drawn scan area).
+  useEffect(() => {
+    const map = mapRef.current; if (!map) return;
+    if (scanFloodOverlayRef.current) { try { scanFloodOverlayRef.current.setMap(null); } catch {} scanFloodOverlayRef.current = null; }
+    if (!scanFloodOverlay) return;
+    scanFloodOverlayRef.current = new google.maps.GroundOverlay(
+      scanFloodOverlay.url,
+      { north: scanFloodOverlay.north, south: scanFloodOverlay.south, east: scanFloodOverlay.east, west: scanFloodOverlay.west },
+      { opacity: 0.8, clickable: false } as any
+    );
+    scanFloodOverlayRef.current.setMap(map);
+  }, [scanFloodOverlay]);
+
+  // Crisp flood tile layer (NOAH-style) — only visible tiles load → sharp + smooth.
+  useEffect(() => {
+    const map = mapRef.current; if (!map) return;
+    const remove = () => {
+      if (!floodTileTypeRef.current) return;
+      const arr = map.overlayMapTypes;
+      for (let i = arr.getLength() - 1; i >= 0; i--) {
+        if (arr.getAt(i) === floodTileTypeRef.current) arr.removeAt(i);
+      }
+      floodTileTypeRef.current = null;
+    };
+    remove();
+    if (!floodTilesOn) return;
+    const t = new google.maps.ImageMapType({
+      getTileUrl: (coord: any, zoom: number) => `/api/flood-tile/${zoom}/${coord.x}/${coord.y}?v=2`,
+      tileSize: new google.maps.Size(256, 256),
+      name: "Flood",
+      opacity: 1,
+    });
+    map.overlayMapTypes.push(t);
+    floodTileTypeRef.current = t;
+    return remove;
+  }, [floodTilesOn]);
 
   // Scan tool: drag on the map to draw a box; on release, report its bounds.
   useEffect(() => {
