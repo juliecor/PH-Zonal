@@ -1560,6 +1560,9 @@ export function Home() {
           province: String(selectedRow["Province-"] ?? ""),
           classification: String(selectedRow["Classification-"] ?? ""),
           zonalValue: String(selectedRow["ZonalValuepersqm.-"] ?? ""),
+          flood: floodRisk?.label,
+          landslide: landslideRisk?.label,
+          stormSurge: stormSurgeRisk?.label,
         } : null}
       />
 

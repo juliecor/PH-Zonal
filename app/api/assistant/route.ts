@@ -24,6 +24,17 @@ const STOP = new Set([
   "near", "nearby", "around", "this", "that", "place", "area", "to", "and", "or",
   "please", "can", "i", "we", "know", "find", "looking", "look", "search",
   "located", "location", "address", "street", "st", "brgy", "barangay", "city",
+  // filler / question / pronoun words (so they never become the street search term,
+  // and so a pronoun-only follow-up like "is it flooded?" is detected as having no
+  // place of its own → we reuse the place from the previous message).
+  "are", "mean", "really", "actually", "mention", "mentioned", "ba", "po", "sa",
+  "ng", "na", "yung", "yong", "ung", "ito", "dito", "dyan", "ang", "mga", "kung",
+  "it", "its", "it's", "yan", "yun", "yon", "nito", "niyan", "sya", "siya", "doon",
+  // hazard words — these are intent, never a place/street name
+  "flood", "flooded", "flooding", "floods", "baha", "bumabaha", "nababaha",
+  "landslide", "landslides", "guho", "pagguho", "storm", "surge", "bagyo",
+  "tsunami", "hazard", "hazards", "risk", "risks", "risky", "safe", "safety",
+  "ligtas", "delikado", "peligro", "prone", "disaster", "calamity", "kalamidad",
 ]);
 
 function tokensOf(s: string): string[] {
@@ -216,6 +227,100 @@ function looksLikeLocationQuery(q: string): boolean {
   return /\b(zonal|value|values|price|prices|presyo|magkano|halaga|worth|cost|sqm|per\s*sq|apprais|classification|street|st|ave|avenue|road|rd|subdivision|subd|barangay|brgy|sitio|purok|lot|land|city|town|municipal|how\s*much)\b/i.test(
     String(q || "")
   );
+}
+
+// Greeting / small-talk / question words that mean the message ISN'T just a place.
+const CHITCHAT_WORDS = new Set([
+  "hi", "hello", "hey", "yo", "hoy", "kumusta", "kamusta", "musta", "salamat",
+  "thanks", "thank", "thankyou", "thx", "please", "pls", "sige", "ok", "okay",
+  "okey", "yes", "yep", "yeah", "no", "nope", "oo", "opo", "hindi", "wala",
+  "test", "testing", "good", "morning", "afternoon", "evening", "night",
+  "maganda", "ganda", "galing", "nice", "wow", "haha", "hehe", "lol", "bye",
+  "who", "what", "when", "why", "how", "where", "which", "can", "you", "are",
+  "sino", "sina", "ano", "bakit", "paano", "kailan", "saan", "pwede", "puede",
+]);
+
+// A bare place name typed with NO "zonal/value/price" keyword, e.g.
+// "tondo manila", "cabuyao laguna", "poblacion talisay". Many users (non-techy)
+// just type the place. Treat these as location lookups too. Kept conservative:
+// short, all-alphabetic tokens, no greeting/question words — and resolveDomain
+// (which is FREE) still has to confirm it's a real place before any paid search.
+function looksLikeBarePlace(qRaw: string): boolean {
+  if (looksLikeLocationQuery(qRaw)) return true;
+  const toks = tokensOf(qRaw).filter((t) => t.length >= 2 && !STOP.has(t));
+  if (toks.length < 1 || toks.length > 6) return false; // bare place names are short
+  // every token must be an alphabetic word (place-like), none chit-talk/questions
+  for (const t of toks) {
+    if (!/^[a-zñ]+(-[a-zñ]+)*$/i.test(t)) return false; // letters (incl. hyphenated names)
+    if (CHITCHAT_WORDS.has(t)) return false;
+  }
+  return true;
+}
+
+// Does the user actually want hazard info (flood / landslide / storm surge)?
+// Gates the (paid) geocode so plain value questions stay free.
+function hazardIntent(q: string): boolean {
+  return /\b(flood|flooded|flooding|baha|bumabaha|nababaha|landslide|land\s*slide|guho|pagguho|storm\s*surge|surge|bagyo|tsunami|hazard|hazards|risk|risks|risky|safe|safety|ligtas|delikado|peligro|disaster|calamity|kalamidad|prone)\b/i.test(
+    String(q || "")
+  );
+}
+
+// Geocode a place to one lat/lon via our cached /api/geocode (memory + DB cache,
+// so repeats are free). Used only when the user asks about hazards.
+async function geocodePoint(
+  baseUrl: string,
+  query: string
+): Promise<{ lat: number; lon: number; label: string } | null> {
+  try {
+    const res = await fetch(`${baseUrl}/api/geocode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    const j = await res.json().catch(() => null);
+    if (j?.ok && Number.isFinite(Number(j.lat)) && Number.isFinite(Number(j.lon))) {
+      return { lat: Number(j.lat), lon: Number(j.lon), label: String(j.displayName ?? query) };
+    }
+  } catch {}
+  return null;
+}
+
+type HazLevel = { label: string; level: number } | null;
+// Flood (100-yr) + landslide + storm surge (worst-case SSA4) at a point. All FREE
+// (local raster reads). Returns {label,level}, or null when outside coverage.
+async function hazardAt(baseUrl: string, lat: number, lon: number) {
+  const [f, l, s] = await Promise.all([
+    getJson(`${baseUrl}/api/flood-at?lat=${lat}&lon=${lon}`, "").catch(() => null),
+    getJson(`${baseUrl}/api/landslide-at?lat=${lat}&lon=${lon}`, "").catch(() => null),
+    getJson(`${baseUrl}/api/stormsurge-at?lat=${lat}&lon=${lon}`, "").catch(() => null),
+  ]);
+  const pick = (d: any): HazLevel =>
+    d?.inCoverage ? { label: String(d.label || ""), level: Number(d.level) || 0 } : null;
+  return { flood: pick(f), landslide: pick(l), stormSurge: pick(s) };
+}
+
+// Map a hazard label (e.g. from selected-property context) back to a 0–3 level.
+function labelLevel(label?: string): number {
+  const s = String(label || "").toLowerCase();
+  if (/high/.test(s)) return 3;
+  if (/moderate|medium/.test(s)) return 2;
+  if (/low/.test(s)) return 1;
+  return 0; // "no flood" / "none"
+}
+
+// Does the message name a place of its own (any non-stopword token)?
+function hasOwnPlace(q: string): boolean {
+  return tokensOf(q).some((t) => t.length >= 2 && !STOP.has(t));
+}
+
+// Most recent earlier USER message that named a place — for follow-up recall
+// ("is it flooded?" → reuse the place from the previous turn).
+function lastPlaceFromHistory(history: any[]): string {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const m = history[i];
+    if (m?.role === "user" && m.content && hasOwnPlace(String(m.content))) return String(m.content);
+  }
+  return "";
 }
 
 function getVal(row: Row, key: string) {
@@ -588,24 +693,42 @@ export async function POST(req: Request) {
     //    independent, like the search box). This is critical: if we looked up the
     //    current province first, a loose fuzzy match could wrongly "find" a place
     //    there (e.g. "aborlan" → Cebu's "Tabuelan") and never reach the real one.
+    // FOLLOW-UP RECALL: if this message has intent but names no place of its own
+    // ("is it flooded?", "how about storm surge?", "magkano dito?"), reuse the place
+    // from the most recent earlier message that did name one. Place resolution then
+    // runs on `placeQuestion`; intent (hazard/area) still keys off the live question.
+    let placeQuestion = question;
+    const wantsIntent =
+      hazardIntent(question) || looksLikeLocationQuery(question) || looksLikeBarePlace(question);
+    const isFollowUp =
+      !hasOwnPlace(question) &&
+      (wantsIntent || /\b(it|this|that|here|there|dito|dyan|doon|yan|yun)\b/i.test(question));
+    if (isFollowUp) {
+      const prev = lastPlaceFromHistory(history);
+      if (prev) placeQuestion = `${prev} ${question}`;
+    }
+
     let targetDomain = domain;
     let resolvedSuggestions: string[] = [];
-    if (domain && looksLikeLocationQuery(question)) {
-      const resolved = await resolveDomain(baseUrl, question, domain);
+    // Resolve the province/domain when the message has location intent OR is just a
+    // bare place name ("cabuyao laguna", "tondo manila"). resolveDomain is free, so
+    // this only adds free lookups; the paid zonal search still gates on a resolved city.
+    if (domain && (looksLikeLocationQuery(placeQuestion) || looksLikeBarePlace(placeQuestion) || hazardIntent(question))) {
+      const resolved = await resolveDomain(baseUrl, placeQuestion, domain);
       if (resolved.domain) targetDomain = resolved.domain; // place belongs to another province
       else resolvedSuggestions = resolved.suggestions; // possible typo → "did you mean"
     }
 
     // 2) Look up on the resolved domain.
     let look: any = domain
-      ? await lookupZonal(baseUrl, cookie, targetDomain, question)
+      ? await lookupZonal(baseUrl, cookie, targetDomain, placeQuestion)
       : { rows: [] as Row[], total: 0, suggestions: [] as string[], stats: null, cityResolved: false };
 
     if (!look.rows.length && !look.suggestions.length && resolvedSuggestions.length) {
       look = { ...look, suggestions: resolvedSuggestions };
     }
 
-    const { rows, total, suggestions, stats, city: resolvedCity, barangay: resolvedBarangay, barangayList } = look;
+    const { rows, total, suggestions, stats, city: resolvedCity, barangay: resolvedBarangay, streetQ: resolvedStreet, barangayList } = look;
     const dataLines = rows.slice(0, MAX_ROWS_IN_PROMPT).map(rowToLine);
 
     // Full barangay list for the resolved city, so the AI can answer "what/how many
@@ -624,9 +747,16 @@ export async function POST(req: Request) {
       const loc = [context.street, context.barangay, context.city, context.province]
         .filter(Boolean)
         .join(", ");
+      const hz = [
+        context.flood ? `flood: ${context.flood}` : "",
+        context.landslide ? `landslide: ${context.landslide}` : "",
+        context.stormSurge ? `storm surge (worst-case): ${context.stormSurge}` : "",
+      ].filter(Boolean).join(" · ");
       selectedBlock =
         `CURRENTLY SELECTED PROPERTY (use this when the user says "this", "here", "selected"):\n` +
-        `- ${loc}${context.classification ? ` [${context.classification}]` : ""}: ₱${context.zonalValue || "no value on record"}/sqm\n\n`;
+        `- ${loc}${context.classification ? ` [${context.classification}]` : ""}: ₱${context.zonalValue || "no value on record"}/sqm` +
+        (hz ? `\n- Hazards here (NOAH): ${hz}` : "") +
+        `\n\n`;
     }
 
     // The TRUE total count of matching records (all pages). We only LIST a sample
@@ -677,11 +807,78 @@ export async function POST(req: Request) {
       }
     }
 
+    // Hazard profile — ONLY when the user asks about it (flood/landslide/surge/safe…).
+    // Geocode the most specific place we resolved (cached → usually free), then read
+    // the three hazard rasters (free). Plain value questions never reach this.
+    // Builds (a) a text block for the model and (b) a structured object the UI renders
+    // as a pretty card.
+    let hazardBlock = "";
+    let hazardResp: any = null;
+    if (hazardIntent(question)) {
+      let where = "";
+      let hz: { flood: HazLevel; landslide: HazLevel; stormSurge: HazLevel } | null = null;
+
+      // (1) Best: geocode the resolved place and sample the rasters. Pick the row
+      // that actually matches the searched STREET (so "colon" geocodes a Colon row,
+      // not whatever happened to be rows[0]); label the card to match that row.
+      let gq = "";
+      if (rows.length) {
+        let tRow = rows[0];
+        if (resolvedStreet) {
+          const sq = normLoose(resolvedStreet);
+          const hit = rows.find((r: Row) => {
+            const s = normLoose(getVal(r, "Street/Subdivision-"));
+            const v = normLoose(getVal(r, "Vicinity-"));
+            return (s && s.includes(sq)) || (v && v.includes(sq));
+          });
+          if (hit) tRow = hit;
+        }
+        const st = String(getVal(tRow, "Street/Subdivision-") ?? "").trim();
+        const br = String(getVal(tRow, "Barangay-") ?? "").trim();
+        const ci = String(getVal(tRow, "City-") ?? "").trim();
+        const pr = String(getVal(tRow, "Province-") ?? "").trim();
+        gq = [st, br, ci, pr, "Philippines"].filter(Boolean).join(", ");
+        where = [st || br, ci].filter(Boolean).join(", ") || ci;
+      } else if (resolvedCity) {
+        gq = [resolvedBarangay, resolvedCity, "Philippines"].filter(Boolean).join(", ");
+        where = [resolvedBarangay, resolvedCity].filter(Boolean).join(", ");
+      }
+      if (gq) {
+        const pt = await geocodePoint(baseUrl, gq);
+        if (pt) {
+          hz = await hazardAt(baseUrl, pt.lat, pt.lon);
+          if (!where) where = pt.label;
+        }
+      }
+      // (2) Fallback: the property currently selected on the map (free — from context).
+      if (!hz && context && (context.city || context.barangay)) {
+        const ctx = (lbl?: string): HazLevel => (lbl ? { label: lbl, level: labelLevel(lbl) } : null);
+        hz = { flood: ctx(context.flood), landslide: ctx(context.landslide), stormSurge: ctx(context.stormSurge) };
+        where = [context.street || context.barangay, context.city].filter(Boolean).join(", ");
+      }
+
+      if (hz) {
+        hazardResp = {
+          place: where,
+          flood: hz.flood,
+          landslide: hz.landslide,
+          stormSurge: hz.stormSurge,
+        };
+        hazardBlock =
+          `\n\nHAZARD PROFILE for ${where} (NOAH data at this point — flood = 100-yr; ` +
+          `storm surge = worst-case SSA4; "None" = NOT in that hazard's zone):\n` +
+          `- Flood: ${hz.flood?.label || "None"}\n` +
+          `- Landslide: ${hz.landslide?.label || "None"}\n` +
+          `- Storm surge: ${hz.stormSurge?.label || "None"}\n` +
+          `(A detailed hazard card is shown to the user, so keep your text to ONE short friendly summary line — do not list each hazard again. Note hazards can vary within a city.)`;
+      }
+    }
+
     const dataBlock =
       dataLines.length > 0
         ? `TOTAL MATCHING RECORDS IN OUR DATABASE: ${total}${shownNote}\n\n` +
-          `SAMPLE OF MATCHING ZONAL RECORDS:\n${dataLines.join("\n")}${statsBlock}${landBlock}${barangayListBlock}`
-        : `TOTAL MATCHING RECORDS IN OUR DATABASE: 0\n(none found for this query)${suggestionBlock}${barangayListBlock}`;
+          `SAMPLE OF MATCHING ZONAL RECORDS:\n${dataLines.join("\n")}${statsBlock}${landBlock}${barangayListBlock}${hazardBlock}`
+        : `TOTAL MATCHING RECORDS IN OUR DATABASE: 0\n(none found for this query)${suggestionBlock}${barangayListBlock}${hazardBlock}`;
 
     // Follow-up quick-replies (tappable) after a successful location answer.
     let followups: string[] = [];
@@ -714,7 +911,8 @@ export async function POST(req: Request) {
       "(4) If no record is provided but CLOSEST MATCHING PLACES are listed, the user likely misspelled it — politely ask 'Did you mean …?' and list those exact suggestions. If there are none, say you don't have a record for that exact location and suggest picking it on the map or checking the spelling. Either way, do NOT guess a number. " +
       "(5) Keep replies short and friendly — a sentence or two (a few more only when listing). No emojis except a friendly greeting. " +
       "(6) Politely steer fully off-topic questions (not about zonal values, locations, or this app) back to what you can help with. " +
-      "(7) LAND VALUE: if a LAND VALUE ESTIMATE is provided, present it clearly (area × ₱/sqm = total) and note it's an estimate based on the zonal value, not the market price.\n\n" +
+      "(7) LAND VALUE: if a LAND VALUE ESTIMATE is provided, present it clearly (area × ₱/sqm = total) and note it's an estimate based on the zonal value, not the market price. " +
+      "(8) HAZARDS: if a HAZARD PROFILE or 'Hazards here' is provided, report the flood, landslide, and storm-surge levels in plain words (e.g. 'Moderate flood risk, no landslide, high worst-case storm surge'). These come from NOAH/PAGASA hazard maps: flood is the 100-yr scenario; storm surge is the worst-case SSA4 (>4m) scenario. Briefly remind that it's a hazard-map estimate for that spot and that risk can differ across a city. NEVER state a hazard level unless it is given in the data — if none is provided, say you can check it if they confirm the exact place.\n\n" +
       selectedBlock +
       dataBlock;
 
@@ -743,6 +941,7 @@ export async function POST(req: Request) {
       matched: dataLines.length,
       suggestions: dataLines.length === 0 ? suggestions ?? [] : [],
       followups,
+      hazard: hazardResp,
     });
   } catch (e: any) {
     console.error("assistant error:", e);

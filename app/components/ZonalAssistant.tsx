@@ -10,13 +10,19 @@ export type AssistantContext = {
   province?: string;
   classification?: string;
   zonalValue?: string;
+  flood?: string;        // e.g. "Low" | "Moderate" | "High"
+  landslide?: string;
+  stormSurge?: string;   // worst-case SSA4
 } | null;
 
+type Haz = { label: string; level: number } | null;
+type HazardData = { place?: string; flood: Haz; landslide: Haz; stormSurge: Haz } | null;
 type Msg = {
   role: "user" | "assistant";
   content: string;
   suggestions?: string[];
   followups?: string[];
+  hazard?: HazardData;
 };
 
 const LOGO = "/pictures/zonal%20ai-Photoroom.png";
@@ -134,6 +140,7 @@ export default function ZonalAssistant({
           content: String(data.text ?? "").trim(),
           suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 8) : [],
           followups: Array.isArray(data.followups) ? data.followups.slice(0, 4) : [],
+          hazard: data.hazard ?? null,
         },
       ]);
     } catch (e: any) {
@@ -300,6 +307,8 @@ export default function ZonalAssistant({
                 <Bubble role={m.role}>
                   {m.role === "assistant" ? <MarkdownText text={m.content} /> : m.content}
                 </Bubble>
+
+                {m.role === "assistant" && m.hazard && <HazardCard hazard={m.hazard} />}
 
                 {m.role === "assistant" && m.content && (
                   <div className="pl-11">
@@ -535,28 +544,39 @@ export default function ZonalAssistant({
 
 /* ── Small presentational pieces ── */
 
-// Lightweight markdown: **bold**, bullet lists, and highlighted ₱ amounts.
+// Theme color for a hazard term so it pops in the chat.
+function hazardColor(noun: string): string {
+  const n = noun.toLowerCase();
+  if (/surge/.test(n)) return "#6d28d9"; // storm surge — violet
+  if (/landslide/.test(n)) return "#92400e"; // landslide — earthy brown
+  return "#0284c7"; // flood / baha — blue
+}
+
+// Lightweight markdown: **bold**, ₱ amounts, and colored hazard terms
+// (flood = blue, landslide = brown, storm surge = violet). One combined pass.
+const INLINE_RE =
+  /(\*\*[^*]+\*\*)|(₱[\d,]+(?:\.\d+)?)|\b((?:high|moderate|low|no|mataas|katamtaman|mababa|walang)\s+(?:worst-case\s+)?)?(storm[\s-]?surge|surge|landslides?|flood(?:ed|ing)?|baha)((?:\s+(?:risk|zone|hazard))?)\b/gi;
+
 function renderInline(s: string, keyBase: string) {
-  const parts = s.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((p, i) => {
-    if (/^\*\*[^*]+\*\*$/.test(p)) {
-      return (
-        <strong key={`${keyBase}-b${i}`} style={{ color: NAVY }}>
-          {p.slice(2, -2)}
-        </strong>
-      );
+  const nodes: React.ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  INLINE_RE.lastIndex = 0;
+  let k = 0;
+  while ((m = INLINE_RE.exec(s)) !== null) {
+    if (m.index > last) nodes.push(<span key={`${keyBase}-t${k}`}>{s.slice(last, m.index)}</span>);
+    if (m[1]) {
+      nodes.push(<strong key={`${keyBase}-b${k}`} style={{ color: NAVY }}>{m[1].slice(2, -2)}</strong>);
+    } else if (m[2]) {
+      nodes.push(<strong key={`${keyBase}-p${k}`} style={{ color: NAVY }}>{m[2]}</strong>);
+    } else {
+      nodes.push(<strong key={`${keyBase}-h${k}`} style={{ color: hazardColor(m[4]) }}>{m[0]}</strong>);
     }
-    const sub = p.split(/(₱[\d,]+(?:\.\d+)?)/g);
-    return sub.map((x, j) =>
-      /^₱[\d,]/.test(x) ? (
-        <strong key={`${keyBase}-${i}-${j}`} style={{ color: NAVY }}>
-          {x}
-        </strong>
-      ) : (
-        <span key={`${keyBase}-${i}-${j}`}>{x}</span>
-      )
-    );
-  });
+    last = INLINE_RE.lastIndex;
+    k++;
+  }
+  if (last < s.length) nodes.push(<span key={`${keyBase}-t${k}`}>{s.slice(last)}</span>);
+  return nodes;
 }
 
 function MarkdownText({ text }: { text: string }) {
@@ -589,6 +609,54 @@ function MarkdownText({ text }: { text: string }) {
   });
   flush("end");
   return <>{out}</>;
+}
+
+// Severity → pill colors (0 None=green, 1 Low=amber, 2 Moderate=orange, 3 High=red).
+function sevStyle(level: number) {
+  if (level >= 3) return { txt: "#b91c1c", bg: "#fee2e2" };
+  if (level === 2) return { txt: "#c2410c", bg: "#ffedd5" };
+  if (level === 1) return { txt: "#b45309", bg: "#fef3c7" };
+  return { txt: "#15803d", bg: "#dcfce7" };
+}
+
+// Pretty hazard card shown under the AI reply when the user asks about hazards.
+function HazardCard({ hazard }: { hazard: NonNullable<HazardData> }) {
+  const rows = [
+    { icon: "🌊", name: "Flood", sub: "100-yr", haz: hazard.flood },
+    { icon: "⛰️", name: "Landslide", sub: "", haz: hazard.landslide },
+    { icon: "🌀", name: "Storm surge", sub: "worst-case", haz: hazard.stormSurge },
+  ];
+  return (
+    <div className="pl-11">
+      <div style={{ border: `1.5px solid ${GOLD}`, borderRadius: 14, background: "#fff", overflow: "hidden", boxShadow: "0 3px 12px rgba(15,23,60,0.08)" }}>
+        <div style={{ background: NAVY, color: "#fff", padding: "7px 12px", fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", gap: 6 }}>
+          <span>⚠️ Hazard check</span>
+          {hazard.place && (
+            <span style={{ color: GOLD, fontWeight: 700, marginLeft: "auto", maxWidth: "62%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {hazard.place}
+            </span>
+          )}
+        </div>
+        {rows.map((r, i) => {
+          const lvl = r.haz?.level ?? 0;
+          const sev = sevStyle(lvl);
+          return (
+            <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderTop: i === 0 ? "none" : "1px solid #f1f1f4" }}>
+              <span style={{ fontSize: 15 }}>{r.icon}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: "#374151" }}>{r.name}</span>
+              {r.sub && <span style={{ fontSize: 10, color: "#9ca3af" }}>{r.sub}</span>}
+              <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 800, color: sev.txt, background: sev.bg, padding: "2px 10px", borderRadius: 999 }}>
+                {r.haz?.label || "None"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 9.5, color: "#9ca3af", marginTop: 3 }}>
+        Based on NOAH / PAGASA hazard maps — risk can vary within a city.
+      </div>
+    </div>
+  );
 }
 
 function MsgActions({ text }: { text: string }) {
