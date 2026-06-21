@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, X, Loader2, Scan, Waves, Mountain } from "lucide-react";
+import { MapPin, X, Loader2, Scan, Waves, Mountain, Tornado } from "lucide-react";
 
 const NAVY = "#1e3a8a";
 const GOLD = "#c9a84c";
@@ -19,10 +19,13 @@ export type ScanResult = {
   floodLabel?: string | null;
   landslideLevel?: number | null;
   landslideLabel?: string | null;
+  stormSurgeLevel?: number | null;
+  stormSurgeLabel?: string | null;
 };
 
 const FLOOD_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#ea580c", 3: "#dc2626" };
 const LS_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#9a3412", 3: "#78350f" };
+const SS_COLOR: Record<number, string> = { 0: "#10b981", 1: "#8b5cf6", 2: "#7c3aed", 3: "#6d28d9" };
 
 export default function MapTools({
   onLocate,
@@ -35,6 +38,8 @@ export default function MapTools({
   onFloodToggle,
   landslideOn,
   onLandslideToggle,
+  stormSurgeOn,
+  onStormSurgeToggle,
 }: {
   onLocate: (lat: number, lon: number) => void;
   scanActive: boolean;
@@ -46,6 +51,8 @@ export default function MapTools({
   onFloodToggle: () => void;
   landslideOn: boolean;
   onLandslideToggle: () => void;
+  stormSurgeOn: boolean;
+  onStormSurgeToggle: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -126,10 +133,18 @@ export default function MapTools({
         >
           <Mountain size={15} style={{ color: landslideOn ? "#fff" : GOLD }} /> <span className={lbl}>Landslide</span>
         </button>
+        <button
+          onClick={onStormSurgeToggle}
+          className={`${pill} text-white`}
+          style={{ background: stormSurgeOn ? "#6d28d9" : NAVY, border: `2px solid ${GOLD}` }}
+          title="Show/hide the worst-case (SSA4) storm-surge hazard overlay"
+        >
+          <Tornado size={15} style={{ color: stormSurgeOn ? "#fff" : GOLD }} /> <span className={lbl}>Storm surge</span>
+        </button>
       </div>
 
       {/* Legends (shown when each overlay is on) */}
-      {(floodOn || landslideOn) && (
+      {(floodOn || landslideOn || stormSurgeOn) && (
         <div className="fixed bottom-44 left-3 z-[60] space-y-2 sm:bottom-24 sm:left-4">
           {floodOn && (
             <div className="rounded-xl bg-white/95 px-3 py-2 shadow-lg" style={{ border: `1.5px solid ${GOLD}` }}>
@@ -145,6 +160,16 @@ export default function MapTools({
             <div className="rounded-xl bg-white/95 px-3 py-2 shadow-lg" style={{ border: `1.5px solid ${GOLD}` }}>
               <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">Landslide</div>
               {[["#ca8a04", "Low"], ["#9a3412", "Moderate"], ["#78350f", "High"]].map(([c, t]) => (
+                <div key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-700">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c as string }} /> {t}
+                </div>
+              ))}
+            </div>
+          )}
+          {stormSurgeOn && (
+            <div className="rounded-xl bg-white/95 px-3 py-2 shadow-lg" style={{ border: `1.5px solid ${GOLD}` }}>
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">Storm surge · worst case</div>
+              {[["#8b5cf6", "Low"], ["#7c3aed", "Moderate"], ["#6d28d9", "High"]].map(([c, t]) => (
                 <div key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-700">
                   <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c as string }} /> {t}
                 </div>
@@ -239,6 +264,11 @@ export default function MapTools({
                     {r.landslideLabel != null && (
                       <span className="inline-flex items-center gap-1" style={{ color: LS_COLOR[r.landslideLevel ?? 0] || "#6b7280" }}>
                         ⛰️ {r.landslideLabel} landslide
+                      </span>
+                    )}
+                    {r.stormSurgeLabel != null && (
+                      <span className="inline-flex items-center gap-1" style={{ color: SS_COLOR[r.stormSurgeLevel ?? 0] || "#6b7280" }}>
+                        🌀 {r.stormSurgeLabel} surge
                       </span>
                     )}
                   </div>

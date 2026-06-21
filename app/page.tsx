@@ -135,6 +135,8 @@ export function Home() {
   const [floodOverlayOn, setFloodOverlayOn] = useState(false);
   const [landslideRisk, setLandslideRisk] = useState<{ level: number; label: string } | null>(null);
   const [landslideOverlayOn, setLandslideOverlayOn] = useState(false);
+  const [stormSurgeRisk, setStormSurgeRisk] = useState<{ level: number; label: string } | null>(null);
+  const [stormSurgeOverlayOn, setStormSurgeOverlayOn] = useState(false);
   const [scanFloodOverlay, setScanFloodOverlay] = useState<{ url: string; north: number; south: number; east: number; west: number } | null>(null);
   const boundsReqRef = useRef(0);
 
@@ -175,6 +177,24 @@ export function Home() {
         else setLandslideRisk(null);
       } catch {
         if (!cancelled) setLandslideRisk(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedLocation]);
+
+  // Storm-surge hazard (worst-case SSA4) for the selected location.
+  useEffect(() => {
+    if (!selectedLocation) { setStormSurgeRisk(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/stormsurge-at?lat=${selectedLocation.lat}&lon=${selectedLocation.lon}`);
+        const d = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (d?.ok && d.inCoverage) setStormSurgeRisk({ level: d.level, label: d.label });
+        else setStormSurgeRisk(null);
+      } catch {
+        if (!cancelled) setStormSurgeRisk(null);
       }
     })();
     return () => { cancelled = true; };
@@ -745,19 +765,23 @@ export function Home() {
       const raw: any[] = data?.ok && Array.isArray(data.points) ? data.points : [];
       const found = raw.filter((p)=>p?.lat&&p?.lon&&p?.value_per_sqm);
 
-      // Tag every found point with flood + landslide levels (batch calls, free raster reads).
+      // Tag every found point with flood + landslide + storm-surge levels (batch calls, free raster reads).
       const ptsBody = JSON.stringify({ points: found.map((p)=>({lat:Number(p.lat),lon:Number(p.lon)})) });
       let floods: any[] = [];
       let slides: any[] = [];
+      let surges: any[] = [];
       try {
-        const [fr, lr] = await Promise.all([
+        const [fr, lr, sr] = await Promise.all([
           fetch("/api/flood-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
           fetch("/api/landslide-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
+          fetch("/api/stormsurge-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
         ]);
         const fd = await fr.json().catch(()=>null);
         const ld = await lr.json().catch(()=>null);
+        const sd = await sr.json().catch(()=>null);
         if (fd?.ok && Array.isArray(fd.levels)) floods = fd.levels;
         if (ld?.ok && Array.isArray(ld.levels)) slides = ld.levels;
+        if (sd?.ok && Array.isArray(sd.levels)) surges = sd.levels;
       } catch {}
       if (myId !== boundsReqRef.current) return;
       const FCOLOR:any = {0:"#10b981",1:"#ca8a04",2:"#ea580c",3:"#dc2626"};
@@ -776,7 +800,7 @@ export function Home() {
           `</div>`;
         return { lat:Number(p.lat), lon:Number(p.lon), label:peso, info };
       });
-      const results = found.map((p,i)=>({ ...p, floodLevel: floods[i]?.level ?? null, floodLabel: floods[i]?.label ?? null, landslideLevel: slides[i]?.level ?? null, landslideLabel: slides[i]?.label ?? null }));
+      const results = found.map((p,i)=>({ ...p, floodLevel: floods[i]?.level ?? null, floodLabel: floods[i]?.label ?? null, landslideLevel: slides[i]?.level ?? null, landslideLabel: slides[i]?.label ?? null, stormSurgeLevel: surges[i]?.level ?? null, stormSurgeLabel: surges[i]?.label ?? null }));
       setNearMePoints(pts);
       setScanResults(results as ScanResult[]);
       // Color the flood ONLY inside the scanned box.
@@ -876,7 +900,7 @@ export function Home() {
       <ZonalSearchIndicator visible={loading} />
 
       <div className="absolute inset-0">
-        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} floodTilesOn={floodOverlayOn} landslideTilesOn={landslideOverlayOn} scanFloodOverlay={scanFloodOverlay} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
+        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} floodTilesOn={floodOverlayOn} landslideTilesOn={landslideOverlayOn} stormSurgeTilesOn={stormSurgeOverlayOn} scanFloodOverlay={scanFloodOverlay} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
       </div>
 
       {/* Brand pill */}
@@ -1326,6 +1350,15 @@ export function Home() {
                         </div>
                       );
                     })()}
+                    {stormSurgeRisk&&(()=>{
+                      const sc=({0:{bg:"#ecfdf5",dot:"#10b981",txt:"No storm surge"},1:{bg:"#ede9fe",dot:"#8b5cf6",txt:"Low storm-surge risk"},2:{bg:"#ddd6fe",dot:"#7c3aed",txt:"Moderate storm-surge risk"},3:{bg:"#e9d5ff",dot:"#6d28d9",txt:"High storm-surge risk"}} as any)[stormSurgeRisk.level]||{bg:"#f3f4f6",dot:"#9ca3af",txt:stormSurgeRisk.label};
+                      return (
+                        <div className="px-4 py-1.5 flex items-center gap-2" style={{background:sc.bg,borderTop:"1px solid #e8e0d8"}}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{background:sc.dot}}/>
+                          <span className="text-[11px] font-bold uppercase tracking-wide" style={{color:"#1e3a8a"}}>{sc.txt} · worst-case surge</span>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Nearby zonal comparables (whole-barangay stats, with loaded sample as fallback) */}
@@ -1542,6 +1575,8 @@ export function Home() {
         onFloodToggle={() => setFloodOverlayOn((v) => !v)}
         landslideOn={landslideOverlayOn}
         onLandslideToggle={() => setLandslideOverlayOn((v) => !v)}
+        stormSurgeOn={stormSurgeOverlayOn}
+        onStormSurgeToggle={() => setStormSurgeOverlayOn((v) => !v)}
       />
     </main>
   );

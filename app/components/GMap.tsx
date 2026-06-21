@@ -34,6 +34,7 @@ interface GMapProps {
   scanFloodOverlay?: { url: string; north: number; south: number; east: number; west: number } | null;
   floodTilesOn?: boolean; // crisp NOAH-style flood tile layer
   landslideTilesOn?: boolean; // crisp landslide hazard tile layer
+  stormSurgeTilesOn?: boolean; // crisp storm-surge (SSA4) tile layer
 
   // ✅ land drawing / area measurement
   drawingMode?: boolean;
@@ -129,6 +130,7 @@ export default function GMap({
   scanFloodOverlay,
   floodTilesOn = false,
   landslideTilesOn = false,
+  stormSurgeTilesOn = false,
   drawingMode = false,
   onAreaMeasured,
   clearDrawingSignal = 0,
@@ -149,6 +151,7 @@ export default function GMap({
   const scanFloodOverlayRef = useRef<any>(null);
   const floodTileTypeRef = useRef<any>(null);
   const landslideTileTypeRef = useRef<any>(null);
+  const stormSurgeTileTypeRef = useRef<any>(null);
   const scanRectRef = useRef<any>(null);
   const scanListenersRef = useRef<any[]>([]);
   const onScanCompleteRef = useRef<typeof onScanComplete | null>(null);
@@ -449,6 +452,30 @@ export default function GMap({
     landslideTileTypeRef.current = t;
     return remove;
   }, [landslideTilesOn]);
+
+  // Crisp storm-surge tile layer (separate toggle, violet palette).
+  useEffect(() => {
+    const map = mapRef.current; if (!map) return;
+    const remove = () => {
+      if (!stormSurgeTileTypeRef.current) return;
+      const arr = map.overlayMapTypes;
+      for (let i = arr.getLength() - 1; i >= 0; i--) {
+        if (arr.getAt(i) === stormSurgeTileTypeRef.current) arr.removeAt(i);
+      }
+      stormSurgeTileTypeRef.current = null;
+    };
+    remove();
+    if (!stormSurgeTilesOn) return;
+    const t = new google.maps.ImageMapType({
+      getTileUrl: (coord: any, zoom: number) => `/api/stormsurge-tile/${zoom}/${coord.x}/${coord.y}?v=1`,
+      tileSize: new google.maps.Size(256, 256),
+      name: "StormSurge",
+      opacity: 1,
+    });
+    map.overlayMapTypes.push(t);
+    stormSurgeTileTypeRef.current = t;
+    return remove;
+  }, [stormSurgeTilesOn]);
 
   // Scan tool: drag on the map to draw a box; on release, report its bounds.
   useEffect(() => {
