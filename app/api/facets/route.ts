@@ -28,6 +28,7 @@ function domainToProvince(domain: string): string | null {
   if(sub.includes("kalinga-apayao")) return "KALINGA";
   if(sub.includes("aklan")) return "AKLAN";
   if (sub.includes("aurora")) return "AURORA";
+  if(sub.includes("laguna")) return "LAGUNA";
   if(sub.includes("kalinga-apayao")) return "KALINGA";
   if(sub.includes("lanaodelsur")) return "LANAO DEL SUR";
   if(sub.includes("leyte-bilaran")) return "LEYTE";
