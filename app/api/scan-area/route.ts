@@ -12,7 +12,7 @@ const MAX_GEOCODES = 90;  // Google street-geocodes per scan (cache hits don't c
 const GEO_CONCURRENCY = 6;
 
 // In-memory reverse-geocode cache (cheap; a scan does ≤5 reverse lookups).
-const REV_CACHE: Map<string, { city: string; barangay: string; province: string } | null> =
+const REV_CACHE: Map<string, { city: string; barangay: string; province: string; street: string } | null> =
   (globalThis as any).__REV_GEO__ ?? new Map();
 (globalThis as any).__REV_GEO__ = REV_CACHE;
 
@@ -39,9 +39,10 @@ async function reverseGeocode(lat: number, lon: number) {
     const data = await res.json().catch(() => null);
     const results: any[] = Array.isArray(data?.results) ? data.results : [];
     if (!results.length) { REV_CACHE.set(key, null); return null; }
-    let city = "", barangay = "", province = "";
+    let city = "", barangay = "", province = "", street = "";
     for (const r of results) {
       const ac1 = r.address_components || [];
+      street = street || comp(ac1, "route");
       city = city || comp(ac1, "locality") || comp(ac1, "administrative_area_level_3");
       barangay =
         barangay ||
@@ -51,10 +52,10 @@ async function reverseGeocode(lat: number, lon: number) {
         comp(ac1, "administrative_area_level_4") ||
         comp(ac1, "administrative_area_level_5");
       province = province || comp(ac1, "administrative_area_level_2") || comp(ac1, "administrative_area_level_1");
-      if (city && barangay) break;
+      if (city && barangay && street) break;
     }
     const clean = (s: string) => s.replace(/^Barangay\s+/i, "").replace(/^Brgy\.?\s+/i, "").trim();
-    const out = { city: clean(city), barangay: clean(barangay), province };
+    const out = { city: clean(city), barangay: clean(barangay), province, street: clean(street) };
     REV_CACHE.set(key, out);
     return out;
   } catch {
@@ -101,6 +102,16 @@ function parseVal(v: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+// Same-city check (ignores "City"/punctuation): a San Juan scan must never return a
+// Pasig value. Keeps results trustworthy — we'd rather say "no data yet" than cross
+// a city line.
+function sameCity(a: string, b: string): boolean {
+  const norm = (s: string) =>
+    String(s || "").toUpperCase().replace(/\bCITY\b/g, "").replace(/[^A-Z0-9]/g, " ").replace(/\s+/g, " ").trim();
+  const x = norm(a), y = norm(b);
+  return !!x && !!y && (x === y || x.includes(y) || y.includes(x));
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -117,6 +128,77 @@ export async function POST(req: Request) {
     const host = req.headers.get("host") || "localhost:3000";
     const baseUrl = `${proto}://${host}`;
     const cookie = req.headers.get("cookie") || "";
+
+    const cLat0 = (minLat + maxLat) / 2, cLon0 = (minLon + maxLon) / 2;
+    const isTiny = Math.max(maxLat - minLat, maxLon - minLon) < 0.006; // a building / lot
+
+    // BUILDING LOOKUP (boss request): a tiny scan = pointing at one building/lot. Give
+    // THAT property's applicable BIR value, matched to its OWN barangay — exact street if
+    // listed, else the barangay's "ALL OTHER STREETS / INTERIOR LOT" default (how BIR
+    // values any lot, incl. interior). Designed to ALWAYS return a value.
+    if (isTiny) {
+      const nl = (s: string) => String(s || "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+      // Probe centre + corners so we still resolve the barangay for interior points.
+      const bprobes = [[cLat0, cLon0], [maxLat, minLon], [maxLat, maxLon], [minLat, minLon], [minLat, maxLon]];
+      const brevs = await Promise.all(bprobes.map(([la, lo]) => reverseGeocode(la, lo)));
+      const bcity = brevs.find((r) => r?.city)?.city || "";
+      const bbrgy = brevs.find((r) => r?.barangay)?.barangay || "";
+      const bstreet = brevs[0]?.street || "";
+      if (bcity && bbrgy) {
+        const recs = await fetchRecords(baseUrl, cookie, domain, bcity, bbrgy);
+        if (recs.length) {
+          const rs = nl(bstreet);
+          let match: Rec | undefined; let matchType = "";
+          if (rs && rs.length >= 3) {
+            match = recs.find((r) => { const s = nl(r.street); return !!s && (s === rs || s.includes(rs) || rs.includes(s)); });
+            if (match) matchType = "exact street";
+          }
+          if (!match) { // barangay default / interior lot — covers scanning inside a lot
+            match = recs.find((r) => /ALL\s*OTHER\s*(STREET|LOT|SUBDIVISION)|INTERIOR/i.test(r.street));
+            if (match) matchType = "barangay default (all other streets)";
+          }
+          if (!match) { // representative = most common value in the barangay
+            const pool = recs.filter((r) => parseVal(r.value));
+            const cnt: Record<string, number> = {};
+            for (const r of pool) { const v = String(parseVal(r.value)); cnt[v] = (cnt[v] || 0) + 1; }
+            const topv = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0];
+            match = pool.find((r) => String(parseVal(r.value)) === topv) || pool[0];
+            if (match) matchType = "barangay (representative)";
+          }
+          const val = match ? parseVal(match.value) : null;
+          if (match && val) {
+            return NextResponse.json({
+              ok: true, building: true, matchType,
+              points: [{
+                lat: cLat0, lon: cLon0, value_per_sqm: val,
+                classification_code: match.classification,
+                street: matchType.startsWith("exact") ? match.street : (bstreet || match.street),
+                barangay: bbrgy, city: bcity, province: match.province, matchType,
+              }],
+            });
+          }
+        }
+      }
+      // Last resort: nearest saved zonal point — but ONLY if it's in the SAME city we
+      // scanned. We never cross a city line (a San Juan scan must not show a Pasig value).
+      const near = await getJson(`${baseUrl}/api/zonal-nearest?lat=${cLat0}&lon=${cLon0}&radius=4000`, cookie);
+      if (near?.ok && near?.found && near?.value_per_sqm && (!bcity || sameCity(bcity, near.city || ""))) {
+        return NextResponse.json({
+          ok: true, building: true, matchType: "nearest",
+          points: [{
+            lat: cLat0, lon: cLon0, value_per_sqm: Number(near.value_per_sqm),
+            classification_code: near.classification_code, street: near.street || "",
+            barangay: near.barangay || bbrgy, city: near.city || bcity, province: near.province || "", matchType: "nearest",
+          }],
+        });
+      }
+      // No value within the scanned city → tell the truth instead of borrowing another
+      // city's value. (Importing that city's data, like Cabuyao, will enable it.)
+      if (bcity) {
+        return NextResponse.json({ ok: true, building: true, noData: true, scannedCity: bcity, scannedBarangay: bbrgy, points: [] });
+      }
+      // else fall through to the area scan (geocodes records → nearest)
+    }
 
     // 1) Map the box to real areas: reverse-geocode a GRID of points across the box,
     //    denser for bigger boxes so a wide scan samples more barangays.

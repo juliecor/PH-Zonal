@@ -95,7 +95,7 @@ function smoothPanTo(map: any, target: { lat: number; lng: number }, durationMs 
 }
 
 const CLEAN_STYLE: any[] = [
-  { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "poi", elementType: "labels", stylers: [{ visibility: "on" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
   { featureType: "road", elementType: "geometry", stylers: [{ lightness: 20 }] },
   { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
@@ -106,7 +106,7 @@ const CLEAN_STYLE: any[] = [
 const MINIMAL_STYLE: any[] = [
   { elementType: "geometry", stylers: [{ color: "#f8f9fa" }] },
   { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "poi", elementType: "labels", stylers: [{ visibility: "on" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
   { featureType: "road", elementType: "labels", stylers: [{ visibility: "off" }] },
 ];
@@ -194,7 +194,7 @@ export default function GMap({
         center: { lat: 12.8797, lng: 121.774 },
         zoom: 10,
         styles: style || undefined,
-        mapTypeId: mapType === "satellite" ? google.maps.MapTypeId.SATELLITE : mapType === "terrain" ? google.maps.MapTypeId.TERRAIN : google.maps.MapTypeId.ROADMAP,
+        mapTypeId: mapType === "satellite" ? google.maps.MapTypeId.HYBRID : mapType === "terrain" ? google.maps.MapTypeId.TERRAIN : google.maps.MapTypeId.ROADMAP,
         clickableIcons: false,
         streetViewControl: false,
         mapTypeControl: false,
@@ -236,7 +236,7 @@ export default function GMap({
     const styleChoice = (process.env.NEXT_PUBLIC_GOOGLE_MAP_STYLE || "clean").toLowerCase();
     const style = styleChoice === "default" ? null : styleChoice === "minimal" ? MINIMAL_STYLE : CLEAN_STYLE;
     map.setOptions({
-      mapTypeId: mapType === "satellite" ? google.maps.MapTypeId.SATELLITE : mapType === "terrain" ? google.maps.MapTypeId.TERRAIN : google.maps.MapTypeId.ROADMAP,
+      mapTypeId: mapType === "satellite" ? google.maps.MapTypeId.HYBRID : mapType === "terrain" ? google.maps.MapTypeId.TERRAIN : google.maps.MapTypeId.ROADMAP,
       styles: style || undefined,
     });
   }, [mapType]);

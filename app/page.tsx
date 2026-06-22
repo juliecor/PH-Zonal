@@ -130,6 +130,7 @@ export function Home() {
   const [nearMePoints, setNearMePoints] = useState<Array<{ lat: number; lon: number; label: string; info?: string }>>([]);
   const [scanMode, setScanMode] = useState(false);
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
+  const [scanNote, setScanNote] = useState("");
   const [scanLoading, setScanLoading] = useState(false);
   const [floodRisk, setFloodRisk] = useState<{ level: number; label: string } | null>(null);
   const [floodOverlayOn, setFloodOverlayOn] = useState(false);
@@ -842,6 +843,7 @@ export function Home() {
     setScanMode(false); // exit draw mode so the map is interactive again
     setScanLoading(true);
     setScanResults([]);
+    setScanNote("");
     setNearMePoints([]);
     const myId = ++boundsReqRef.current;
     // Paint the flood color inside the box right away (blue on satellite to match).
@@ -852,6 +854,26 @@ export function Home() {
     });
     try {
       const bounds = `minLat=${b.minLat}&maxLat=${b.maxLat}&minLon=${b.minLon}&maxLon=${b.maxLon}`;
+
+      // BUILDING MODE — a small box = the user pointed at one building/lot. Show ONLY
+      // that place's zonal value (matched to its street/barangay), nothing else.
+      const span = Math.max(b.maxLat - b.minLat, b.maxLon - b.minLon);
+      if (span < 0.006) {
+        const autoData = await fetch(`/api/scan-area`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ minLat:b.minLat, maxLat:b.maxLat, minLon:b.minLon, maxLon:b.maxLon, domain }) }).then((r)=>r.json()).catch(()=>null);
+        if (myId !== boundsReqRef.current) return;
+        const pts: any[] = autoData?.ok && Array.isArray(autoData.points) ? autoData.points : [];
+        // No same-city value for this spot → say so instead of borrowing another city's.
+        if (autoData?.noData) {
+          const where = [autoData.scannedBarangay, autoData.scannedCity].filter(Boolean).join(", ");
+          setScanNote(`No zonal value saved for ${where || "this area"} yet.`);
+          await renderScanPoints([], myId);
+          return;
+        }
+        // Building lookup → keep just the single matched value; otherwise the nearest one.
+        const only = autoData?.building ? pts.slice(0, 1) : dedupePoints(pts).slice(0, 1);
+        await renderScanPoints(only, myId);
+        return;
+      }
 
       // PHASE 1 — saved points (one fast query) → show immediately.
       const cachedData = await fetch(`/api/zonal-in-bounds?${bounds}&limit=300`).then((r)=>r.json()).catch(()=>null);
@@ -1648,8 +1670,9 @@ export function Home() {
       <MapTools
         onLocate={(lat, lon) => setSelectedLocation({ lat, lon })}
         scanActive={scanMode}
-        onScanToggle={() => { setScanMode((v) => !v); setScanResults([]); setNearMePoints([]); setScanFloodOverlay(null); }}
+        onScanToggle={() => { setScanMode((v) => !v); setScanResults([]); setScanNote(""); setNearMePoints([]); setScanFloodOverlay(null); }}
         scanResults={scanResults}
+        scanNote={scanNote}
         scanLoading={scanLoading}
         onPickResult={(r) => setSelectedLocation({ lat: r.lat, lon: r.lon })}
         floodOn={floodOverlayOn}

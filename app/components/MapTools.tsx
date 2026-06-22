@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { MapPin, X, Loader2, Scan, Waves, Mountain, Tornado, Activity } from "lucide-react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
+import { MapPin, X, Loader2, Scan, Waves, Mountain, Tornado, Activity, Search } from "lucide-react";
 
 const NAVY = "#1e3a8a";
 const GOLD = "#c9a84c";
@@ -25,6 +25,7 @@ export type ScanResult = {
   faultLabel?: string | null;
   faultDistance?: number | null;
   faultName?: string | null;
+  matchType?: string | null;
 };
 
 // A hazard legend styled like the scan-results panel (rounded card, navy header,
@@ -58,6 +59,7 @@ export default function MapTools({
   scanActive,
   onScanToggle,
   scanResults,
+  scanNote,
   scanLoading,
   onPickResult,
   floodOn,
@@ -74,6 +76,7 @@ export default function MapTools({
   scanActive: boolean;
   onScanToggle: () => void;
   scanResults: ScanResult[];
+  scanNote?: string;
   scanLoading: boolean;
   onPickResult: (r: ScanResult) => void;
   floodOn: boolean;
@@ -90,8 +93,80 @@ export default function MapTools({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [err, setErr] = useState("");
+  const [searchQ, setSearchQ] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchErr, setSearchErr] = useState("");
+  type Suggestion = { description: string; main: string; secondary: string; placeId: string };
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [showSuggest, setShowSuggest] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const suppressFetch = useRef(false); // skip the autocomplete fetch right after a pick/submit
 
   const peso = (v: any) => "₱" + Number(v).toLocaleString("en-PH");
+
+  // Debounced Google-style place suggestions as the user types.
+  useEffect(() => {
+    const q = searchQ.trim();
+    if (suppressFetch.current) { suppressFetch.current = false; return; }
+    if (q.length < 2) { setSuggestions([]); setShowSuggest(false); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/places-autocomplete?q=${encodeURIComponent(q)}`);
+        const data = await res.json().catch(() => null);
+        const list: Suggestion[] = data?.ok && Array.isArray(data.suggestions) ? data.suggestions : [];
+        setSuggestions(list);
+        setShowSuggest(list.length > 0);
+        setActiveIdx(-1);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 220);
+    return () => clearTimeout(t);
+  }, [searchQ]);
+
+  // Geocode a place string and fly there (Google-Maps-style search).
+  const doSearch = async (overrideQuery?: string) => {
+    const raw = (overrideQuery ?? searchQ).trim();
+    if (!raw || searching) return;
+    setShowSuggest(false);
+    setSuggestions([]);
+    setSearching(true);
+    setSearchErr("");
+    try {
+      const query = /philippines|,\s*ph$/i.test(raw) ? raw : `${raw}, Philippines`;
+      const res = await fetch("/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.ok && Number.isFinite(data.lat) && Number.isFinite(data.lon)) {
+        onLocate(Number(data.lat), Number(data.lon));
+      } else {
+        setSearchErr("Place not found. Try adding the city or province.");
+      }
+    } catch {
+      setSearchErr("Couldn't search right now.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const pickSuggestion = (s: Suggestion) => {
+    suppressFetch.current = true;
+    setSearchQ(s.description);
+    setShowSuggest(false);
+    setActiveIdx(-1);
+    doSearch(s.description);
+  };
+
+  const onSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSuggest || suggestions.length === 0) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx((i) => (i + 1) % suggestions.length); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx((i) => (i - 1 + suggestions.length) % suggestions.length); }
+    else if (e.key === "Enter" && activeIdx >= 0) { e.preventDefault(); pickSuggestion(suggestions[activeIdx]); }
+    else if (e.key === "Escape") { setShowSuggest(false); }
+  };
 
   const nearMe = () => {
     setErr("");
@@ -136,7 +211,7 @@ export default function MapTools({
   return (
     <>
       {/* Top-center toolbar */}
-      <div className="fixed left-1/2 top-3 z-[60] flex max-w-[96vw] -translate-x-1/2 items-center gap-1.5 sm:top-4 sm:gap-2">
+      <div className="fixed left-1/2 top-3 z-[60] flex max-w-[96vw] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 sm:top-4 sm:gap-2">
         <button onClick={nearMe} className={`${pill} text-white`} style={{ background: NAVY, border: `2px solid ${GOLD}` }} title="Zonal value near me">
           <MapPin size={15} style={{ color: GOLD }} /> <span className={lbl}>Near me</span>
         </button>
@@ -181,7 +256,64 @@ export default function MapTools({
         >
           <Activity size={15} style={{ color: faultsOn ? "#fff" : GOLD }} /> <span className={lbl}>Fault</span>
         </button>
+
+        {/* Google-Maps-style search box, right beside the Fault button */}
+        <div className="relative">
+          <form
+            onSubmit={(e) => { e.preventDefault(); doSearch(); }}
+            className="flex items-center gap-1.5 rounded-full bg-white px-3 py-2 shadow-lg"
+            style={{ border: `2px solid ${GOLD}` }}
+          >
+            <Search size={15} style={{ color: NAVY }} />
+            <input
+              value={searchQ}
+              onChange={(e) => { setSearchQ(e.target.value); if (searchErr) setSearchErr(""); }}
+              onKeyDown={onSearchKeyDown}
+              onFocus={() => { if (suggestions.length) setShowSuggest(true); }}
+              onBlur={() => setTimeout(() => setShowSuggest(false), 150)}
+              placeholder="Search a place…"
+              aria-label="Search a place"
+              className="w-28 bg-transparent text-[13px] font-semibold text-gray-800 outline-none placeholder:text-gray-400 sm:w-44"
+            />
+            {searching ? (
+              <Loader2 size={14} className="animate-spin" style={{ color: NAVY }} />
+            ) : searchQ ? (
+              <button type="button" onClick={() => { setSearchQ(""); setSearchErr(""); setSuggestions([]); setShowSuggest(false); }} title="Clear" className="shrink-0">
+                <X size={14} className="text-gray-400 hover:text-gray-600" />
+              </button>
+            ) : null}
+          </form>
+
+          {/* Suggestions dropdown (like Google Maps) */}
+          {showSuggest && suggestions.length > 0 && (
+            <ul className="absolute left-0 right-0 top-[calc(100%+6px)] z-[70] overflow-hidden rounded-2xl bg-white py-1 shadow-2xl" style={{ border: `2px solid ${GOLD}` }}>
+              {suggestions.map((s, i) => (
+                <li key={s.placeId}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); pickSuggestion(s); }}
+                    onMouseEnter={() => setActiveIdx(i)}
+                    className="flex w-full items-start gap-2 px-3 py-2 text-left"
+                    style={{ background: i === activeIdx ? "#f1f5ff" : "transparent" }}
+                  >
+                    <MapPin size={14} className="mt-0.5 shrink-0" style={{ color: NAVY }} />
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-semibold text-gray-800">{s.main}</span>
+                      {s.secondary && <span className="block truncate text-[11px] text-gray-500">{s.secondary}</span>}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
+
+      {searchErr && (
+        <div className="fixed left-1/2 top-16 z-[60] -translate-x-1/2 rounded-full bg-red-600 px-3 py-1 text-[12px] font-semibold text-white shadow-lg sm:top-[68px]">
+          {searchErr}
+        </div>
+      )}
 
       {/* Legends (shown when each overlay is on) — styled like the scan-results panel */}
       {(floodOn || landslideOn || stormSurgeOn || faultsOn) && (
@@ -258,14 +390,14 @@ export default function MapTools({
       )}
 
       {/* Scan results panel */}
-      {(scanLoading || scanResults.length > 0) && (
+      {(scanLoading || scanResults.length > 0 || !!scanNote) && (
         <div
           className="fixed right-3 top-28 z-[60] flex max-h-[62vh] w-[88vw] max-w-[300px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
           style={{ border: `2px solid ${GOLD}` }}
         >
           <div className="flex items-center justify-between px-3 py-2.5 text-white" style={{ background: NAVY }}>
             <span className="text-[13px] font-bold">
-              {scanLoading ? "Scanning…" : `Zonal values found (${scanResults.length})`}
+              {scanLoading ? "Scanning…" : scanResults.length === 0 && scanNote ? "No data here yet" : `Zonal values found (${scanResults.length})`}
             </span>
             {!scanLoading && (
               <button onClick={onScanToggle} className="rounded-full p-1 text-white/70 hover:bg-white/15 hover:text-white" title="Done">
@@ -279,7 +411,7 @@ export default function MapTools({
                 <Loader2 size={15} className="animate-spin" style={{ color: NAVY }} /> Reading the area…
               </div>
             ) : scanResults.length === 0 ? (
-              <div className="p-3 text-[13px] text-gray-500">No zonal values saved in that area yet.</div>
+              <div className="p-3 text-[13px] text-gray-500">{scanNote || "No zonal values saved in that area yet."}</div>
             ) : (
               scanResults.map((r, i) => (
                 <button
@@ -290,7 +422,9 @@ export default function MapTools({
                   <div className="text-[14px] font-black" style={{ color: NAVY }}>
                     {peso(r.value_per_sqm)}<span className="text-[10px] font-semibold text-gray-400">/sqm</span>
                   </div>
-                  {r.street && <div className="truncate text-[12px] font-semibold text-gray-700">{r.street}</div>}
+                  {r.street && (
+                    <div className="truncate text-[12px] font-semibold text-gray-700">{r.street}</div>
+                  )}
                   <div className="truncate text-[11px] text-gray-500">
                     {[r.barangay, r.city].filter(Boolean).join(", ")}
                     {r.classification_code ? ` · ${r.classification_code}` : ""}
