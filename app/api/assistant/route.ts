@@ -874,6 +874,40 @@ export async function POST(req: Request) {
       }
     }
 
+    // MULTI-PLACE: "give me the hazards on those [examples]" → the places were named in
+    // the AI's PREVIOUS reply, not the user's message. Pull the cities out of the last
+    // assistant message and return a hazard card for each (city-level, up to 3).
+    let hazardsResp: any[] = hazardResp ? [hazardResp] : [];
+    const refersPrior = /\b(those|these|them|the\s+examples?|all|each|lahat|sila|nila|yan)\b/i.test(question);
+    if (hazardIntent(question) && hazardsResp.length === 0 && refersPrior && domain) {
+      const lastAssistant = [...history].reverse().find((m: any) => m?.role === "assistant" && m?.content);
+      if (lastAssistant) {
+        const cd = await getJson(`${baseUrl}/api/facets?mode=cities&domain=${encodeURIComponent(domain)}`, cookie);
+        const cities: string[] = Array.isArray(cd?.cities) ? cd.cities : [];
+        const amsg = normLoose(String(lastAssistant.content));
+        const provTok = tokensOf(String(lastAssistant.content)).find((t) => PROVINCE_WORDS.has(t)) || "";
+        // STRICT: the full city name (minus a "City" suffix) must appear as a phrase, so
+        // "Santa Rosa" doesn't falsely match "Santa Cruz" on the shared word "Santa".
+        const coreOf = (c: string) => normLoose(c).replace(/\bCITY\b/g, "").replace(/\s+/g, " ").trim();
+        const matched = cities.filter((c) => { const core = coreOf(c); return core.length >= 3 && phraseInText(amsg, core); }).slice(0, 3);
+        for (const city of matched) {
+          const q = [cityCore(city), provTok, "Philippines"].filter(Boolean).join(", ");
+          const pt = await geocodePoint(baseUrl, q);
+          if (!pt) continue;
+          const hz = await hazardAt(baseUrl, pt.lat, pt.lon);
+          hazardsResp.push({ place: city, flood: hz.flood, landslide: hz.landslide, stormSurge: hz.stormSurge });
+        }
+        if (hazardsResp.length) {
+          hazardBlock =
+            `\n\nHAZARD PROFILES for the places mentioned (NOAH, city-level; cards are shown to the ` +
+            `user — give ONE short friendly summary line, do not re-list each):\n` +
+            hazardsResp
+              .map((h) => `- ${h.place}: flood ${h.flood?.label || "None"}, landslide ${h.landslide?.label || "None"}, storm surge ${h.stormSurge?.label || "None"}`)
+              .join("\n");
+        }
+      }
+    }
+
     const dataBlock =
       dataLines.length > 0
         ? `TOTAL MATCHING RECORDS IN OUR DATABASE: ${total}${shownNote}\n\n` +
@@ -942,6 +976,7 @@ export async function POST(req: Request) {
       suggestions: dataLines.length === 0 ? suggestions ?? [] : [],
       followups,
       hazard: hazardResp,
+      hazards: hazardsResp,
     });
   } catch (e: any) {
     console.error("assistant error:", e);

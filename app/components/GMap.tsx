@@ -418,8 +418,9 @@ export default function GMap({
     };
     remove();
     if (!floodTilesOn) return;
+    const sat = mapType === "satellite" ? 1 : 0; // blue palette on satellite, NOAH warm otherwise
     const t = new google.maps.ImageMapType({
-      getTileUrl: (coord: any, zoom: number) => `/api/flood-tile/${zoom}/${coord.x}/${coord.y}?v=2`,
+      getTileUrl: (coord: any, zoom: number) => `/api/flood-tile/${zoom}/${coord.x}/${coord.y}?v=6&sat=${sat}`,
       tileSize: new google.maps.Size(256, 256),
       name: "Flood",
       opacity: 1,
@@ -427,7 +428,7 @@ export default function GMap({
     map.overlayMapTypes.push(t);
     floodTileTypeRef.current = t;
     return remove;
-  }, [floodTilesOn]);
+  }, [floodTilesOn, mapType]);
 
   // Crisp landslide tile layer (separate toggle, earthy palette).
   useEffect(() => {
@@ -443,7 +444,7 @@ export default function GMap({
     remove();
     if (!landslideTilesOn) return;
     const t = new google.maps.ImageMapType({
-      getTileUrl: (coord: any, zoom: number) => `/api/landslide-tile/${zoom}/${coord.x}/${coord.y}?v=2`,
+      getTileUrl: (coord: any, zoom: number) => `/api/landslide-tile/${zoom}/${coord.x}/${coord.y}?v=5`,
       tileSize: new google.maps.Size(256, 256),
       name: "Landslide",
       opacity: 1,
@@ -467,7 +468,7 @@ export default function GMap({
     remove();
     if (!stormSurgeTilesOn) return;
     const t = new google.maps.ImageMapType({
-      getTileUrl: (coord: any, zoom: number) => `/api/stormsurge-tile/${zoom}/${coord.x}/${coord.y}?v=1`,
+      getTileUrl: (coord: any, zoom: number) => `/api/stormsurge-tile/${zoom}/${coord.x}/${coord.y}?v=4`,
       tileSize: new google.maps.Size(256, 256),
       name: "StormSurge",
       opacity: 1,

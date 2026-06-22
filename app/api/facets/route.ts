@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { fetchZonalValuesByDomain, fetchZonalIndex } from "../../lib/zonalByDomain";
 
 export const runtime = "nodejs";
@@ -102,81 +102,116 @@ function matchesBarangay(value: any, want: any) {
   return normLoose(value) === normLoose(want);
 }
 
+// In-flight fetches, so concurrent identical loads share ONE download instead of
+// each re-pulling all rows (the UI fires several loadCities() at once during search
+// → without this it was a "cache stampede": 4× the same 23k-row fetch).
+const FACET_INFLIGHT: Map<string, Promise<AnyRow[]>> =
+  (globalThis as any).__FACET_INFLIGHT__ ?? new Map();
+(globalThis as any).__FACET_INFLIGHT__ = FACET_INFLIGHT;
+
+async function fetchAllDomainRows(domain: string): Promise<AnyRow[]> {
+  const startTime = Date.now();
+  const idx = await fetchZonalIndex(domain);
+  const rowsLimit = Number(idx?.rowsLimit ?? 5000);
+  const pagesNeeded = Math.min(HARD_CAP_PAGES, Math.max(1, Math.ceil(rowsLimit / PAGE_SIZE)));
+  console.log(`[getAllDomainRows] Fetching ${pagesNeeded} pages for ${domain}...`);
+
+  // Fetch with bounded concurrency and tolerate partial 5xx failures.
+  const CONCURRENCY = 8; // keep upstream happy
+  const results: Array<{ rows: AnyRow[] } | null> = [];
+  let failed = 0;
+
+  for (let start = 1; start <= pagesNeeded; start += CONCURRENCY) {
+    const end = Math.min(pagesNeeded, start + CONCURRENCY - 1);
+    const batchPromises: Array<Promise<{ rows: AnyRow[] } | null>> = [];
+
+    for (let p = start; p <= end; p++) {
+      batchPromises.push(
+        fetchZonalValuesByDomain({ domain, page: p, itemsPerPage: PAGE_SIZE, search: "" })
+          .then((r) => ({ rows: (Array.isArray(r?.rows) ? r.rows : []) as AnyRow[] }))
+          .catch((e) => {
+            failed += 1;
+            console.warn(`[getAllDomainRows] page ${p} failed for ${domain}: ${e?.code || e?.response?.status}`);
+            return null; // tolerate this page; continue with others
+          })
+      );
+    }
+
+    const settled = await Promise.all(batchPromises);
+    results.push(...settled);
+  }
+
+  const all: AnyRow[] = [];
+  for (const r of results) {
+    if (r) all.push(...(Array.isArray(r.rows) ? r.rows : []));
+  }
+
+  if (all.length === 0) {
+    const err: any = new Error(`Upstream returned no data for ${domain}. pages=${pagesNeeded}, failed=${failed}`);
+    err.code = "UPSTREAM_EMPTY";
+    throw err;
+  }
+
+  FACET_CACHE.set(domain, { ts: Date.now(), rows: all });
+  console.log(`[getAllDomainRows] SUCCESS for ${domain} - ${all.length} rows in ${Date.now() - startTime}ms`);
+  return all;
+}
+
 async function getAllDomainRows(domain: string) {
   const cached = FACET_CACHE.get(domain);
   if (cached && Date.now() - cached.ts < TTL_MS) {
-    console.log(`[getAllDomainRows] Cache HIT for ${domain} (age: ${Date.now() - cached.ts}ms)`);
     return { rows: cached.rows, fromCache: true as const };
   }
 
-  console.log(`[getAllDomainRows] Cache MISS for ${domain}, fetching from upstream...`);
-  const startTime = Date.now();
-  
-  try {
-    const idx = await fetchZonalIndex(domain);
-    const rowsLimit = Number(idx?.rowsLimit ?? 5000);
-    console.log(`[getAllDomainRows] Got index for ${domain} - rowsLimit: ${rowsLimit}`);
-
-    const pagesNeeded = Math.min(HARD_CAP_PAGES, Math.max(1, Math.ceil(rowsLimit / PAGE_SIZE)));
-    console.log(`[getAllDomainRows] Will fetch ${pagesNeeded} pages for ${domain}`);
-
-    // Fetch with bounded concurrency and tolerate partial 5xx failures
-    const CONCURRENCY = 8; // keep upstream happy
-    const results: Array<{ rows: AnyRow[] } | null> = [];
-    let failed = 0;
-
-    for (let start = 1; start <= pagesNeeded; start += CONCURRENCY) {
-      const end = Math.min(pagesNeeded, start + CONCURRENCY - 1);
-      const batchPromises: Array<Promise<{ rows: AnyRow[] } | null>> = [];
-
-      for (let p = start; p <= end; p++) {
-        batchPromises.push(
-          fetchZonalValuesByDomain({
-            domain,
-            page: p,
-            itemsPerPage: PAGE_SIZE,
-            search: "", // keep empty to fetch everything
-          })
-            .then((r) => ({ rows: (Array.isArray(r?.rows) ? r.rows : []) as AnyRow[] }))
-            .catch((e) => {
-              const status = e?.response?.status ?? 0;
-              const code = e?.code || "UNKNOWN";
-              console.warn(`[getAllDomainRows] Page ${p} failed for ${domain} - status=${status} code=${code}`);
-              failed += 1;
-              return null; // tolerate this page; continue with others
-            })
-        );
-      }
-
-      const settled = await Promise.all(batchPromises);
-      results.push(...settled);
-    }
-
-    const all: AnyRow[] = [];
-    for (const r of results) {
-      if (!r) continue;
-      const batch = Array.isArray(r.rows) ? r.rows : [];
-      all.push(...batch);
-    }
-
-    if (all.length === 0) {
-      // If absolutely nothing succeeded, surface the failure
-      const err: any = new Error(`Upstream returned no data for ${domain}. pagesNeeded=${pagesNeeded}, failedPages=${failed}`);
-      err.code = "UPSTREAM_EMPTY";
-      throw err;
-    }
-
-    FACET_CACHE.set(domain, { ts: Date.now(), rows: all });
-    console.log(`[getAllDomainRows] SUCCESS for ${domain} - fetched ${all.length} rows in ${Date.now() - startTime}ms`);
-    return { rows: all, fromCache: false as const };
-  } catch (err: any) {
-    console.error(`[getAllDomainRows] FAILED for ${domain} after ${Date.now() - startTime}ms:`, {
-      status: err?.response?.status,
-      code: err?.code,
-      message: err?.message,
-    });
-    throw err;
+  // Coalesce: if a fetch for this domain is already running, await the SAME promise.
+  let inflight = FACET_INFLIGHT.get(domain);
+  if (!inflight) {
+    inflight = fetchAllDomainRows(domain);
+    FACET_INFLIGHT.set(domain, inflight);
+    inflight.finally(() => FACET_INFLIGHT.delete(domain));
+  } else {
+    console.log(`[getAllDomainRows] coalesced into in-flight fetch for ${domain}`);
   }
+
+  const rows = await inflight;
+  return { rows, fromCache: false as const };
+}
+
+const STALE_AFTER_SECONDS = 60 * 60; // serve instantly; refresh in background if older than 1h
+const SWR_HEADERS = { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" };
+
+// Durable facet cache (Laravel DB). Degrades gracefully: any failure is treated as a
+// miss and we fall back to the live fetch, so the dropdowns never break.
+async function dbFacetGet(key: string): Promise<{ payload: string[]; ageSeconds: number | null } | null> {
+  if (!BACKEND_URL) return null;
+  try {
+    const res = await fetch(`${BACKEND_URL.replace(/\/$/, "")}/api/facet-cache?key=${encodeURIComponent(key)}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const j = await res.json().catch(() => null);
+    if (!j?.found || !Array.isArray(j.payload)) return null;
+    return { payload: j.payload as string[], ageSeconds: typeof j.age_seconds === "number" ? j.age_seconds : null };
+  } catch {
+    return null;
+  }
+}
+
+async function dbFacetSave(key: string, payload: string[]): Promise<void> {
+  if (!BACKEND_URL || !payload.length) return; // never cache an empty list
+  try {
+    await fetch(`${BACKEND_URL.replace(/\/$/, "")}/api/facet-cache`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, payload }),
+    });
+  } catch {}
+}
+
+function facetResponse(mode: string, domain: string, city: string, barangay: string, list: string[], cached: boolean) {
+  if (mode === "barangays") return NextResponse.json({ domain, city, barangays: list, cached }, { headers: SWR_HEADERS });
+  if (mode === "classifications") return NextResponse.json({ domain, city, barangay, classifications: list, cached }, { headers: SWR_HEADERS });
+  return NextResponse.json({ domain, cities: list, cached }, { headers: SWR_HEADERS });
 }
 
 export async function GET(req: Request) {
@@ -190,155 +225,112 @@ export async function GET(req: Request) {
     const mode = norm(searchParams.get("mode") ?? "cities");
     const city = norm(searchParams.get("city"));
     const barangay = norm(searchParams.get("barangay"));
+    const wantRefresh = searchParams.get("refresh") === "1" || searchParams.get("nocache") === "1";
 
     if (!domain || !domain.includes(".") || domain.includes(" ")) {
       return NextResponse.json({ error: "Invalid domain", domain }, { status: 400 });
     }
+    if (mode !== "cities" && mode !== "barangays" && mode !== "classifications") {
+      return NextResponse.json({ error: "Invalid mode (use cities|barangays|classifications)" }, { status: 400 });
+    }
+    if (mode === "barangays" && !city) {
+      return NextResponse.json({ error: "city is required" }, { status: 400 });
+    }
 
+    const cacheKey = (
+      mode === "barangays" ? `barangays|${domain}|${city}`
+      : mode === "classifications" ? `classifications|${domain}|${city}|${barangay}`
+      : `cities|${domain}`
+    ).toLowerCase();
+
+    // 1) Durable cache → instant. If it's old, serve it now and refresh in the
+    //    background (stale-while-revalidate) so the user never waits the ~5s again.
+    if (!wantRefresh) {
+      const cached = await dbFacetGet(cacheKey);
+      if (cached && cached.payload.length) {
+        if (cached.ageSeconds == null || cached.ageSeconds > STALE_AFTER_SECONDS) {
+          try {
+            const u = new URL(req.url);
+            u.searchParams.set("refresh", "1");
+            const refreshUrl = u.toString();
+            after(async () => {
+              try {
+                await fetch(refreshUrl, { headers: { cookie: cookieHeader } });
+              } catch {}
+            });
+          } catch {}
+        }
+        return facetResponse(mode, domain, city, barangay, cached.payload, true);
+      }
+    }
+
+    // 2) Cache miss (or forced refresh): compute the list (same union logic as before).
     const province = domainToProvince(domain);
+    let list: string[] = [];
 
-    // If this domain maps to a DB-backed province and BACKEND_URL configured, prefer backend facet endpoints but UNION with spreadsheet
     if (province && BACKEND_URL) {
       const base = BACKEND_URL.replace(/\/$/, "");
+      const headers: Record<string, string> = { Accept: "application/json" };
+      if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+
       if (mode === "cities") {
-        const url = `${base}/api/facets/cities?province=${encodeURIComponent(province)}`;
-        const headers: Record<string,string> = { Accept: "application/json" };
-        if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-        const res = await fetch(url, { headers });
+        const res = await fetch(`${base}/api/facets/cities?province=${encodeURIComponent(province)}`, { headers });
         const j = await res.json().catch(() => null);
-        if (!res.ok || !j) return NextResponse.json({ error: j?.error || "Backend facets failed" }, { status: 502 });
-
-        // Backend cities
-        const backendCities: string[] = Array.isArray(j?.cities) ? j.cities : [];
-
-        // Spreadsheet cities (union)
+        // backend unavailable/unauthed → degrade to spreadsheet-only below (don't 502)
+        const set = new Set<string>(Array.isArray(j?.cities) ? j.cities : []);
         const { rows } = await getAllDomainRows(domain);
-        const set = new Set<string>(backendCities);
-        for (const r of rows) {
-          const c = norm(getVal(r, "City-"));
-          if (c) set.add(c);
-        }
-        const cities = Array.from(set).sort((a, b) => a.localeCompare(b));
-        return NextResponse.json(
-          { domain, cities, cached: false },
-          { headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" } }
-        );
-      }
-      if (mode === "barangays") {
-        if (!city) return NextResponse.json({ error: "city is required" }, { status: 400 });
-        const url = `${base}/api/facets/barangays?province=${encodeURIComponent(province)}&city=${encodeURIComponent(city)}`;
-        const headers: Record<string,string> = { Accept: "application/json" };
-        if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-        const res = await fetch(url, { headers });
+        for (const r of rows) { const c = norm(getVal(r, "City-")); if (c) set.add(c); }
+        list = Array.from(set).sort((a, b) => a.localeCompare(b));
+      } else if (mode === "barangays") {
+        const res = await fetch(`${base}/api/facets/barangays?province=${encodeURIComponent(province)}&city=${encodeURIComponent(city)}`, { headers });
         const j = await res.json().catch(() => null);
-        if (!res.ok || !j) return NextResponse.json({ error: j?.error || "Backend facets failed" }, { status: 502 });
-
-        const backendList: string[] = Array.isArray(j?.barangays) ? j.barangays : [];
-
-        // Spreadsheet barangays (union for selected city)
+        // backend unavailable/unauthed → degrade to spreadsheet-only below (don't 502)
+        const set = new Set<string>(Array.isArray(j?.barangays) ? j.barangays : []);
         const { rows } = await getAllDomainRows(domain);
-        const set = new Set<string>(backendList);
         for (const r of rows) {
-          const rowCity = String(getVal(r, "City-") ?? "");
-          if (!matchesLoose(rowCity, city)) continue;
-          const b = norm(getVal(r, "Barangay-"));
-          if (b) set.add(b);
+          if (!matchesLoose(getVal(r, "City-"), city)) continue;
+          const b = norm(getVal(r, "Barangay-")); if (b) set.add(b);
         }
-        const list = Array.from(set).sort((a, b) => a.localeCompare(b));
-        return NextResponse.json(
-          { domain, city, barangays: list, cached: false },
-          { headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" } }
-        );
-      }
-      if (mode === "classifications") {
+        list = Array.from(set).sort((a, b) => a.localeCompare(b));
+      } else {
         const url = `${base}/api/facets/classifications?province=${encodeURIComponent(province)}${city ? `&city=${encodeURIComponent(city)}` : ""}${barangay ? `&barangay=${encodeURIComponent(barangay)}` : ""}`;
-        const headers: Record<string,string> = { Accept: "application/json" };
-        if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
         const res = await fetch(url, { headers });
         const j = await res.json().catch(() => null);
-        if (!res.ok || !j) return NextResponse.json({ error: j?.error || "Backend facets failed" }, { status: 502 });
-
-        const backendList: string[] = Array.isArray(j?.classifications) ? j.classifications : [];
-
-        // Spreadsheet classifications (optional union, filtered if city/barangay provided)
+        // backend unavailable/unauthed → degrade to spreadsheet-only below (don't 502)
+        const set = new Set<string>(Array.isArray(j?.classifications) ? j.classifications : []);
         const { rows } = await getAllDomainRows(domain);
         let filtered = rows;
         if (city) filtered = filtered.filter((r) => matchesLoose(getVal(r, "City-"), city));
         if (barangay) filtered = filtered.filter((r) => matchesBarangay(getVal(r, "Barangay-"), barangay));
-        const set = new Set<string>(backendList);
-        for (const r of filtered) {
-          const c = norm(getVal(r, "Classification-"));
-          if (c) set.add(c);
+        for (const r of filtered) { const c = norm(getVal(r, "Classification-")); if (c) set.add(c); }
+        list = Array.from(set).sort((a, b) => a.localeCompare(b));
+      }
+    } else {
+      const { rows } = await getAllDomainRows(domain);
+      if (mode === "cities") {
+        const set = new Set<string>();
+        for (const r of rows) { const c = norm(getVal(r, "City-")); if (c) set.add(c); }
+        list = Array.from(set).sort((a, b) => a.localeCompare(b));
+      } else if (mode === "barangays") {
+        const set = new Set<string>();
+        for (const r of rows) {
+          if (!matchesLoose(getVal(r, "City-"), city)) continue;
+          const b = norm(getVal(r, "Barangay-")); if (b) set.add(b);
         }
-        const list = Array.from(set).sort((a, b) => a.localeCompare(b));
-        return NextResponse.json(
-          { domain, city, barangay, classifications: list, cached: false },
-          { headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" } }
-        );
+        list = Array.from(set).sort((a, b) => a.localeCompare(b));
+      } else {
+        let filtered = rows;
+        if (city) filtered = filtered.filter((r) => matchesLoose(getVal(r, "City-"), city));
+        if (barangay) filtered = filtered.filter((r) => matchesBarangay(getVal(r, "Barangay-"), barangay));
+        const set = new Set<string>();
+        for (const r of filtered) { const c = norm(getVal(r, "Classification-")); if (c) set.add(c); }
+        list = Array.from(set).sort((a, b) => a.localeCompare(b));
       }
     }
 
-    const { rows, fromCache } = await getAllDomainRows(domain);
-
-    if (mode === "cities") {
-      const set = new Set<string>();
-      for (const r of rows) {
-        const c = norm(getVal(r, "City-"));
-        if (c) set.add(c);
-      }
-      const cities = Array.from(set).sort((a, b) => a.localeCompare(b));
-      return NextResponse.json(
-        { domain, cities, cached: fromCache },
-        { headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" } }
-      );
-    }
-
-    if (mode === "barangays") {
-      if (!city) {
-        return NextResponse.json({ error: "city is required" }, { status: 400 });
-      }
-
-      const set = new Set<string>();
-      for (const r of rows) {
-        const rowCity = String(getVal(r, "City-") ?? "");
-        if (!matchesLoose(rowCity, city)) continue;
-
-        const b = norm(getVal(r, "Barangay-"));
-        if (b) set.add(b);
-      }
-
-      const barangays = Array.from(set).sort((a, b) => a.localeCompare(b));
-      return NextResponse.json(
-        { domain, city, barangays, cached: fromCache },
-        { headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" } }
-      );
-    }
-
-    // OPTIONAL: if you want "classifications" facet later
-    if (mode === "classifications") {
-      let filtered = rows;
-      
-
-      if (city) filtered = filtered.filter((r) => matchesLoose(getVal(r, "City-"), city));
-      if (barangay) filtered = filtered.filter((r) => matchesBarangay(getVal(r, "Barangay-"), barangay));
-
-      const set = new Set<string>();
-      for (const r of filtered) {
-        const c = norm(getVal(r, "Classification-"));
-        if (c) set.add(c);
-      }
-
-      const classifications = Array.from(set).sort((a, b) => a.localeCompare(b));
-      return NextResponse.json(
-        { domain, city, barangay, classifications, cached: fromCache },
-        { headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=86400" } }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Invalid mode (use cities|barangays)" },
-      { status: 400, headers: { "Cache-Control": "public, max-age=60" } }
-    );
+    // 3) Persist to the durable cache for next time (await so it survives serverless).
+    await dbFacetSave(cacheKey, list);
+    return facetResponse(mode, domain, city, barangay, list, false);
   } catch (e: any) {
     const status = e?.response?.status ?? 500;
     const code = e?.code || "UNKNOWN";

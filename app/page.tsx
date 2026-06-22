@@ -203,6 +203,16 @@ export function Home() {
   const [boundary, setBoundary] = useState<Boundary | null>(null);
   const [mapType, setMapType] = useState<MapType>("street");
 
+  // Recolor the scan flood overlay (blue ↔ warm) when the base map type changes.
+  useEffect(() => {
+    setScanFloodOverlay((prev) => {
+      if (!prev) return prev;
+      const sat = mapType === "satellite" ? 1 : 0;
+      const url = prev.url.replace(/([?&]sat=)[01]/, `$1${sat}`);
+      return url === prev.url ? prev : { ...prev, url };
+    });
+  }, [mapType]);
+
   const [geoLabel, setGeoLabel] = useState("");
   const [matchStatus, setMatchStatus] = useState<string>("");
   const [geoLoading, setGeoLoading] = useState(false);
@@ -750,64 +760,99 @@ export function Home() {
     lsSave(GEO_LS_KEY,bag); return payload;
   }
 
-  // Scan tool: the user drew a box → load ONLY the cached zonal values inside it
-  // (free DB query, no Google). Shows pins + a clickable results list.
+  // Hazard-tag a set of zonal points and render them (map pins + results list).
+  async function renderScanPoints(found: any[], myId: number) {
+    const ptsBody = JSON.stringify({ points: found.map((p)=>({lat:Number(p.lat),lon:Number(p.lon)})) });
+    let floods: any[] = [], slides: any[] = [], surges: any[] = [];
+    try {
+      const [fr, lr, sr] = await Promise.all([
+        fetch("/api/flood-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
+        fetch("/api/landslide-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
+        fetch("/api/stormsurge-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
+      ]);
+      const fd = await fr.json().catch(()=>null);
+      const ld = await lr.json().catch(()=>null);
+      const sd = await sr.json().catch(()=>null);
+      if (fd?.ok && Array.isArray(fd.levels)) floods = fd.levels;
+      if (ld?.ok && Array.isArray(ld.levels)) slides = ld.levels;
+      if (sd?.ok && Array.isArray(sd.levels)) surges = sd.levels;
+    } catch {}
+    if (myId !== boundsReqRef.current) return;
+    const FCOLOR:any = {0:"#10b981",1:"#ca8a04",2:"#ea580c",3:"#dc2626"};
+    const esc = (s:any)=>String(s??"").replace(/[<>&]/g,(c)=>({"<":"&lt;",">":"&gt;","&":"&amp;"} as any)[c]);
+    const pts = found.map((p,i)=>{
+      const peso = "₱"+Number(p.value_per_sqm).toLocaleString("en-PH");
+      const fl = floods[i];
+      const floodLine = fl ? `<div style="font-size:11px;color:${FCOLOR[fl.level]||"#6b7280"};margin-top:2px;font-weight:700">🌊 ${fl.label} (100-yr flood)</div>` : "";
+      const info = `<div style="font-family:system-ui,sans-serif;max-width:230px;padding:2px 4px">`+
+        `<div style="font-weight:800;color:#1e3a8a;font-size:15px">${peso}<span style="font-size:11px;color:#6b7280;font-weight:600">/sqm</span></div>`+
+        (p.street?`<div style="font-weight:600;font-size:12px;color:#374151;margin-top:2px">${esc(p.street)}</div>`:"")+
+        `<div style="font-size:11px;color:#6b7280">${esc([p.barangay,p.city,p.province].filter(Boolean).join(", "))}</div>`+
+        (p.classification_code?`<div style="font-size:11px;color:#9ca3af;margin-top:2px">${esc(p.classification_code)}</div>`:"")+
+        floodLine+
+        `</div>`;
+      return { lat:Number(p.lat), lon:Number(p.lon), label:peso, info };
+    });
+    const results = found.map((p,i)=>({ ...p, floodLevel: floods[i]?.level ?? null, floodLabel: floods[i]?.label ?? null, landslideLevel: slides[i]?.level ?? null, landslideLabel: slides[i]?.label ?? null, stormSurgeLevel: surges[i]?.level ?? null, stormSurgeLabel: surges[i]?.label ?? null }));
+    if (myId !== boundsReqRef.current) return;
+    setNearMePoints(pts);
+    setScanResults(results as ScanResult[]);
+  }
+
+  const dedupePoints = (arr: any[]) => {
+    const seen = new Set<string>(); const out: any[] = [];
+    for (const p of arr) {
+      if (!(p?.lat && p?.lon && p?.value_per_sqm)) continue;
+      const k = `${Number(p.lat).toFixed(5)},${Number(p.lon).toFixed(5)}`;
+      if (seen.has(k)) continue;
+      seen.add(k); out.push(p);
+    }
+    return out;
+  };
+
+  // Scan tool: the user drew a box → show zonal values inside it. PHASE 1 shows the
+  // already-saved points instantly (one fast DB query). If the area is already
+  // well-covered we stop there (so repeat scans are instant). Otherwise PHASE 2
+  // auto-geocodes new records for that area in the background and merges them in
+  // (and saves them, so the NEXT scan of this area is instant too).
   async function onScanComplete(b: { minLat:number; maxLat:number; minLon:number; maxLon:number }) {
     setScanMode(false); // exit draw mode so the map is interactive again
     setScanLoading(true);
     setScanResults([]);
     setNearMePoints([]);
     const myId = ++boundsReqRef.current;
+    // Paint the flood color inside the box right away (blue on satellite to match).
+    const satFlag = mapType === "satellite" ? 1 : 0;
+    setScanFloodOverlay({
+      url: `/api/flood-overlay?minLat=${b.minLat}&maxLat=${b.maxLat}&minLon=${b.minLon}&maxLon=${b.maxLon}&sat=${satFlag}`,
+      north: b.maxLat, south: b.minLat, east: b.maxLon, west: b.minLon,
+    });
     try {
-      const res = await fetch(`/api/zonal-in-bounds?minLat=${b.minLat}&maxLat=${b.maxLat}&minLon=${b.minLon}&maxLon=${b.maxLon}&limit=300`);
-      const data = await res.json().catch(()=>null);
-      if (myId !== boundsReqRef.current) return;
-      const raw: any[] = data?.ok && Array.isArray(data.points) ? data.points : [];
-      const found = raw.filter((p)=>p?.lat&&p?.lon&&p?.value_per_sqm);
+      const bounds = `minLat=${b.minLat}&maxLat=${b.maxLat}&minLon=${b.minLon}&maxLon=${b.maxLon}`;
 
-      // Tag every found point with flood + landslide + storm-surge levels (batch calls, free raster reads).
-      const ptsBody = JSON.stringify({ points: found.map((p)=>({lat:Number(p.lat),lon:Number(p.lon)})) });
-      let floods: any[] = [];
-      let slides: any[] = [];
-      let surges: any[] = [];
-      try {
-        const [fr, lr, sr] = await Promise.all([
-          fetch("/api/flood-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
-          fetch("/api/landslide-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
-          fetch("/api/stormsurge-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
-        ]);
-        const fd = await fr.json().catch(()=>null);
-        const ld = await lr.json().catch(()=>null);
-        const sd = await sr.json().catch(()=>null);
-        if (fd?.ok && Array.isArray(fd.levels)) floods = fd.levels;
-        if (ld?.ok && Array.isArray(ld.levels)) slides = ld.levels;
-        if (sd?.ok && Array.isArray(sd.levels)) surges = sd.levels;
-      } catch {}
+      // PHASE 1 — saved points (one fast query) → show immediately.
+      const cachedData = await fetch(`/api/zonal-in-bounds?${bounds}&limit=300`).then((r)=>r.json()).catch(()=>null);
       if (myId !== boundsReqRef.current) return;
-      const FCOLOR:any = {0:"#10b981",1:"#ca8a04",2:"#ea580c",3:"#dc2626"};
+      const cached: any[] = cachedData?.ok && Array.isArray(cachedData.points) ? cachedData.points : [];
+      let found = dedupePoints(cached);
+      if (found.length) {
+        await renderScanPoints(found, myId);
+        if (myId !== boundsReqRef.current) return;
+        setScanLoading(false); // saved values are on screen now — no waiting
+      }
 
-      const esc = (s:any)=>String(s??"").replace(/[<>&]/g,(c)=>({"<":"&lt;",">":"&gt;","&":"&amp;"} as any)[c]);
-      const pts = found.map((p,i)=>{
-        const peso = "₱"+Number(p.value_per_sqm).toLocaleString("en-PH");
-        const fl = floods[i];
-        const floodLine = fl ? `<div style="font-size:11px;color:${FCOLOR[fl.level]||"#6b7280"};margin-top:2px;font-weight:700">🌊 ${fl.label} (100-yr flood)</div>` : "";
-        const info = `<div style="font-family:system-ui,sans-serif;max-width:230px;padding:2px 4px">`+
-          `<div style="font-weight:800;color:#1e3a8a;font-size:15px">${peso}<span style="font-size:11px;color:#6b7280;font-weight:600">/sqm</span></div>`+
-          (p.street?`<div style="font-weight:600;font-size:12px;color:#374151;margin-top:2px">${esc(p.street)}</div>`:"")+
-          `<div style="font-size:11px;color:#6b7280">${esc([p.barangay,p.city,p.province].filter(Boolean).join(", "))}</div>`+
-          (p.classification_code?`<div style="font-size:11px;color:#9ca3af;margin-top:2px">${esc(p.classification_code)}</div>`:"")+
-          floodLine+
-          `</div>`;
-        return { lat:Number(p.lat), lon:Number(p.lon), label:peso, info };
-      });
-      const results = found.map((p,i)=>({ ...p, floodLevel: floods[i]?.level ?? null, floodLabel: floods[i]?.label ?? null, landslideLevel: slides[i]?.level ?? null, landslideLabel: slides[i]?.label ?? null, stormSurgeLevel: surges[i]?.level ?? null, stormSurgeLabel: surges[i]?.label ?? null }));
-      setNearMePoints(pts);
-      setScanResults(results as ScanResult[]);
-      // Color the flood ONLY inside the scanned box.
-      setScanFloodOverlay({
-        url: `/api/flood-overlay?minLat=${b.minLat}&maxLat=${b.maxLat}&minLon=${b.minLon}&maxLon=${b.maxLon}`,
-        north: b.maxLat, south: b.minLat, east: b.maxLon, west: b.minLon,
-      });
+      // Already well-covered → skip the (slower) auto-geocode entirely.
+      if (found.length >= 15) return;
+
+      // PHASE 2 — auto-geocode new records for this area, then merge + re-render.
+      const autoData = await fetch(`/api/scan-area`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ minLat:b.minLat, maxLat:b.maxLat, minLon:b.minLon, maxLon:b.maxLon, domain }) }).then((r)=>r.json()).catch(()=>null);
+      if (myId !== boundsReqRef.current) return;
+      const auto: any[] = autoData?.ok && Array.isArray(autoData.points) ? autoData.points : [];
+      const merged = dedupePoints([...cached, ...auto]);
+      if (merged.length !== found.length || found.length === 0) {
+        found = merged;
+        await renderScanPoints(found, myId);
+      }
     } catch {} finally {
       if (myId === boundsReqRef.current) setScanLoading(false);
     }
@@ -1580,6 +1625,7 @@ export function Home() {
         onLandslideToggle={() => setLandslideOverlayOn((v) => !v)}
         stormSurgeOn={stormSurgeOverlayOn}
         onStormSurgeToggle={() => setStormSurgeOverlayOn((v) => !v)}
+        mapType={mapType}
       />
     </main>
   );

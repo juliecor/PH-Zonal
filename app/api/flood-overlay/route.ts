@@ -3,10 +3,15 @@ import { gridsForBounds, sampleGrid } from "../../lib/floodGrid";
 
 export const runtime = "nodejs";
 
-const COLORS: Record<number, [number, number, number, number]> = {
+const WARM: Record<number, [number, number, number, number]> = {
   1: [234, 179, 8, 130],
   2: [234, 88, 12, 150],
   3: [220, 38, 38, 175],
+};
+const COOL: Record<number, [number, number, number, number]> = {
+  1: [125, 211, 252, 150], // sky blue
+  2: [56, 165, 245, 175],  // blue
+  3: [3, 90, 175, 205],    // deep blue
 };
 const MAX_DIM = 1200;
 
@@ -25,6 +30,9 @@ export async function GET(req: Request) {
   const minLon = Number(searchParams.get("minLon"));
   const maxLon = Number(searchParams.get("maxLon"));
   if ([minLat, maxLat, minLon, maxLon].some((v) => !Number.isFinite(v))) return transparent();
+
+  // Blue palette on satellite (?sat=1) to match the flood tile layer; NOAH warm otherwise.
+  const COLORS = searchParams.get("sat") === "1" ? COOL : WARM;
 
   const dLon = maxLon - minLon;
   const dLat = maxLat - minLat;

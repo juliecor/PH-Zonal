@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { MapPin, X, Loader2, Scan, Waves, Mountain, Tornado } from "lucide-react";
 
 const NAVY = "#1e3a8a";
@@ -23,6 +23,26 @@ export type ScanResult = {
   stormSurgeLabel?: string | null;
 };
 
+// A hazard legend styled like the scan-results panel (rounded card, navy header,
+// gold border) so the overlays feel polished, not boxy.
+function LegendCard({ title, icon, items }: { title: string; icon: ReactNode; items: [string, string][] }) {
+  return (
+    <div className="overflow-hidden rounded-2xl bg-white shadow-2xl" style={{ border: `2px solid ${GOLD}` }}>
+      <div className="flex items-center gap-1.5 px-3 py-2 text-white" style={{ background: NAVY }}>
+        {icon}
+        <span className="text-[12px] font-bold">{title}</span>
+      </div>
+      <div className="space-y-1 px-3 py-2.5">
+        {items.map(([c, t]) => (
+          <div key={t} className="flex items-center gap-2 text-[11px] font-semibold text-gray-700">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: c }} /> {t}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const FLOOD_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#ea580c", 3: "#dc2626" };
 const LS_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#9a3412", 3: "#78350f" };
 const SS_COLOR: Record<number, string> = { 0: "#10b981", 1: "#8b5cf6", 2: "#7c3aed", 3: "#6d28d9" };
@@ -40,6 +60,7 @@ export default function MapTools({
   onLandslideToggle,
   stormSurgeOn,
   onStormSurgeToggle,
+  mapType,
 }: {
   onLocate: (lat: number, lon: number) => void;
   scanActive: boolean;
@@ -53,6 +74,7 @@ export default function MapTools({
   onLandslideToggle: () => void;
   stormSurgeOn: boolean;
   onStormSurgeToggle: () => void;
+  mapType?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -143,38 +165,31 @@ export default function MapTools({
         </button>
       </div>
 
-      {/* Legends (shown when each overlay is on) */}
+      {/* Legends (shown when each overlay is on) — styled like the scan-results panel */}
       {(floodOn || landslideOn || stormSurgeOn) && (
-        <div className="fixed bottom-44 left-3 z-[60] space-y-2 sm:bottom-24 sm:left-4">
+        <div className="fixed bottom-44 left-3 z-[60] w-[150px] space-y-2 sm:bottom-24 sm:left-4">
           {floodOn && (
-            <div className="rounded-xl bg-white/95 px-3 py-2 shadow-lg" style={{ border: `1.5px solid ${GOLD}` }}>
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">100-yr flood</div>
-              {[["#ca8a04", "Low"], ["#ea580c", "Moderate"], ["#dc2626", "High"]].map(([c, t]) => (
-                <div key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-700">
-                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c as string }} /> {t}
-                </div>
-              ))}
-            </div>
+            <LegendCard
+              title="100-yr flood"
+              icon={<Waves size={13} style={{ color: GOLD }} />}
+              items={mapType === "satellite"
+                ? [["#7dd3fc", "Low"], ["#38a5f5", "Moderate"], ["#035aaf", "High"]]
+                : [["#ca8a04", "Low"], ["#ea580c", "Moderate"], ["#dc2626", "High"]]}
+            />
           )}
           {landslideOn && (
-            <div className="rounded-xl bg-white/95 px-3 py-2 shadow-lg" style={{ border: `1.5px solid ${GOLD}` }}>
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">Landslide</div>
-              {[["#ca8a04", "Low"], ["#9a3412", "Moderate"], ["#78350f", "High"]].map(([c, t]) => (
-                <div key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-700">
-                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c as string }} /> {t}
-                </div>
-              ))}
-            </div>
+            <LegendCard
+              title="Landslide"
+              icon={<Mountain size={13} style={{ color: GOLD }} />}
+              items={[["#ca8a04", "Low"], ["#9a3412", "Moderate"], ["#78350f", "High"]]}
+            />
           )}
           {stormSurgeOn && (
-            <div className="rounded-xl bg-white/95 px-3 py-2 shadow-lg" style={{ border: `1.5px solid ${GOLD}` }}>
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">Storm surge · worst case</div>
-              {[["#8b5cf6", "Low"], ["#7c3aed", "Moderate"], ["#6d28d9", "High"]].map(([c, t]) => (
-                <div key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-700">
-                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c as string }} /> {t}
-                </div>
-              ))}
-            </div>
+            <LegendCard
+              title="Storm surge"
+              icon={<Tornado size={13} style={{ color: GOLD }} />}
+              items={[["#8b5cf6", "Low"], ["#7c3aed", "Moderate"], ["#6d28d9", "High"]]}
+            />
           )}
         </div>
       )}

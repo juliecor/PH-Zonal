@@ -23,6 +23,7 @@ type Msg = {
   suggestions?: string[];
   followups?: string[];
   hazard?: HazardData;
+  hazards?: NonNullable<HazardData>[];
 };
 
 const LOGO = "/pictures/zonal%20ai-Photoroom.png";
@@ -141,6 +142,7 @@ export default function ZonalAssistant({
           suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 8) : [],
           followups: Array.isArray(data.followups) ? data.followups.slice(0, 4) : [],
           hazard: data.hazard ?? null,
+          hazards: Array.isArray(data.hazards) ? data.hazards : data.hazard ? [data.hazard] : [],
         },
       ]);
     } catch (e: any) {
@@ -308,7 +310,11 @@ export default function ZonalAssistant({
                   {m.role === "assistant" ? <MarkdownText text={m.content} /> : m.content}
                 </Bubble>
 
-                {m.role === "assistant" && m.hazard && <HazardCard hazard={m.hazard} />}
+                {m.role === "assistant" &&
+                  (() => {
+                    const cards = m.hazards && m.hazards.length ? m.hazards : m.hazard ? [m.hazard] : [];
+                    return cards.map((h, hi) => <HazardCard key={hi} hazard={h} showPlace={cards.length > 1} />);
+                  })()}
 
                 {m.role === "assistant" && m.content && (
                   <div className="pl-11">
@@ -620,7 +626,7 @@ function sevStyle(level: number) {
 }
 
 // Pretty hazard card shown under the AI reply when the user asks about hazards.
-function HazardCard({ hazard }: { hazard: NonNullable<HazardData> }) {
+function HazardCard({ hazard, showPlace }: { hazard: NonNullable<HazardData>; showPlace?: boolean }) {
   const rows = [
     { icon: "🌊", name: "Flood", sub: "100-yr", haz: hazard.flood },
     { icon: "⛰️", name: "Landslide", sub: "", haz: hazard.landslide },
@@ -631,7 +637,7 @@ function HazardCard({ hazard }: { hazard: NonNullable<HazardData> }) {
       <div style={{ border: `1.5px solid ${GOLD}`, borderRadius: 14, background: "#fff", overflow: "hidden", boxShadow: "0 3px 12px rgba(15,23,60,0.08)" }}>
         <div style={{ background: NAVY, color: "#fff", padding: "7px 12px", fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", gap: 6 }}>
           <span>⚠️ Hazard check</span>
-          {hazard.place && (
+          {showPlace && hazard.place && (
             <span style={{ color: GOLD, fontWeight: 700, marginLeft: "auto", maxWidth: "62%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {hazard.place}
             </span>
