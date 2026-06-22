@@ -16,6 +16,7 @@ type MapType = "street" | "terrain" | "satellite";
 interface GMapProps {
   selected?: LatLng | null;
   onPickOnMap?: (lat: number, lon: number) => void;
+  onPoiClick?: (placeId: string, lat: number, lon: number) => void; // clicked a base-map establishment icon
   disablePickOnMap?: boolean;
   popupLabel?: string;
   boundary?: Boundary | null;
@@ -114,6 +115,7 @@ const MINIMAL_STYLE: any[] = [
 export default function GMap({
   selected,
   onPickOnMap,
+  onPoiClick,
   disablePickOnMap,
   boundary,
   highlightRadiusMeters = 80,
@@ -162,6 +164,11 @@ export default function GMap({
   useEffect(() => { onScanCompleteRef.current = onScanComplete ?? null; }, [onScanComplete]);
   const onPickRef = useRef<typeof onPickOnMap | null>(null);
   const canPickRef = useRef<boolean>(true);
+  const onPoiClickRef = useRef<typeof onPoiClick | null>(null);
+  useEffect(() => { onPoiClickRef.current = onPoiClick ?? null; }, [onPoiClick]);
+  // Suppress POI clicks while drawing a scan box / measuring land.
+  const busyModeRef = useRef<boolean>(false);
+  useEffect(() => { busyModeRef.current = !!scanMode || !!drawingMode; }, [scanMode, drawingMode]);
 
   // ✅ land drawing refs
   const drawClickListenerRef = useRef<any>(null);
@@ -195,13 +202,21 @@ export default function GMap({
         zoom: 10,
         styles: style || undefined,
         mapTypeId: mapType === "satellite" ? google.maps.MapTypeId.HYBRID : mapType === "terrain" ? google.maps.MapTypeId.TERRAIN : google.maps.MapTypeId.ROADMAP,
-        clickableIcons: false,
+        clickableIcons: true, // base-map establishment icons are clickable (→ onPoiClick)
         streetViewControl: false,
         mapTypeControl: false,
         fullscreenControl: false,
         zoomControl: true,
       });
       map.addListener("click", (e: any) => {
+        // Clicked a base-map establishment icon → it carries a placeId. Suppress
+        // Google's default popup and hand it to the page (name + zonal value card).
+        if (e?.placeId) {
+          try { e.stop?.(); } catch {}
+          if (busyModeRef.current) return;
+          if (e.latLng && onPoiClickRef.current) onPoiClickRef.current(e.placeId, e.latLng.lat(), e.latLng.lng());
+          return;
+        }
         if (!e?.latLng) return;
         if (!onPickRef.current) return;
         if (!canPickRef.current) return;

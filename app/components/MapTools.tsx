@@ -71,6 +71,7 @@ export default function MapTools({
   faultsOn,
   onFaultToggle,
   mapType,
+  sidebarOpen,
 }: {
   onLocate: (lat: number, lon: number) => void;
   scanActive: boolean;
@@ -88,6 +89,7 @@ export default function MapTools({
   faultsOn: boolean;
   onFaultToggle: () => void;
   mapType?: string;
+  sidebarOpen?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -211,7 +213,7 @@ export default function MapTools({
   return (
     <>
       {/* Top-center toolbar */}
-      <div className="fixed left-1/2 top-3 z-[60] flex max-w-[96vw] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 sm:top-4 sm:gap-2">
+      <div className={`fixed top-3 z-[60] flex max-w-[96vw] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 transition-[left] duration-300 sm:top-4 sm:gap-2 ${sidebarOpen ? "left-1/2 lg:left-[calc(50%+200px)]" : "left-1/2"}`}>
         <button onClick={nearMe} className={`${pill} text-white`} style={{ background: NAVY, border: `2px solid ${GOLD}` }} title="Zonal value near me">
           <MapPin size={15} style={{ color: GOLD }} /> <span className={lbl}>Near me</span>
         </button>

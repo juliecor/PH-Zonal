@@ -28,6 +28,7 @@ import {
   Sparkles,
   Camera,
   Image as ImageIcon,
+  Building2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiMe } from "./lib/authClient";
@@ -132,6 +133,14 @@ export function Home() {
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const [scanNote, setScanNote] = useState("");
   const [scanLoading, setScanLoading] = useState(false);
+  // Clicked establishment (base-map POI) → name + zonal value of that land.
+  type NearbyZonal = { lat: number; lon: number; value: number; street: string; barangay: string; city: string; classification: string; dist: number };
+  const [poiCard, setPoiCard] = useState<null | {
+    loading: boolean; name: string; address: string; lat: number; lon: number;
+    value: number | null; classification: string; street: string; barangay: string; city: string;
+    noData: boolean; scannedCity: string; nearby: NearbyZonal[]; nearbyLoading: boolean;
+  }>(null);
+  const poiReqRef = useRef(0);
   const [floodRisk, setFloodRisk] = useState<{ level: number; label: string } | null>(null);
   const [floodOverlayOn, setFloodOverlayOn] = useState(false);
   const [landslideRisk, setLandslideRisk] = useState<{ level: number; label: string } | null>(null);
@@ -977,6 +986,58 @@ export function Home() {
     finally { if (myId!==reqIdRef.current) return; }
   }
 
+  // Clicked a base-map establishment icon → show its name, the zonal value of that
+  // land, and a list of nearby zonal values (click one to fly there).
+  async function onPoiClick(placeId: string, lat: number, lon: number) {
+    const myId = ++poiReqRef.current;
+    setPoiCard({ loading: true, name: "", address: "", lat, lon, value: null, classification: "", street: "", barangay: "", city: "", noData: false, scannedCity: "", nearby: [], nearbyLoading: true });
+    // 1) establishment name + address (cheap, cached)
+    const det = await fetch(`/api/place-details?placeId=${encodeURIComponent(placeId)}`).then(r=>r.json()).catch(()=>null);
+    if (myId !== poiReqRef.current) return;
+    const name = det?.ok ? String(det.name||"") : "";
+    const address = det?.ok ? String(det.address||"") : "";
+    const plat = det?.ok && Number.isFinite(Number(det.lat)) ? Number(det.lat) : lat;
+    const plon = det?.ok && Number.isFinite(Number(det.lon)) ? Number(det.lon) : lon;
+    setPoiCard(c => c ? { ...c, name, address, lat: plat, lon: plon } : c);
+    // 2) value of that exact spot + nearby zonals around it, in parallel.
+    const dV = 0.0009, dN = 0.006; // ~100m building box, ~1.3km nearby box
+    const [sa, nb] = await Promise.all([
+      fetch(`/api/scan-area`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ minLat: plat-dV, maxLat: plat+dV, minLon: plon-dV, maxLon: plon+dV, domain }) }).then(r=>r.json()).catch(()=>null),
+      fetch(`/api/zonal-in-bounds?minLat=${plat-dN}&maxLat=${plat+dN}&minLon=${plon-dN}&maxLon=${plon+dN}&limit=300`).then(r=>r.json()).catch(()=>null),
+    ]);
+    if (myId !== poiReqRef.current) return;
+    const pt = sa?.ok && Array.isArray(sa.points) ? sa.points[0] : null;
+    // Build nearby list: distance to the clicked point, de-duped by street+value, nearest first.
+    const seen = new Set<string>();
+    const nearby: NearbyZonal[] = (nb?.ok && Array.isArray(nb.points) ? nb.points : [])
+      .map((p: any) => {
+        const dx = (Number(p.lon) - plon) * Math.cos((plat * Math.PI) / 180);
+        const dy = Number(p.lat) - plat;
+        return {
+          lat: Number(p.lat), lon: Number(p.lon), value: Number(p.value_per_sqm),
+          street: String(p.street||""), barangay: String(p.barangay||""), city: String(p.city||""),
+          classification: String(p.classification_code||""), dist: Math.sqrt(dx*dx + dy*dy) * 111000,
+        };
+      })
+      .filter((p: NearbyZonal) => {
+        if (!p.value || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return false;
+        const k = `${p.street}|${p.value}`.toLowerCase();
+        if (seen.has(k)) return false; seen.add(k); return true;
+      })
+      .sort((a: NearbyZonal, b: NearbyZonal) => a.dist - b.dist)
+      .slice(0, 50);
+    setPoiCard(c => c ? {
+      ...c, loading: false, nearbyLoading: false, nearby,
+      value: pt?.value_per_sqm ?? null,
+      classification: pt?.classification_code ?? "",
+      street: pt?.street ?? "",
+      barangay: pt?.barangay ?? "",
+      city: pt?.city ?? "",
+      noData: !!sa?.noData,
+      scannedCity: String(sa?.scannedCity ?? pt?.city ?? ""),
+    } : c);
+  }
+
   useEffect(()=>{ const t=setTimeout(()=>{ if (!domain) return; searchZonal({page:1}); },350); return ()=>clearTimeout(t); },[domain,city,barangay,classification,q]);
 
   const showingFrom   = totalRows ? (page-1)*itemsPerPage+1 : 0;
@@ -990,7 +1051,7 @@ export function Home() {
       <ZonalSearchIndicator visible={loading} />
 
       <div className="absolute inset-0">
-        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} floodTilesOn={floodOverlayOn} landslideTilesOn={landslideOverlayOn} stormSurgeTilesOn={stormSurgeOverlayOn} faultsOn={faultOverlayOn} scanFloodOverlay={scanFloodOverlay} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
+        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} onPoiClick={onPoiClick} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} floodTilesOn={floodOverlayOn} landslideTilesOn={landslideOverlayOn} stormSurgeTilesOn={stormSurgeOverlayOn} faultsOn={faultOverlayOn} scanFloodOverlay={scanFloodOverlay} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
       </div>
 
       {/* Brand pill */}
@@ -1359,9 +1420,10 @@ export function Home() {
           </div>
         </div>
 
-        {/* Drawer toggle */}
-        <button onClick={()=>setLeftOpen(v=>!v)} className="h-14 mt-6 rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-xl px-3 flex items-center justify-center hover:bg-white transition z-50" title={leftOpen?"Collapse panel":"Expand panel"}>
-          {leftOpen?<ChevronLeft/>:<ChevronRight/>}
+        {/* Drawer toggle — vertically centered on the map's left edge (like Google Maps)
+            so it never crowds the top toolbar / search box. */}
+        <button onClick={()=>setLeftOpen(v=>!v)} className="h-16 self-center rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 border-l-0 shadow-xl px-2.5 flex items-center justify-center hover:bg-white transition z-50" title={leftOpen?"Collapse panel":"Expand panel"} aria-label={leftOpen?"Collapse panel":"Expand panel"}>
+          {leftOpen?<ChevronLeft size={20} style={{color:"#1e3a8a"}}/>:<ChevronRight size={20} style={{color:"#1e3a8a"}}/>}
         </button>
       </div>
 
@@ -1684,7 +1746,98 @@ export function Home() {
         faultsOn={faultOverlayOn}
         onFaultToggle={() => setFaultOverlayOn((v) => !v)}
         mapType={mapType}
+        sidebarOpen={leftOpen}
       />
+
+      {/* ESTABLISHMENT PANEL — click a building/business icon on the map → full-height
+          sidebar with its name, the zonal value of that land, and nearby zonal values
+          (click one to fly there). */}
+      {poiCard && (
+        <div
+          className="fixed left-0 top-0 z-[58] flex h-full w-full flex-col bg-white shadow-2xl sm:w-[380px]"
+          style={{ borderRight: "2px solid #c9a84c", animation: "poiSlideIn 0.25s ease-out" }}
+        >
+          {/* Navy header */}
+          <div className="flex shrink-0 items-center justify-between px-4 py-3 text-white" style={{ background: "#1e3a8a" }}>
+            <span className="flex items-center gap-2 text-[14px] font-bold">
+              <Building2 size={17} style={{ color: "#c9a84c" }} /> Establishment
+            </span>
+            <button onClick={() => setPoiCard(null)} className="rounded-full p-1 text-white/70 hover:bg-white/15 hover:text-white" title="Close" aria-label="Close">
+              <X size={17} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {/* Name + the zonal value of THIS land */}
+            <div className="border-b border-gray-100 p-4">
+              {poiCard.loading && !poiCard.name ? (
+                <div className="flex items-center gap-2 text-[13px] text-gray-600">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-[#1e3a8a]" /> Reading this place…
+                </div>
+              ) : (
+                <>
+                  <div className="text-[17px] font-black leading-tight" style={{ color: "#1e3a8a" }}>{poiCard.name || "This location"}</div>
+                  {poiCard.address && <div className="mt-1 text-[12px] leading-snug text-gray-500">{poiCard.address}</div>}
+                  <div className="mt-3 rounded-2xl p-3.5" style={{ background: "#f8f6f0", border: "1px solid #efe6d6" }}>
+                    {poiCard.loading ? (
+                      <div className="flex items-center gap-2 text-[12px] text-gray-500">
+                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-[#1e3a8a]" /> Finding the zonal value…
+                      </div>
+                    ) : poiCard.value != null ? (
+                      <>
+                        <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Zonal value of this land</div>
+                        <div className="text-[26px] font-black leading-none" style={{ color: "#1e3a8a" }}>
+                          ₱{poiCard.value.toLocaleString("en-PH")}<span className="text-[12px] font-semibold text-gray-400">/sqm</span>
+                        </div>
+                        <div className="mt-1 text-[11.5px] font-semibold text-gray-600">
+                          {[poiCard.street, poiCard.barangay, poiCard.city].filter(Boolean).join(", ")}
+                          {poiCard.classification ? ` · ${poiCard.classification}` : ""}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-[12px] text-gray-500">No zonal value saved for {poiCard.scannedCity || "this area"} yet.</div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Nearby zonal values */}
+            <div className="sticky top-0 z-10 flex items-center justify-between bg-gray-50 px-4 py-2">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Nearby zonal values</span>
+              {!poiCard.nearbyLoading && poiCard.nearby.length > 0 && (
+                <span className="text-[11px] font-bold" style={{ color: "#c9a84c" }}>{poiCard.nearby.length}</span>
+              )}
+            </div>
+            {poiCard.nearbyLoading ? (
+              <div className="flex items-center gap-2 p-4 text-[12px] text-gray-500">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-[#1e3a8a]" /> Loading nearby values…
+              </div>
+            ) : poiCard.nearby.length === 0 ? (
+              <div className="p-4 text-[12px] text-gray-500">No other saved zonal values near here yet.</div>
+            ) : (
+              poiCard.nearby.map((n, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setSelectedLocation({ lat: n.lat, lon: n.lon }); setBottomOpen(true); }}
+                  className="block w-full border-b border-gray-100 px-4 py-2.5 text-left transition hover:bg-[#f5f7fc]"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[14px] font-black" style={{ color: "#1e3a8a" }}>
+                      ₱{n.value.toLocaleString("en-PH")}<span className="text-[10px] font-semibold text-gray-400">/sqm</span>
+                    </span>
+                    <span className="shrink-0 text-[10px] font-semibold text-gray-400">{n.dist < 1000 ? `${Math.round(n.dist)} m` : `${(n.dist/1000).toFixed(1)} km`}</span>
+                  </div>
+                  {n.street && <div className="truncate text-[12px] font-semibold text-gray-700">{n.street}</div>}
+                  <div className="truncate text-[11px] text-gray-500">
+                    {[n.barangay, n.city].filter(Boolean).join(", ")}{n.classification ? ` · ${n.classification}` : ""}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }''
