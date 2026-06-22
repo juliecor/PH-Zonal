@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { MapPin, X, Loader2, Scan, Waves, Mountain, Tornado } from "lucide-react";
+import { MapPin, X, Loader2, Scan, Waves, Mountain, Tornado, Activity } from "lucide-react";
 
 const NAVY = "#1e3a8a";
 const GOLD = "#c9a84c";
@@ -21,6 +21,10 @@ export type ScanResult = {
   landslideLabel?: string | null;
   stormSurgeLevel?: number | null;
   stormSurgeLabel?: string | null;
+  faultLevel?: number | null;
+  faultLabel?: string | null;
+  faultDistance?: number | null;
+  faultName?: string | null;
 };
 
 // A hazard legend styled like the scan-results panel (rounded card, navy header,
@@ -46,6 +50,8 @@ function LegendCard({ title, icon, items }: { title: string; icon: ReactNode; it
 const FLOOD_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#ea580c", 3: "#dc2626" };
 const LS_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#9a3412", 3: "#78350f" };
 const SS_COLOR: Record<number, string> = { 0: "#10b981", 1: "#8b5cf6", 2: "#7c3aed", 3: "#6d28d9" };
+const FAULT_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#ea580c", 3: "#dc2626" };
+const fmtDist = (m: number) => (m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`);
 
 export default function MapTools({
   onLocate,
@@ -60,6 +66,8 @@ export default function MapTools({
   onLandslideToggle,
   stormSurgeOn,
   onStormSurgeToggle,
+  faultsOn,
+  onFaultToggle,
   mapType,
 }: {
   onLocate: (lat: number, lon: number) => void;
@@ -74,6 +82,8 @@ export default function MapTools({
   onLandslideToggle: () => void;
   stormSurgeOn: boolean;
   onStormSurgeToggle: () => void;
+  faultsOn: boolean;
+  onFaultToggle: () => void;
   mapType?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -163,10 +173,18 @@ export default function MapTools({
         >
           <Tornado size={15} style={{ color: stormSurgeOn ? "#fff" : GOLD }} /> <span className={lbl}>Storm surge</span>
         </button>
+        <button
+          onClick={onFaultToggle}
+          className={`${pill} text-white`}
+          style={{ background: faultsOn ? "#b91c1c" : NAVY, border: `2px solid ${GOLD}` }}
+          title="Show/hide active fault lines (PHIVOLCS) + distance to the nearest fault"
+        >
+          <Activity size={15} style={{ color: faultsOn ? "#fff" : GOLD }} /> <span className={lbl}>Fault</span>
+        </button>
       </div>
 
       {/* Legends (shown when each overlay is on) — styled like the scan-results panel */}
-      {(floodOn || landslideOn || stormSurgeOn) && (
+      {(floodOn || landslideOn || stormSurgeOn || faultsOn) && (
         <div className="fixed bottom-44 left-3 z-[60] w-[150px] space-y-2 sm:bottom-24 sm:left-4">
           {floodOn && (
             <LegendCard
@@ -189,6 +207,13 @@ export default function MapTools({
               title="Storm surge"
               icon={<Tornado size={13} style={{ color: GOLD }} />}
               items={[["#8b5cf6", "Low"], ["#7c3aed", "Moderate"], ["#6d28d9", "High"]]}
+            />
+          )}
+          {faultsOn && (
+            <LegendCard
+              title="Active faults"
+              icon={<Activity size={13} style={{ color: GOLD }} />}
+              items={[["#b91c1c", "Fault line"]]}
             />
           )}
         </div>
@@ -284,6 +309,11 @@ export default function MapTools({
                     {r.stormSurgeLabel != null && (
                       <span className="inline-flex items-center gap-1" style={{ color: SS_COLOR[r.stormSurgeLevel ?? 0] || "#6b7280" }}>
                         🌀 {r.stormSurgeLabel} surge
+                      </span>
+                    )}
+                    {r.faultDistance != null && (
+                      <span className="inline-flex items-center gap-1" style={{ color: FAULT_COLOR[r.faultLevel ?? 0] || "#6b7280" }}>
+                        🌋 {fmtDist(r.faultDistance)} to fault
                       </span>
                     )}
                   </div>

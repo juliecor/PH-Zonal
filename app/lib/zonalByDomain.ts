@@ -13,7 +13,7 @@ const keepAliveHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 })
 const httpClient: AxiosInstance = axios.create({
   httpAgent: keepAliveHttpAgent,
   httpsAgent: keepAliveHttpsAgent,
-  timeout: 12000,
+  timeout: 30000,
   decompress: true,
   validateStatus: (s) => s >= 200 && s < 400, // allow redirects
 });
@@ -74,8 +74,8 @@ export async function fetchZonalIndex(domain: string) {
   try {
     const data = await getWithRetry(
       `https://api.spreadsimple.com/spread-view/public/omit-routes/${domain}`,
-      { timeout: 10000 },
-      5 // a bit more persistent for index
+      { timeout: 28000 }, // SpreadSimple cold index can take ~15-25s; wait it out vs abort+retry
+      4 // a bit more persistent for index
     );
     const idx = {
       rowsLimit: data?.customDealLimits?.rowsLimit ?? 5000,
@@ -131,7 +131,7 @@ export type ZonalFlatRow = {
 
 async function fetchS3Json(s3Url: string) {
   const data = await getWithRetry(s3Url, {
-    timeout: 10000,
+    timeout: 25000,
     headers: { Accept: "application/json" },
   });
   if (typeof data === "string") {
@@ -164,7 +164,7 @@ export async function fetchZonalValuesByDomain(args: {
     `&options=${b64(options)}`;
 
   // 1) first request with retry
-  let raw = await getWithRetry(url, { timeout: 12000 });
+  let raw = await getWithRetry(url, { timeout: 25000 });
 
   // ✅ 2) if table missing but s3Url exists, follow it
   if (!raw?.table && raw?.s3Url) {

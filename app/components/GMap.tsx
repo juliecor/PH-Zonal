@@ -35,6 +35,7 @@ interface GMapProps {
   floodTilesOn?: boolean; // crisp NOAH-style flood tile layer
   landslideTilesOn?: boolean; // crisp landslide hazard tile layer
   stormSurgeTilesOn?: boolean; // crisp storm-surge (SSA4) tile layer
+  faultsOn?: boolean; // active fault lines (PHIVOLCS) vector overlay
 
   // ✅ land drawing / area measurement
   drawingMode?: boolean;
@@ -131,6 +132,7 @@ export default function GMap({
   floodTilesOn = false,
   landslideTilesOn = false,
   stormSurgeTilesOn = false,
+  faultsOn = false,
   drawingMode = false,
   onAreaMeasured,
   clearDrawingSignal = 0,
@@ -152,6 +154,8 @@ export default function GMap({
   const floodTileTypeRef = useRef<any>(null);
   const landslideTileTypeRef = useRef<any>(null);
   const stormSurgeTileTypeRef = useRef<any>(null);
+  const faultDataRef = useRef<any>(null);
+  const faultGeoRef = useRef<any>(null);
   const scanRectRef = useRef<any>(null);
   const scanListenersRef = useRef<any[]>([]);
   const onScanCompleteRef = useRef<typeof onScanComplete | null>(null);
@@ -477,6 +481,34 @@ export default function GMap({
     stormSurgeTileTypeRef.current = t;
     return remove;
   }, [stormSurgeTilesOn]);
+
+  // Active fault lines (PHIVOLCS) — crisp vector overlay via a dedicated Data layer.
+  useEffect(() => {
+    const map = mapRef.current; if (!map) return;
+    let cancelled = false;
+    const clear = () => {
+      if (faultDataRef.current) { for (const l of faultDataRef.current) l.setMap(null); faultDataRef.current = null; }
+    };
+    clear();
+    if (!faultsOn) return;
+    (async () => {
+      let gj = faultGeoRef.current;
+      if (!gj) {
+        try { gj = await (await fetch("/api/faults")).json(); faultGeoRef.current = gj; } catch { return; }
+      }
+      if (cancelled || !mapRef.current) return;
+      // Two layers: a soft wide halo (the "fault zone") under a crisp solid line.
+      const casing = new google.maps.Data();
+      const line = new google.maps.Data();
+      try { casing.addGeoJson(gj); line.addGeoJson(gj); } catch { return; }
+      casing.setStyle({ strokeColor: "#ef4444", strokeWeight: 9, strokeOpacity: 0.16, clickable: false } as any);
+      line.setStyle({ strokeColor: "#b91c1c", strokeWeight: 2.5, strokeOpacity: 0.95, clickable: false } as any);
+      casing.setMap(map);
+      line.setMap(map);
+      faultDataRef.current = [casing, line];
+    })();
+    return () => { cancelled = true; clear(); };
+  }, [faultsOn]);
 
   // Scan tool: drag on the map to draw a box; on release, report its bounds.
   useEffect(() => {

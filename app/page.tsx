@@ -137,6 +137,8 @@ export function Home() {
   const [landslideOverlayOn, setLandslideOverlayOn] = useState(false);
   const [stormSurgeRisk, setStormSurgeRisk] = useState<{ level: number; label: string } | null>(null);
   const [stormSurgeOverlayOn, setStormSurgeOverlayOn] = useState(false);
+  const [faultRisk, setFaultRisk] = useState<{ distance_m: number; name: string; level: number; label: string } | null>(null);
+  const [faultOverlayOn, setFaultOverlayOn] = useState(false);
   const [scanFloodOverlay, setScanFloodOverlay] = useState<{ url: string; north: number; south: number; east: number; west: number } | null>(null);
   const boundsReqRef = useRef(0);
 
@@ -195,6 +197,24 @@ export function Home() {
         else setStormSurgeRisk(null);
       } catch {
         if (!cancelled) setStormSurgeRisk(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedLocation]);
+
+  // Distance to the nearest active fault (PHIVOLCS) for the selected location.
+  useEffect(() => {
+    if (!selectedLocation) { setFaultRisk(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/fault-at?lat=${selectedLocation.lat}&lon=${selectedLocation.lon}`);
+        const d = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (d?.ok && d.found) setFaultRisk({ distance_m: d.distance_m, name: d.name, level: d.level, label: d.label });
+        else setFaultRisk(null);
+      } catch {
+        if (!cancelled) setFaultRisk(null);
       }
     })();
     return () => { cancelled = true; };
@@ -763,19 +783,22 @@ export function Home() {
   // Hazard-tag a set of zonal points and render them (map pins + results list).
   async function renderScanPoints(found: any[], myId: number) {
     const ptsBody = JSON.stringify({ points: found.map((p)=>({lat:Number(p.lat),lon:Number(p.lon)})) });
-    let floods: any[] = [], slides: any[] = [], surges: any[] = [];
+    let floods: any[] = [], slides: any[] = [], surges: any[] = [], faults: any[] = [];
     try {
-      const [fr, lr, sr] = await Promise.all([
+      const [fr, lr, sr, qr] = await Promise.all([
         fetch("/api/flood-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
         fetch("/api/landslide-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
         fetch("/api/stormsurge-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
+        fetch("/api/fault-at",{method:"POST",headers:{"Content-Type":"application/json"},body:ptsBody}),
       ]);
       const fd = await fr.json().catch(()=>null);
       const ld = await lr.json().catch(()=>null);
       const sd = await sr.json().catch(()=>null);
+      const qd = await qr.json().catch(()=>null);
       if (fd?.ok && Array.isArray(fd.levels)) floods = fd.levels;
       if (ld?.ok && Array.isArray(ld.levels)) slides = ld.levels;
       if (sd?.ok && Array.isArray(sd.levels)) surges = sd.levels;
+      if (qd?.ok && Array.isArray(qd.levels)) faults = qd.levels;
     } catch {}
     if (myId !== boundsReqRef.current) return;
     const FCOLOR:any = {0:"#10b981",1:"#ca8a04",2:"#ea580c",3:"#dc2626"};
@@ -793,7 +816,7 @@ export function Home() {
         `</div>`;
       return { lat:Number(p.lat), lon:Number(p.lon), label:peso, info };
     });
-    const results = found.map((p,i)=>({ ...p, floodLevel: floods[i]?.level ?? null, floodLabel: floods[i]?.label ?? null, landslideLevel: slides[i]?.level ?? null, landslideLabel: slides[i]?.label ?? null, stormSurgeLevel: surges[i]?.level ?? null, stormSurgeLabel: surges[i]?.label ?? null }));
+    const results = found.map((p,i)=>({ ...p, floodLevel: floods[i]?.level ?? null, floodLabel: floods[i]?.label ?? null, landslideLevel: slides[i]?.level ?? null, landslideLabel: slides[i]?.label ?? null, stormSurgeLevel: surges[i]?.level ?? null, stormSurgeLabel: surges[i]?.label ?? null, faultLevel: faults[i]?.level ?? null, faultLabel: faults[i]?.label ?? null, faultDistance: faults[i]?.distance_m ?? null, faultName: faults[i]?.name ?? null }));
     if (myId !== boundsReqRef.current) return;
     setNearMePoints(pts);
     setScanResults(results as ScanResult[]);
@@ -945,7 +968,7 @@ export function Home() {
       <ZonalSearchIndicator visible={loading} />
 
       <div className="absolute inset-0">
-        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} floodTilesOn={floodOverlayOn} landslideTilesOn={landslideOverlayOn} stormSurgeTilesOn={stormSurgeOverlayOn} scanFloodOverlay={scanFloodOverlay} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
+        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} floodTilesOn={floodOverlayOn} landslideTilesOn={landslideOverlayOn} stormSurgeTilesOn={stormSurgeOverlayOn} faultsOn={faultOverlayOn} scanFloodOverlay={scanFloodOverlay} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
       </div>
 
       {/* Brand pill */}
@@ -1404,6 +1427,16 @@ export function Home() {
                         </div>
                       );
                     })()}
+                    {faultRisk&&(()=>{
+                      const qc=({0:{bg:"#ecfdf5",dot:"#10b981"},1:{bg:"#fef9c3",dot:"#ca8a04"},2:{bg:"#ffedd5",dot:"#ea580c"},3:{bg:"#fee2e2",dot:"#dc2626"}} as any)[faultRisk.level]||{bg:"#f3f4f6",dot:"#9ca3af"};
+                      const dist = faultRisk.distance_m < 1000 ? `${faultRisk.distance_m} m` : `${(faultRisk.distance_m/1000).toFixed(1)} km`;
+                      return (
+                        <div className="px-4 py-1.5 flex items-center gap-2" style={{background:qc.bg,borderTop:"1px solid #e8e0d8"}}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{background:qc.dot}}/>
+                          <span className="text-[11px] font-bold uppercase tracking-wide" style={{color:"#1e3a8a"}}>{dist} from {faultRisk.name}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Nearby zonal comparables (whole-barangay stats, with loaded sample as fallback) */}
@@ -1625,6 +1658,8 @@ export function Home() {
         onLandslideToggle={() => setLandslideOverlayOn((v) => !v)}
         stormSurgeOn={stormSurgeOverlayOn}
         onStormSurgeToggle={() => setStormSurgeOverlayOn((v) => !v)}
+        faultsOn={faultOverlayOn}
+        onFaultToggle={() => setFaultOverlayOn((v) => !v)}
         mapType={mapType}
       />
     </main>

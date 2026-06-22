@@ -11,6 +11,8 @@ const nextConfig: NextConfig = {
     "/api/landslide-at": ["./landslide-data/**"],
     "/api/stormsurge-tile/[z]/[x]/[y]": ["./stormsurge-data/**"],
     "/api/stormsurge-at": ["./stormsurge-data/**"],
+    "/api/fault-at": ["./fault-data/**"],
+    "/api/faults": ["./fault-data/**"],
   },
 };
 
