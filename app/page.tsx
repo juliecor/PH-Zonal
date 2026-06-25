@@ -979,7 +979,16 @@ export function Home() {
   // well-covered we stop there (so repeat scans are instant). Otherwise PHASE 2
   // auto-geocodes new records for that area in the background and merges them in
   // (and saves them, so the NEXT scan of this area is instant too).
+  // Clear the scan-results left panel (and the drawn box on the map). Used so the scan and
+  // establishment panels never stack — only one shows on the left rail at a time.
+  function clearScanPanel() {
+    setScanResults([]); setScanNote(""); setScanLoading(false);
+    setScanHazards(null); setScanHazardsLoading(false); setScanNearby([]);
+    setScanFloodOverlay(null); setClearScanSignal((s) => s + 1);
+  }
+
   async function onScanComplete(b: { minLat:number; maxLat:number; minLon:number; maxLon:number }) {
+    setPoiCard(null); // scan takes over the left rail — close any open establishment panel
     setScanMode(false); // exit draw mode so the map is interactive again
     setScanLoading(true);
     setScanResults([]);
@@ -1142,6 +1151,7 @@ export function Home() {
   // land, and a list of nearby zonal values (click one to fly there).
   async function onPoiClick(placeId: string, lat: number, lon: number) {
     const myId = ++poiReqRef.current;
+    clearScanPanel(); // establishment takes the left rail — close any open scan panel
     setPoiCard({ loading: true, name: "", address: "", lat, lon, value: null, classification: "", street: "", barangay: "", city: "", noData: false, scannedCity: "", nearby: [], nearbyLoading: true, hazards: null, hazardsLoading: true });
     // 1) establishment name + address (cheap, cached)
     const det = await fetch(`/api/place-details?placeId=${encodeURIComponent(placeId)}`).then(r=>r.json()).catch(()=>null);
@@ -1222,6 +1232,7 @@ export function Home() {
   // "Near me" → GPS → open the SAME panel (relabeled "Your Location") with the zonal
   // value + hazard profile + nearby for the user's current spot. Uniform with clicks.
   function runNearMe() {
+    clearScanPanel(); // Near me takes the left rail — close any open scan panel
     const blank = { value: null as number | null, classification: "", street: "", barangay: "", city: "", noData: false, scannedCity: "", nearby: [] as NearbyZonal[], cityTypical: false };
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setPoiCard({ loading: false, name: "Location unavailable", address: "This device doesn't support geolocation.", lat: 0, lon: 0, ...blank, noData: true, nearbyLoading: false, hazards: null, hazardsLoading: false, kind: "nearme" });
@@ -1959,7 +1970,7 @@ export function Home() {
         onSearchZonal={toggleSearchPanel}
         searchZonalActive={leftOpen}
         scanActive={scanMode}
-        onScanToggle={() => { setScanMode((v) => !v); setScanResults([]); setScanNote(""); setNearMePoints([]); setScanFloodOverlay(null); setScanHazards(null); setScanHazardsLoading(false); setScanNearby([]); setClearScanSignal((s) => s + 1); }}
+        onScanToggle={() => { setPoiCard(null); setScanMode((v) => !v); setScanResults([]); setScanNote(""); setNearMePoints([]); setScanFloodOverlay(null); setScanHazards(null); setScanHazardsLoading(false); setScanNearby([]); setClearScanSignal((s) => s + 1); }}
         scanResults={scanResults}
         scanNote={scanNote}
         scanLoading={scanLoading}
