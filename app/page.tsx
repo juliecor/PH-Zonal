@@ -2035,7 +2035,7 @@ export function Home() {
                     {poiCard.cityTypical ? (
                       <div className="hero-applies" style={{ alignItems: "flex-start" }}>
                         <Crosshair size={13} style={{ flexShrink: 0, marginTop: 2 }} />
-                        <span><b>Typical value for {[poiCard.barangay, poiCard.city].filter(Boolean).join(", ") || "this city"}.</b> The exact street here isn&rsquo;t in the BIR list yet, so this is the city&rsquo;s representative rate — not the exact lot.</span>
+                        <span><b>Typical value for {[poiCard.barangay, poiCard.city].filter(Boolean).join(", ") || "this city"}.</b> A representative city rate for this area — for a specific lot, search its exact street.</span>
                       </div>
                     ) : (
                       [poiCard.street, poiCard.barangay, poiCard.city].filter(Boolean).length > 0 && (
@@ -2157,7 +2157,7 @@ export function Home() {
                           : (r.classification_code && <span className="nb-cls">{r.classification_code}</span>)}
                       </div>
                       <div className="nb-where" style={{ whiteSpace: "normal" }}>{[r.street, r.barangay, r.city].filter(Boolean).join(" · ")}</div>
-                      {r.matchType === "city typical" && <div style={{ fontSize: 10, color: "#92400e", lineHeight: 1.4 }}>Typical value for this city — the exact street here isn&rsquo;t in the BIR list yet.</div>}
+                      {r.matchType === "city typical" && <div style={{ fontSize: 10, color: "#92400e", lineHeight: 1.4 }}>Representative city rate for this area.</div>}
                       {(r.floodLabel != null || r.landslideLabel != null || r.stormSurgeLabel != null || r.faultDistance != null) && (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 1 }}>
                           {r.floodLevel != null && <ScanHazChip level={r.floodLevel} label={hzLabel(r.floodLevel, "flood")} />}
