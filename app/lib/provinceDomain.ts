@@ -12,10 +12,22 @@
 
 const ZV = (sub: string) => `${sub}.zonalvalue.com`;
 
+// Convert Cebuano/Tagalog place names Google sometimes returns (even with language=en) into
+// their English DB forms: "Lungsod ng Dabaw" → "DAVAO CITY", "Dakbayan sa Sugbo" → "CEBU CITY",
+// "Lalawigan ng Davao del Sur" → "DAVAO DEL SUR", "Maynila" → "MANILA".
+export function anglicizePH(s: any): string {
+  let v = String(s || "").toUpperCase().replace(/Ñ/g, "N");
+  const isCity = /\b(?:LUNGSOD\s+NG|LUNGSOD|DAKBAYAN\s+SA|DAKBAYAN)\b/.test(v);
+  v = v.replace(/\b(?:LUNGSOD\s+NG|LUNGSOD|DAKBAYAN\s+SA|DAKBAYAN)\b/g, " ");                                  // "city of" wrappers
+  v = v.replace(/\b(?:BAYAN\s+NG|MUNISIPYO\s+NG|MUNISIPALIDAD\s+NG|LALAWIGAN\s+NG|PROBINSYA\s+NG|LALAWIGAN|PROBINSYA)\b/g, " "); // town/province wrappers
+  v = v.replace(/\bDABAW\b/g, "DAVAO").replace(/\bMAYNILA\b/g, "MANILA").replace(/\bSUGBO\b/g, "CEBU");        // local place-name roots
+  v = v.replace(/\s+/g, " ").trim();
+  if (isCity && v && !/\bCITY$/.test(v)) v += " CITY"; // "Lungsod ng X" means "City of X"
+  return v;
+}
+
 function norm(s: any): string {
-  return String(s || "")
-    .toUpperCase()
-    .replace(/Ñ/g, "N")
+  return anglicizePH(s)
     .replace(/\bPROVINCE OF\b/g, " ")
     .replace(/\bCITY OF\b/g, " ")
     .replace(/[^A-Z0-9 ]/g, " ")

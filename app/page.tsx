@@ -101,6 +101,18 @@ const SEV_WORD = ["None", "Low", "Moderate", "High"];
 function sevClass(level: number) { return level < 0 ? "s-na" : SEV_CLASS[Math.min(3, level)]; }
 function sevWord(level: number) { return level < 0 ? "No data" : SEV_WORD[Math.min(3, level)]; }
 function hzLabel(level: number, kind: string) { return level <= 0 ? `No ${kind}` : `${SEV_WORD[Math.min(3, level)]} ${kind}`; }
+
+// Tidy a displayed address: Google sometimes returns PH place names in Cebuano/Tagalog even
+// in EN ("Lungsod ng Dabaw" → "Davao City", "Lalawigan ng Davao del Sur" → "Davao del Sur").
+function cleanAddr(s: string): string {
+  return String(s || "")
+    .replace(/\bLungsod ng Dabaw\b/gi, "Davao City")
+    .replace(/\bDakbayan sa Sugbo\b/gi, "Cebu City")
+    .replace(/\bMaynila\b/gi, "Manila")
+    .replace(/\b(?:Lungsod ng|Dakbayan sa)\s+([A-Za-zÑñ.\-]+)/gi, "$1 City")
+    .replace(/\b(?:Lalawigan ng|Probinsya ng|Bayan ng|Munisipyo ng)\s+/gi, "")
+    .replace(/\s+,/g, ",").replace(/\s{2,}/g, " ").trim();
+}
 const HAZ_ICON: Record<string, ReactNode> = {
   flood: (<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3 14c2 0 2-1.5 4.5-1.5S10 14 12 14s2-1.5 4.5-1.5S19 14 21 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M3 19c2 0 2-1.5 4.5-1.5S10 19 12 19s2-1.5 4.5-1.5S19 19 21 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M12 4v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>),
   landslide: (<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3 20 9 9l4 5 3-4 5 10H3Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/></svg>),
@@ -2008,7 +2020,7 @@ export function Home() {
               )}
               {poiCard.address && (
                 <div className="address">
-                  <MapPin size={13} /><span>{poiCard.address}</span>
+                  <MapPin size={13} /><span>{cleanAddr(poiCard.address)}</span>
                 </div>
               )}
             </div>

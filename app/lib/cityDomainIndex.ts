@@ -12,7 +12,7 @@
 // province is the tiebreaker. Returns null when unsure → callers fall back to the
 // name-based resolver, so behavior is never worse than before.
 
-import { provinceToDomain } from "./provinceDomain";
+import { provinceToDomain, anglicizePH } from "./provinceDomain";
 
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "";
 
@@ -22,9 +22,7 @@ const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_U
 // "Kidapawan" → "KIDAPAWAN" == "KIDAPAWAN CITY". Increased collisions are resolved by the
 // province tiebreaker below.
 function cityKey(s: any): string {
-  return String(s || "")
-    .toUpperCase()
-    .replace(/Ñ/g, "N")
+  return anglicizePH(s) // Cebuano/Tagalog → English first ("Lungsod ng Dabaw" → "DAVAO CITY")
     .replace(/\(.*?\)/g, " ")
     .replace(/\b(CITY|MUNICIPALITY)\s+OF\b/g, " ")
     .replace(/[^A-Z0-9 ]/g, " ")
