@@ -73,7 +73,11 @@ export async function apiLogin(payload: {
 
 export function setToken(token: string) {
   try {
-    document.cookie = `authToken=${token}; path=/; max-age=${60 * 60 * 24 * 7}`;
+    // Harden the cookie for production: SameSite=Lax (CSRF defense) and Secure (HTTPS-only,
+    // so the token is never sent over plain HTTP). Secure is added only on HTTPS so local
+    // http://localhost dev still works. Value is URL-encoded (getToken/routes decode it).
+    const secure = typeof location !== "undefined" && location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `authToken=${encodeURIComponent(token)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax${secure}`;
     localStorage.setItem("authToken", token);
 
     try {
