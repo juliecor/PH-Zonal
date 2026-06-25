@@ -306,7 +306,10 @@ export default function GMap({
     if (circleRef.current) { circleRef.current.setMap(null); circleRef.current = null; }
 
     smoothPanTo(map, { lat: selected.lat, lng: selected.lon });
-    const targetZoom = Math.max(map.getZoom() || 10, 15);
+    // Zoom in to parcel/street level on select. 15 showed ~7km (whole metro at PH latitudes) —
+    // too wide for due-diligence; 17 shows the building + immediate streets. Keep deeper zoom
+    // if the user is already closer in.
+    const targetZoom = Math.max(map.getZoom() || 10, 17);
     // apply zoom a bit later for smoother effect
     window.setTimeout(() => {
       try { map.setZoom(targetZoom); } catch {}
