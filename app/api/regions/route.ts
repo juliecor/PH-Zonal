@@ -54,7 +54,7 @@ export async function GET(req: Request) {
   const { data: raw } = await axios.get(url, { timeout: 30000 });
   const rows = extractRows(raw);
 
-  const matches = rows
+  const rawMatches = rows
     .map((r: any) => {
       const province = String(cell(r, "Province-") ?? "").trim();
       const city = String(cell(r, "City-") ?? "").trim();
@@ -66,6 +66,26 @@ export async function GET(req: Request) {
       return { province, city, domain };
     })
     .filter((m: any) => m.domain);
+
+  // Dedupe to one entry per province+domain — the regions sheet has a row per city,
+  // so a province search would otherwise list the same province many times.
+  const seen = new Set<string>();
+  const matches = rawMatches.filter((m: any) => {
+    const key = `${m.province}|${m.domain}`.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Provinces split out of a combined domain into their own DB-only search (not in the
+  // external regions sheet) — surfaced here so they're searchable as standalone provinces.
+  const SPLIT_REGIONS = [{ province: "Biliran", domain: "biliran.zonalvalue.com" }, { province: "Batanes", domain: "batanes.zonalvalue.com" }, { province: "Apayao", domain: "apayao.zonalvalue.com" }, { province: "Mountain Province", domain: "mtprovince.zonalvalue.com" }, { province: "Camiguin", domain: "camiguin.zonalvalue.com" }, { province: "Davao de Oro", domain: "davaodeoro.zonalvalue.com" }, { province: "Davao Occidental", domain: "davaooccidental.zonalvalue.com" }, { province: "Davao City", domain: "davaocity.zonalvalue.com" }, { province: "General Santos", domain: "generalsantos.zonalvalue.com" }, { province: "Dinagat Islands", domain: "dinagat.zonalvalue.com" }];
+  const ql = q.toLowerCase();
+  for (const sr of SPLIT_REGIONS) {
+    if (ql.length >= 2 && sr.province.toLowerCase().includes(ql) && !matches.some((m: any) => m.domain === sr.domain)) {
+      matches.unshift({ province: sr.province, city: "", domain: sr.domain });
+    }
+  }
 
   return NextResponse.json({
     q,

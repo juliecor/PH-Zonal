@@ -48,7 +48,15 @@ export default function ZonalAssistant({
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<Msg[]>([]);
+  // Load saved chat synchronously on first render so nothing can race/wipe it.
+  const [messages, setMessages] = useState<Msg[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) { const p = JSON.parse(raw); if (Array.isArray(p)) return p; }
+    } catch {}
+    return [];
+  });
   const [listening, setListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -93,19 +101,11 @@ export default function ZonalAssistant({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  // Load saved chat history once.
+  // Persist chat history (keep it bounded). Skip the empty initial state so the very
+  // first render doesn't overwrite (wipe) the saved chat before the load effect restores
+  // it. The "Clear chat" button removes the key explicitly, so empty never needs saving.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) setMessages(parsed);
-      }
-    } catch {}
-  }, []);
-
-  // Persist chat history (keep it bounded).
-  useEffect(() => {
+    if (messages.length === 0) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-40)));
     } catch {}
@@ -131,20 +131,63 @@ export default function ZonalAssistant({
           history: messages.slice(-12), // remember the last ~6 turns
         }),
       });
-      const data = await res.json().catch(() => null);
       if (myId !== reqRef.current) return;
-      if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Something went wrong");
-      setMessages((m) => [
-        ...m,
-        {
-          role: "assistant",
-          content: String(data.text ?? "").trim(),
-          suggestions: Array.isArray(data.suggestions) ? data.suggestions.slice(0, 8) : [],
-          followups: Array.isArray(data.followups) ? data.followups.slice(0, 4) : [],
-          hazard: data.hazard ?? null,
-          hazards: Array.isArray(data.hazards) ? data.hazards : data.hazard ? [data.hazard] : [],
-        },
-      ]);
+      if (!res.ok || !res.body) {
+        let err = "Something went wrong";
+        try { const d = await res.json(); err = d?.error ?? err; } catch {}
+        throw new Error(err);
+      }
+
+      // Stream the reply: first line = JSON metadata, then the answer text token-by-token.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let raw = "";
+      let metaParsed = false;
+      let meta: any = {};
+      let added = false;
+      const renderMsg = (text: string): Msg => ({
+        role: "assistant",
+        content: text,
+        suggestions: Array.isArray(meta.suggestions) ? meta.suggestions.slice(0, 8) : [],
+        followups: Array.isArray(meta.followups) ? meta.followups.slice(0, 4) : [],
+        hazard: meta.hazard ?? null,
+        hazards: Array.isArray(meta.hazards) ? meta.hazards : meta.hazard ? [meta.hazard] : [],
+      });
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (myId !== reqRef.current) { try { await reader.cancel(); } catch {} return; }
+        raw += decoder.decode(value, { stream: true });
+        const nl = raw.indexOf("\n");
+        if (nl < 0) continue; // metadata line not complete yet
+        if (!metaParsed) {
+          try { meta = JSON.parse(raw.slice(0, nl)); } catch {}
+          metaParsed = true;
+          setLoading(false); // answer is arriving → drop the typing indicator
+        }
+        const text = raw.slice(nl + 1);
+        const msg = renderMsg(text);
+        setMessages((m) => {
+          const copy = m.slice();
+          if (added) copy[copy.length - 1] = msg;
+          else copy.push(msg);
+          return copy;
+        });
+        added = true;
+      }
+      // flush trailing bytes
+      raw += decoder.decode();
+      if (metaParsed) {
+        const nl = raw.indexOf("\n");
+        const finalMsg = renderMsg(nl >= 0 ? raw.slice(nl + 1) : "");
+        setMessages((m) => {
+          const copy = m.slice();
+          if (added) copy[copy.length - 1] = finalMsg;
+          else copy.push(finalMsg);
+          return copy;
+        });
+      }
     } catch (e: any) {
       if (myId !== reqRef.current) return;
       setMessages((m) => [
@@ -718,14 +761,18 @@ function Bubble({ role, children }: { role: "user" | "assistant"; children: Reac
             ? {
                 color: "#fff",
                 background: `linear-gradient(135deg, #2b4cb0, ${NAVY})`,
-                borderRadius: 18,
+                borderTopLeftRadius: 18,
+                borderTopRightRadius: 18,
                 borderBottomRightRadius: 5,
+                borderBottomLeftRadius: 18,
                 boxShadow: "0 6px 14px -6px rgba(30,58,138,0.55)",
               }
             : {
                 color: "#1f2937",
                 background: "#fff",
-                borderRadius: 18,
+                borderTopLeftRadius: 18,
+                borderTopRightRadius: 18,
+                borderBottomRightRadius: 18,
                 borderBottomLeftRadius: 5,
                 border: "1px solid #eef0f5",
                 boxShadow: "0 2px 8px rgba(15,23,60,0.06)",

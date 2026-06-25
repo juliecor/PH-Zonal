@@ -3,6 +3,8 @@ import { fetchZonalValuesByDomain, fetchZonalIndex } from "../../lib/zonalByDoma
 import { fuzzyMatchStreets } from "../../lib/zonal-util";
 
 // --- Optional: DB backend (Laravel) integration for Cebu ---
+import { DB_ONLY_PROVINCES } from "../../lib/dbProvinces";
+
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "";
 
 function domainToProvince(domain: string): string | null {
@@ -10,35 +12,92 @@ function domainToProvince(domain: string): string | null {
   if (!host) return null;
   const sub = host.split(".")[0] || host; // handle apex domains like negrosoriental-siquijor.com
   // Flexible includes-based matching to support combined domains (e.g., negrosoriental-siquijor)
+  if (sub.includes("negrosoccidental")) return "NEGROS OCCIDENTAL";
   if (sub.includes("negrosoriental-siquijor")) return "NEGROS ORIENTAL"; // explicit preference
   if (sub.includes("cebu")) return "CEBU";
   if (sub.includes("bohol")) return "BOHOL";
   if (sub.includes("iloilo")) return "ILOILO";
   if (sub.includes("davaodelsur")) return "DAVAO DEL SUR";
   if (sub.includes("davaodelnorte-samal-compostelavalley")) return "DAVAO DEL NORTE";
+  if(sub.includes("davaodeoro")) return "DAVAO DE ORO";
+  if(sub.includes("davaooccidental")) return "DAVAO OCCIDENTAL";
+  if(sub.includes("davaooriental")) return "DAVAO ORIENTAL";
+  if(sub.includes("davaocity")) return "DAVAO CITY";
   if (sub.includes("zamboangadelsur")) return "ZAMBOANGA DEL SUR";
   if (sub.includes("agusandelnorte")) return "AGUSAN DEL NORTE";
   if (sub.includes("ncr1stdistrict")) return "NCR";
+  if(sub.includes("ncr2nddistrict")) return "NCR";
+  if(sub.includes("ncr3rddistrict")) return "NCR";
+  if(sub.includes("ncr4thdistrict")) return "NCR";
   if (sub.includes("benguet")) return "BENGUET";
+  if(sub.includes("ifugao")) return "IFUGAO";
   if (sub.includes("cagayan-batanes")) return "CAGAYAN";
+  if(sub.includes("batanes")) return "BATANES";
+  if(sub.includes("isabela")) return "ISABELA";
   if (sub.includes("abra")) return "ABRA";
-  if (sub.includes("misamisoriental-camiguin")) return "CAMIGUIN-MISAMISORIENTAL";
+  if (sub.includes("misamisoriental-camiguin")) return "MISAMIS ORIENTAL";
+  if(sub.includes("camiguin")) return "CAMIGUIN";
+  if(sub.includes("bukidnon")) return "BUKIDNON";
+  if(sub.includes("misamiscccidental")) return "MISAMIS OCCIDENTAL";
+  if(sub.includes("misamisoccidental")) return "MISAMIS OCCIDENTAL";
+  if(sub.includes("lanaodelnorte")) return "LANAO DEL NORTE";
   if(sub.includes("agusandelsur")) return "AGUSAN DEL SUR";
+  if(sub.includes("surigaodelnorte")) return "SURIGAO DEL NORTE";
+  if(sub.includes("surigaodelsur")) return "SURIGAO DEL SUR";
+  if(sub.includes("dinagat")) return "DINAGAT ISLANDS";
   if(sub.includes("kalinga-apayao")) return "KALINGA";
+  if(sub.includes("apayao")) return "APAYAO";
   if(sub.includes("aklan")) return "AKLAN";
-  if (sub.includes("aurora")) return "AURORA";
+  if(sub.includes("capiz")) return "CAPIZ";
+  if(sub.includes("antique")) return "ANTIQUE";
+  if(sub.includes("camarinesnorte")) return "CAMARINES NORTE";
+  if(sub.includes("camarinessur")) return "CAMARINES SUR";
+  if(sub.includes("albay")) return "ALBAY";
+  if(sub.includes("sorsogon")) return "SORSOGON";
+  if(sub.includes("catanduanes")) return "CATANDUANES";
+  if(sub.includes("masbate")) return "MASBATE";
+  if(sub.includes("occidentalmindoro")) return "OCCIDENTAL MINDORO";
+  if(sub.includes("orientalmindoro")) return "ORIENTAL MINDORO";
+  if(sub.includes("marinduque")) return "MARINDUQUE";
+  if(sub.includes("romblon")) return "ROMBLON";
+  if(sub.includes("palawan")) return "PALAWAN";
+  if(sub.includes("cavite")) return "CAVITE";
   if(sub.includes("laguna")) return "LAGUNA";
+  if(sub.includes("batangas")) return "BATANGAS";
+  if(sub.includes("rizal")) return "RIZAL";
+  if(sub.includes("quezon")) return "QUEZON";
+  if (sub.includes("aurora")) return "AURORA";
+  if(sub.includes("bataan")) return "BATAAN";
+  if(sub.includes("bulacan")) return "BULACAN";
+  if(sub.includes("nuevaecija")) return "NUEVA ECIJA";
+  if(sub.includes("pampanga")) return "PAMPANGA";
+  if(sub.includes("tarlac")) return "TARLAC";
+  if(sub.includes("zambales")) return "ZAMBALES";
   if (sub.includes("lanaodelsur")) return "LANAO DEL SUR";
-  if (sub.includes("leyte-bilaran")) return "LEYTE";
+  if(sub.includes("maguindanao")) return "MAGUINDANAO";
+  if(sub.includes("basilan")) return "BASILAN";
+  if(sub.includes("sulu")) return "SULU";
+  if(sub.includes("southernleyte")) return "SOUTHERN LEYTE";
+  if (sub.includes("leyte-bilaran")) return "LEYTE"; // (before "biliran" — combined name contains it)
+  if (sub.includes("biliran")) return "BILIRAN";
   if(sub.includes("mtprovince")) return "MOUNTAIN PROVINCE";
   if(sub.includes("northernsamar")) return "NORTHERN SAMAR";
+  if(sub.includes("easternsamar")) return "EASTERN SAMAR";
+  if(sub.includes("westernsamar")) return "WESTERN SAMAR";
   if(sub.includes("nuevavizcaya")) return "NUEVA VIZCAYA"; 
   if(sub.includes("quirino")) return "QUIRINO";
+  if(sub.includes("ilocosnorte")) return "ILOCOS NORTE";
+  if(sub.includes("ilocossur")) return "ILOCOS SUR";
+  if(sub.includes("launion")) return "LA UNION";
+  if(sub.includes("pangasinan")) return "PANGASINAN";
   if(sub.includes("southcotabato")) return "SOUTH COTABATO";
+  if(sub.includes("northcotabato")) return "NORTH COTABATO";
+  if(sub.includes("sultankudarat")) return "SULTAN KUDARAT";
+  if(sub.includes("generalsantos")) return "GENERAL SANTOS";
+  if(sub.includes("sarangani")) return "SARANGANI";
   if(sub.includes("tawitawi")) return "TAWI-TAWI";
   if(sub.includes("zamboangadelnorte")) return "ZAMBOANGA DEL NORTE";
   if(sub.includes("zamboangasibugay")) return "ZAMBOANGA SIBUGAY";
-  if(sub.includes("zamboangadelsur")) return "ZAMBOANGA DEL SUR";
 
   return null;
 }
@@ -56,11 +115,12 @@ async function fetchFromDbBackend(args: {
   barangay?: string;
   classification?: string;
   q?: string;
+  sort?: string;
   itemsPerPage: number;
   token?: string | null;
 }) {
   if (!BACKEND_URL) throw new Error("BACKEND_URL not configured");
-  const { province, page, city = "", barangay = "", classification = "", q = "", itemsPerPage, token } = args;
+  const { province, page, city = "", barangay = "", classification = "", q = "", sort = "", itemsPerPage, token } = args;
 
   const params = new URLSearchParams();
   params.set("province", province);
@@ -69,6 +129,7 @@ async function fetchFromDbBackend(args: {
   // Pass code-like classifications only (e.g., GP, RR, CR, A50)
   if (/^[A-Z0-9-]{1,5}$/.test(classification)) params.set("classification_code", classification);
   if (q) params.set("q", q);
+  if (sort) params.set("sort", sort);
   params.set("page", String(page));
   params.set("per_page", String(itemsPerPage));
 
@@ -329,6 +390,7 @@ export async function GET(req: Request) {
     const barangay = String(searchParams.get("barangay") ?? "").trim();
     const classification = String(searchParams.get("classification") ?? "").trim();
     const q = String(searchParams.get("q") ?? "").trim();
+    const sort = String(searchParams.get("sort") ?? "").trim();
 
     if (!domain) {
       return NextResponse.json({ error: "domain is required" }, { status: 400 });
@@ -342,8 +404,10 @@ export async function GET(req: Request) {
     const province = domainToProvince(domain);
     if (province && BACKEND_URL) {
       const hasFilters = Boolean(city || barangay || classification || q);
-      if (!hasFilters) {
-        const payload = await fetchFromDbBackend({ province, page, city, barangay, classification, q, itemsPerPage, token: authToken });
+      // DB-complete provinces (e.g. Cebu) read straight from the DB for ALL queries —
+      // the backend filters + paginates natively, so no SpreadSimple fetch at all.
+      if (!hasFilters || DB_ONLY_PROVINCES.has(province)) {
+        const payload = await fetchFromDbBackend({ province, page, city, barangay, classification, q, sort, itemsPerPage, token: authToken });
         return NextResponse.json(payload, { headers: { "Cache-Control": "public, max-age=20, stale-while-revalidate=60" } });
       }
 

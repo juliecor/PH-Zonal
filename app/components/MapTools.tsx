@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, type ReactNode } from "react";
-import { MapPin, X, Loader2, Scan, Waves, Mountain, Tornado, Activity, Search } from "lucide-react";
+import { MapPin, X, Loader2, Scan, Waves, Mountain, Tornado, Activity, Search, Droplets, AlertTriangle, Layers, ChevronDown } from "lucide-react";
 
 const NAVY = "#1e3a8a";
 const GOLD = "#c9a84c";
@@ -48,14 +48,12 @@ function LegendCard({ title, icon, items }: { title: string; icon: ReactNode; it
   );
 }
 
-const FLOOD_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#ea580c", 3: "#dc2626" };
-const LS_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#9a3412", 3: "#78350f" };
-const SS_COLOR: Record<number, string> = { 0: "#10b981", 1: "#8b5cf6", 2: "#7c3aed", 3: "#6d28d9" };
-const FAULT_COLOR: Record<number, string> = { 0: "#10b981", 1: "#ca8a04", 2: "#ea580c", 3: "#dc2626" };
-const fmtDist = (m: number) => (m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`);
 
 export default function MapTools({
   onLocate,
+  onNearMe,
+  onSearchZonal,
+  searchZonalActive,
   scanActive,
   onScanToggle,
   scanResults,
@@ -70,10 +68,20 @@ export default function MapTools({
   onStormSurgeToggle,
   faultsOn,
   onFaultToggle,
+  liquefactionOn,
+  onLiquefactionToggle,
+  tsunamiOn,
+  onTsunamiToggle,
+  groundRuptureOn,
+  onGroundRuptureToggle,
   mapType,
   sidebarOpen,
+  leftPanelOpen,
 }: {
   onLocate: (lat: number, lon: number) => void;
+  onNearMe: () => void;
+  onSearchZonal: () => void;
+  searchZonalActive?: boolean;
   scanActive: boolean;
   onScanToggle: () => void;
   scanResults: ScanResult[];
@@ -88,13 +96,17 @@ export default function MapTools({
   onStormSurgeToggle: () => void;
   faultsOn: boolean;
   onFaultToggle: () => void;
+  liquefactionOn: boolean;
+  onLiquefactionToggle: () => void;
+  tsunamiOn: boolean;
+  onTsunamiToggle: () => void;
+  groundRuptureOn: boolean;
+  onGroundRuptureToggle: () => void;
   mapType?: string;
   sidebarOpen?: boolean;
+  leftPanelOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [err, setErr] = useState("");
+  const [hazardsOpen, setHazardsOpen] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchErr, setSearchErr] = useState("");
@@ -103,8 +115,6 @@ export default function MapTools({
   const [showSuggest, setShowSuggest] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
   const suppressFetch = useRef(false); // skip the autocomplete fetch right after a pick/submit
-
-  const peso = (v: any) => "₱" + Number(v).toLocaleString("en-PH");
 
   // Debounced Google-style place suggestions as the user types.
   useEffect(() => {
@@ -170,51 +180,30 @@ export default function MapTools({
     else if (e.key === "Escape") { setShowSuggest(false); }
   };
 
-  const nearMe = () => {
-    setErr("");
-    setResult(null);
-    setOpen(true);
-    setLoading(true);
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setErr("Location isn't supported on this device.");
-      setLoading(false);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const { latitude, longitude } = pos.coords;
-          onLocate(latitude, longitude);
-          const res = await fetch(`/api/zonal-nearest?lat=${latitude}&lon=${longitude}&radius=3000`);
-          const data = await res.json().catch(() => null);
-          if (!data?.ok || !data?.found) {
-            setErr("No zonal value saved near you yet. Try scanning an area you've browsed.");
-          } else {
-            setResult(data);
-          }
-        } catch {
-          setErr("Couldn't fetch the nearest value.");
-        } finally {
-          setLoading(false);
-        }
-      },
-      () => {
-        setErr("Please allow location access.");
-        setLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
-    );
-  };
-
   // Icon-only on phones (label hidden), full label on >= sm. Keeps one tidy row.
   const pill = "flex items-center gap-1.5 rounded-full p-2.5 sm:px-3.5 sm:py-2 text-[13px] font-bold shadow-lg transition hover:scale-105 active:scale-95";
   const lbl = "hidden sm:inline";
+
+  // All overlay layers, grouped under one "Hazards" dropdown to keep the toolbar tidy.
+  const HAZARDS = [
+    { label: "Flood", on: floodOn, toggle: onFloodToggle, Icon: Waves, color: "#0ea5e9" },
+    { label: "Landslide", on: landslideOn, toggle: onLandslideToggle, Icon: Mountain, color: "#92400e" },
+    { label: "Storm surge", on: stormSurgeOn, toggle: onStormSurgeToggle, Icon: Tornado, color: "#6d28d9" },
+    { label: "Fault", on: faultsOn, toggle: onFaultToggle, Icon: Activity, color: "#b91c1c" },
+    { label: "Liquefaction", on: liquefactionOn, toggle: onLiquefactionToggle, Icon: Droplets, color: "#d97706" },
+    { label: "Tsunami", on: tsunamiOn, toggle: onTsunamiToggle, Icon: Waves, color: "#0891b2" },
+    { label: "Ground Rupture", on: groundRuptureOn, toggle: onGroundRuptureToggle, Icon: AlertTriangle, color: "#dc2626" },
+  ];
+  const activeHazards = HAZARDS.filter((h) => h.on).length;
 
   return (
     <>
       {/* Top-center toolbar */}
       <div className={`fixed top-3 z-[60] flex max-w-[96vw] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 transition-[left] duration-300 sm:top-4 sm:gap-2 ${sidebarOpen ? "left-1/2 lg:left-[calc(50%+200px)]" : "left-1/2"}`}>
-        <button onClick={nearMe} className={`${pill} text-white`} style={{ background: NAVY, border: `2px solid ${GOLD}` }} title="Zonal value near me">
+        <button onClick={onSearchZonal} className={`${pill} text-white`} style={{ background: searchZonalActive ? "#b5923f" : NAVY, border: `2px solid ${GOLD}` }} title="Open the zonal-value search panel">
+          <Search size={15} style={{ color: searchZonalActive ? "#fff" : GOLD }} /> <span className={lbl}>Search Zonal</span>
+        </button>
+        <button onClick={onNearMe} className={`${pill} text-white`} style={{ background: NAVY, border: `2px solid ${GOLD}` }} title="Zonal value near me">
           <MapPin size={15} style={{ color: GOLD }} /> <span className={lbl}>Near me</span>
         </button>
         <button
@@ -226,40 +215,66 @@ export default function MapTools({
           <Scan size={15} style={{ color: scanActive ? "#fff" : GOLD }} />{" "}
           <span className={lbl}>{scanActive ? "Draw a box…" : "Scan area"}</span>
         </button>
-        <button
-          onClick={onFloodToggle}
-          className={`${pill} text-white`}
-          style={{ background: floodOn ? "#0ea5e9" : NAVY, border: `2px solid ${GOLD}` }}
-          title="Show/hide the 100-yr flood hazard overlay"
-        >
-          <Waves size={15} style={{ color: floodOn ? "#fff" : GOLD }} /> <span className={lbl}>Flood</span>
-        </button>
-        <button
-          onClick={onLandslideToggle}
-          className={`${pill} text-white`}
-          style={{ background: landslideOn ? "#92400e" : NAVY, border: `2px solid ${GOLD}` }}
-          title="Show/hide the landslide hazard overlay"
-        >
-          <Mountain size={15} style={{ color: landslideOn ? "#fff" : GOLD }} /> <span className={lbl}>Landslide</span>
-        </button>
-        <button
-          onClick={onStormSurgeToggle}
-          className={`${pill} text-white`}
-          style={{ background: stormSurgeOn ? "#6d28d9" : NAVY, border: `2px solid ${GOLD}` }}
-          title="Show/hide the worst-case (SSA4) storm-surge hazard overlay"
-        >
-          <Tornado size={15} style={{ color: stormSurgeOn ? "#fff" : GOLD }} /> <span className={lbl}>Storm surge</span>
-        </button>
-        <button
-          onClick={onFaultToggle}
-          className={`${pill} text-white`}
-          style={{ background: faultsOn ? "#b91c1c" : NAVY, border: `2px solid ${GOLD}` }}
-          title="Show/hide active fault lines (PHIVOLCS) + distance to the nearest fault"
-        >
-          <Activity size={15} style={{ color: faultsOn ? "#fff" : GOLD }} /> <span className={lbl}>Fault</span>
-        </button>
+        {/* Hazards — grouped into one dropdown to keep the toolbar tidy */}
+        <div className="relative">
+          <button
+            onClick={() => setHazardsOpen((v) => !v)}
+            className={`${pill} text-white`}
+            style={{ background: activeHazards ? "#0f766e" : NAVY, border: `2px solid ${GOLD}` }}
+            title="Show/hide hazard overlays (flood, landslide, fault, liquefaction, tsunami…)"
+          >
+            <Layers size={15} style={{ color: activeHazards ? "#fff" : GOLD }} />
+            <span className={lbl}>Hazards</span>
+            {activeHazards > 0 && (
+              <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-extrabold text-[#0f766e]" style={{ background: GOLD }}>
+                {activeHazards}
+              </span>
+            )}
+            <ChevronDown size={13} className={`transition-transform ${hazardsOpen ? "rotate-180" : ""}`} style={{ color: GOLD }} />
+          </button>
 
-        {/* Google-Maps-style search box, right beside the Fault button */}
+          {hazardsOpen && (
+            <>
+              {/* click-away backdrop */}
+              <div className="fixed inset-0 z-[65]" onClick={() => setHazardsOpen(false)} />
+              <div className="absolute left-1/2 top-[calc(100%+8px)] z-[70] w-56 -translate-x-1/2 overflow-hidden rounded-2xl bg-white shadow-2xl" style={{ border: `2px solid ${GOLD}` }}>
+                <div className="flex items-center justify-between px-3 py-2 text-white" style={{ background: NAVY }}>
+                  <span className="text-[12px] font-bold">Hazard overlays</span>
+                  {activeHazards > 0 && (
+                    <button
+                      onClick={() => HAZARDS.forEach((h) => h.on && h.toggle())}
+                      className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                      style={{ background: "rgba(255,255,255,0.18)" }}
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+                <div className="py-1">
+                  {HAZARDS.map((h) => (
+                    <button
+                      key={h.label}
+                      onClick={h.toggle}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-[#f5f7fc]"
+                    >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full" style={{ background: h.on ? h.color : "#eef1f6" }}>
+                        <h.Icon size={14} style={{ color: h.on ? "#fff" : "#64748b" }} />
+                      </span>
+                      <span className="flex-1 text-[13px] font-semibold" style={{ color: h.on ? "#0f172a" : "#475569" }}>
+                        {h.label}
+                      </span>
+                      <span className="relative inline-flex h-4 w-7 items-center rounded-full transition" style={{ background: h.on ? h.color : "#cbd5e1" }}>
+                        <span className={`absolute h-3 w-3 rounded-full bg-white transition-all ${h.on ? "left-[14px]" : "left-0.5"}`} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Google-Maps-style search box, right beside the Hazards button */}
         <div className="relative">
           <form
             onSubmit={(e) => { e.preventDefault(); doSearch(); }}
@@ -318,8 +333,8 @@ export default function MapTools({
       )}
 
       {/* Legends (shown when each overlay is on) — styled like the scan-results panel */}
-      {(floodOn || landslideOn || stormSurgeOn || faultsOn) && (
-        <div className="fixed bottom-44 left-3 z-[60] w-[150px] space-y-2 sm:bottom-24 sm:left-4">
+      {(floodOn || landslideOn || stormSurgeOn || faultsOn || liquefactionOn || tsunamiOn || groundRuptureOn) && (
+        <div className={`fixed bottom-44 z-[56] max-h-[60vh] w-[160px] space-y-2 overflow-y-auto transition-[left] duration-300 sm:bottom-24 ${leftPanelOpen ? "left-3 sm:left-[396px]" : "left-3 sm:left-4"}`}>
           {floodOn && (
             <LegendCard
               title="100-yr flood"
@@ -350,6 +365,32 @@ export default function MapTools({
               items={[["#b91c1c", "Fault line"]]}
             />
           )}
+          {liquefactionOn && (
+            <LegendCard
+              title="Liquefaction"
+              icon={<Droplets size={13} style={{ color: GOLD }} />}
+              items={[["#e0a23a", "Susceptible area"]]}
+            />
+          )}
+          {tsunamiOn && (
+            <LegendCard
+              title="Tsunami-prone"
+              icon={<Waves size={13} style={{ color: GOLD }} />}
+              items={[["#22b8cf", "Prone coastal area"]]}
+            />
+          )}
+          {groundRuptureOn && (
+            <LegendCard
+              title="Ground rupture"
+              icon={<AlertTriangle size={13} style={{ color: GOLD }} />}
+              items={[["#dc2626", "Active fault"], ["#a855f7", "Trench"]]}
+            />
+          )}
+          {(liquefactionOn || tsunamiOn || groundRuptureOn) && (
+            <div className="rounded-lg bg-white/90 px-2 py-1 text-[9px] font-semibold text-gray-500 shadow" style={{ border: `1px solid ${GOLD}` }}>
+              Source: PHIVOLCS / GeoRiskPH
+            </div>
+          )}
         </div>
       )}
 
@@ -360,105 +401,8 @@ export default function MapTools({
         </div>
       )}
 
-      {/* Near-me result card */}
-      {open && (
-        <div
-          className="fixed left-1/2 top-16 z-[61] w-[90vw] max-w-[340px] -translate-x-1/2 rounded-2xl bg-white p-4 shadow-2xl"
-          style={{ border: `2px solid ${GOLD}` }}
-        >
-          <button onClick={() => setOpen(false)} className="absolute right-2 top-2 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
-            <X size={16} />
-          </button>
-          {loading ? (
-            <div className="flex items-center gap-2 py-1 text-sm text-gray-600">
-              <Loader2 size={16} className="animate-spin" style={{ color: NAVY }} /> Finding the value near you…
-            </div>
-          ) : err ? (
-            <div className="pr-5 text-[13px] leading-relaxed text-gray-600">{err}</div>
-          ) : result ? (
-            <div className="pr-5">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Nearest zonal value</div>
-              <div className="text-2xl font-black leading-tight" style={{ color: NAVY }}>
-                {peso(result.value_per_sqm)}<span className="text-sm font-semibold text-gray-500">/sqm</span>
-              </div>
-              {result.street && <div className="mt-1 text-[13px] font-semibold text-gray-800">{result.street}</div>}
-              <div className="text-[12px] text-gray-500">{[result.barangay, result.city, result.province].filter(Boolean).join(", ")}</div>
-              <div className="mt-1 text-[11px] text-gray-400">
-                {result.classification_code ? `${result.classification_code} · ` : ""}~{result.distance_m}m from you
-              </div>
-            </div>
-          ) : null}
-        </div>
-      )}
-
-      {/* Scan results panel */}
-      {(scanLoading || scanResults.length > 0 || !!scanNote) && (
-        <div
-          className="fixed right-3 top-28 z-[60] flex max-h-[62vh] w-[88vw] max-w-[300px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-          style={{ border: `2px solid ${GOLD}` }}
-        >
-          <div className="flex items-center justify-between px-3 py-2.5 text-white" style={{ background: NAVY }}>
-            <span className="text-[13px] font-bold">
-              {scanLoading ? "Scanning…" : scanResults.length === 0 && scanNote ? "No data here yet" : `Zonal values found (${scanResults.length})`}
-            </span>
-            {!scanLoading && (
-              <button onClick={onScanToggle} className="rounded-full p-1 text-white/70 hover:bg-white/15 hover:text-white" title="Done">
-                <X size={15} />
-              </button>
-            )}
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {scanLoading ? (
-              <div className="flex items-center gap-2 p-3 text-[13px] text-gray-600">
-                <Loader2 size={15} className="animate-spin" style={{ color: NAVY }} /> Reading the area…
-              </div>
-            ) : scanResults.length === 0 ? (
-              <div className="p-3 text-[13px] text-gray-500">{scanNote || "No zonal values saved in that area yet."}</div>
-            ) : (
-              scanResults.map((r, i) => (
-                <button
-                  key={i}
-                  onClick={() => onPickResult(r)}
-                  className="block w-full border-b border-gray-100 px-3 py-2 text-left transition hover:bg-[#f5f7fc]"
-                >
-                  <div className="text-[14px] font-black" style={{ color: NAVY }}>
-                    {peso(r.value_per_sqm)}<span className="text-[10px] font-semibold text-gray-400">/sqm</span>
-                  </div>
-                  {r.street && (
-                    <div className="truncate text-[12px] font-semibold text-gray-700">{r.street}</div>
-                  )}
-                  <div className="truncate text-[11px] text-gray-500">
-                    {[r.barangay, r.city].filter(Boolean).join(", ")}
-                    {r.classification_code ? ` · ${r.classification_code}` : ""}
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10.5px] font-bold">
-                    {r.floodLabel != null && (
-                      <span className="inline-flex items-center gap-1" style={{ color: FLOOD_COLOR[r.floodLevel ?? 0] || "#6b7280" }}>
-                        🌊 {r.floodLabel} flood
-                      </span>
-                    )}
-                    {r.landslideLabel != null && (
-                      <span className="inline-flex items-center gap-1" style={{ color: LS_COLOR[r.landslideLevel ?? 0] || "#6b7280" }}>
-                        ⛰️ {r.landslideLabel} landslide
-                      </span>
-                    )}
-                    {r.stormSurgeLabel != null && (
-                      <span className="inline-flex items-center gap-1" style={{ color: SS_COLOR[r.stormSurgeLevel ?? 0] || "#6b7280" }}>
-                        🌀 {r.stormSurgeLabel} surge
-                      </span>
-                    )}
-                    {r.faultDistance != null && (
-                      <span className="inline-flex items-center gap-1" style={{ color: FAULT_COLOR[r.faultLevel ?? 0] || "#6b7280" }}>
-                        🌋 {fmtDist(r.faultDistance)} to fault
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+      {/* Near-me & Scan results now render in the left .epx panel (see page.tsx) for a
+          consistent, formal look that matches the Establishment panel. */}
     </>
   );
 }

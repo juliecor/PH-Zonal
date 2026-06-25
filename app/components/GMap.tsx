@@ -33,10 +33,14 @@ interface GMapProps {
   onScanComplete?: (b: { minLat: number; maxLat: number; minLon: number; maxLon: number }) => void;
   floodOverlay?: { url: string; north: number; south: number; east: number; west: number } | null;
   scanFloodOverlay?: { url: string; north: number; south: number; east: number; west: number } | null;
+  clearScanBoxSignal?: number; // bump to erase the drawn scan square
   floodTilesOn?: boolean; // crisp NOAH-style flood tile layer
   landslideTilesOn?: boolean; // crisp landslide hazard tile layer
   stormSurgeTilesOn?: boolean; // crisp storm-surge (SSA4) tile layer
   faultsOn?: boolean; // active fault lines (PHIVOLCS) vector overlay
+  liquefactionOn?: boolean; // PHIVOLCS liquefaction-susceptibility raster overlay
+  tsunamiOn?: boolean; // PHIVOLCS tsunami-prone raster overlay
+  groundRuptureOn?: boolean; // PHIVOLCS ground-rupture / active-fault raster overlay
 
   // ✅ land drawing / area measurement
   drawingMode?: boolean;
@@ -131,10 +135,14 @@ export default function GMap({
   onScanComplete,
   floodOverlay,
   scanFloodOverlay,
+  clearScanBoxSignal,
   floodTilesOn = false,
   landslideTilesOn = false,
   stormSurgeTilesOn = false,
   faultsOn = false,
+  liquefactionOn = false,
+  tsunamiOn = false,
+  groundRuptureOn = false,
   drawingMode = false,
   onAreaMeasured,
   clearDrawingSignal = 0,
@@ -158,6 +166,8 @@ export default function GMap({
   const stormSurgeTileTypeRef = useRef<any>(null);
   const faultDataRef = useRef<any>(null);
   const faultGeoRef = useRef<any>(null);
+  const hazardLayersRef = useRef<Record<string, any[]>>({}); // layer key -> google.maps.Data[]
+  const hazardGeoRef = useRef<Record<string, any>>({});      // url -> cached GeoJSON
   const scanRectRef = useRef<any>(null);
   const scanListenersRef = useRef<any[]>([]);
   const onScanCompleteRef = useRef<typeof onScanComplete | null>(null);
@@ -525,6 +535,65 @@ export default function GMap({
     return () => { cancelled = true; clear(); };
   }, [faultsOn]);
 
+  // PHIVOLCS hazard overlays as crisp VECTOR layers (Data layers) — sharp at any zoom,
+  // no labels, no pixelation. Liquefaction/Tsunami are traced polygon zones; Ground
+  // Rupture = the GEM active-fault lines (red) + traced trench arcs (magenta).
+  useEffect(() => {
+    const map = mapRef.current; if (!map) return;
+    let cancelled = false;
+    const store = hazardLayersRef.current; // key -> google.maps.Data[]
+
+    const remove = (key: string) => {
+      for (const d of store[key] || []) { try { d.setMap(null); } catch {} }
+      delete store[key];
+    };
+    const fetchGeo = async (url: string) => {
+      if (hazardGeoRef.current[url]) return hazardGeoRef.current[url];
+      try { const j = await (await fetch(url)).json(); hazardGeoRef.current[url] = j; return j; } catch { return null; }
+    };
+    const addLayer = (gj: any, style: any) => {
+      const d = new google.maps.Data();
+      try { d.addGeoJson(gj); } catch { return null; }
+      d.setStyle(style);
+      d.setMap(map);
+      return d;
+    };
+
+    const sync = async (on: boolean, key: string, build: () => Promise<any[]>) => {
+      if (on && !store[key]) {
+        const layers = (await build()).filter(Boolean);
+        if (cancelled) { for (const l of layers) try { l.setMap(null); } catch {} return; }
+        store[key] = layers;
+      } else if (!on && store[key]) {
+        remove(key);
+      }
+    };
+
+    (async () => {
+      await sync(!!liquefactionOn, "liquefaction", async () => {
+        const gj = await fetchGeo("/hazard/liquefaction_vec.geojson"); if (!gj) return [];
+        return [addLayer(gj, { fillColor: "#e0a23a", fillOpacity: 0.5, strokeColor: "#b97e15", strokeWeight: 0.7, strokeOpacity: 0.9, clickable: false })];
+      });
+      await sync(!!tsunamiOn, "tsunami", async () => {
+        const gj = await fetchGeo("/hazard/tsunami_vec.geojson"); if (!gj) return [];
+        return [addLayer(gj, { fillColor: "#22b8cf", fillOpacity: 0.45, strokeColor: "#0e8ea6", strokeWeight: 0.7, strokeOpacity: 0.9, clickable: false })];
+      });
+      await sync(!!groundRuptureOn, "groundrupture", async () => {
+        const out: any[] = [];
+        const tr = await fetchGeo("/hazard/trenches_vec.geojson");
+        if (tr) out.push(addLayer(tr, { fillColor: "#a21caf", fillOpacity: 0.85, strokeColor: "#86198f", strokeWeight: 0.5, strokeOpacity: 0.9, clickable: false }));
+        const fa = await fetchGeo("/api/faults");
+        if (fa) {
+          out.push(addLayer(fa, { strokeColor: "#ef4444", strokeWeight: 7, strokeOpacity: 0.18, clickable: false }));
+          out.push(addLayer(fa, { strokeColor: "#dc2626", strokeWeight: 2, strokeOpacity: 0.95, clickable: false }));
+        }
+        return out;
+      });
+    })();
+
+    return () => { cancelled = true; };
+  }, [liquefactionOn, tsunamiOn, groundRuptureOn]);
+
   // Scan tool: drag on the map to draw a box; on release, report its bounds.
   useEffect(() => {
     const map = mapRef.current; if (!map) return;
@@ -532,7 +601,8 @@ export default function GMap({
     const cleanup = () => {
       for (const l of scanListenersRef.current) { try { google.maps.event.removeListener(l); } catch {} }
       scanListenersRef.current = [];
-      if (scanRectRef.current) { try { scanRectRef.current.setMap(null); } catch {} scanRectRef.current = null; }
+      // NOTE: we intentionally KEEP the drawn rectangle on the map so the user can see
+      // the area they scanned. It's cleared via clearScanBoxSignal (new scan / close).
       try { map.setOptions({ draggable: true, draggableCursor: null }); } catch {}
     };
 
@@ -550,9 +620,10 @@ export default function GMap({
         map,
         bounds: { north: start.lat, south: start.lat, east: start.lng, west: start.lng },
         fillColor: "#1e3a8a",
-        fillOpacity: 0.08,
+        fillOpacity: 0,            // outline only — no color fill inside the square
         strokeColor: "#1e3a8a",
-        strokeWeight: 2,
+        strokeWeight: 2.5,
+        strokeOpacity: 0.95,
         clickable: false,
       });
     });
@@ -585,6 +656,12 @@ export default function GMap({
 
     return cleanup;
   }, [scanMode]);
+
+  // Erase the drawn scan square on demand (new scan / panel closed).
+  useEffect(() => {
+    if (!clearScanBoxSignal) return;
+    if (scanRectRef.current) { try { scanRectRef.current.setMap(null); } catch {} scanRectRef.current = null; }
+  }, [clearScanBoxSignal]);
 
   // ✅ Land drawing / area measurement
   // NOTE: google.maps.drawing.DrawingManager was removed in Maps JS API v3.65,

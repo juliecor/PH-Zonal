@@ -1,0 +1,292 @@
+<style>
+  :root{
+    --navy:#1e3a8a; --navy-deep:#16276a; --gold:#c9a84c; --gold-deep:#b5923f;
+    --cream:#f8f6f0; --ink:#0f172a; --slate:#64748b;
+    --safe:#10b981; --low:#ca8a04; --mod:#ea580c; --high:#dc2626;
+    --line:#e9ecf2; --card:#ffffff;
+    --shadow-sm:0 1px 2px rgba(15,23,42,.06), 0 1px 1px rgba(15,23,42,.04);
+    --shadow-md:0 6px 20px -8px rgba(15,23,42,.18), 0 2px 6px -2px rgba(15,23,42,.08);
+    --serif:Georgia,'Times New Roman',serif;
+    --font:'Inter','Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--font);background:#dfe3ea;color:var(--ink);-webkit-font-smoothing:antialiased;display:flex;justify-content:flex-start}
+  .panel{width:380px;height:100vh;background:var(--cream);display:flex;flex-direction:column;box-shadow:18px 0 40px -24px rgba(15,23,42,.45);position:relative;overflow:hidden;border-right:1px solid rgba(15,23,42,.06)}
+  .header{flex:0 0 auto;background:radial-gradient(120% 140% at 100% 0%, rgba(201,168,76,.28) 0%, rgba(201,168,76,0) 46%),linear-gradient(155deg,#23439b 0%,var(--navy) 55%,var(--navy-deep) 100%);color:#fff;padding:15px 18px 16px;position:relative;z-index:5}
+  .header::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold) 18%,#efdca0 50%,var(--gold) 82%,transparent)}
+  .head-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .brand{display:flex;align-items:center;gap:9px;min-width:0}
+  .logo{width:28px;height:28px;border-radius:8px;flex:0 0 auto;background:linear-gradient(150deg,#d8bd63,#b9952f);display:grid;place-items:center;color:#1a2b56;font-weight:800;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.4)}
+  .brand-txt{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#cdd8f4;font-weight:600}
+  .brand-txt b{color:#fff;font-weight:700}
+  .head-actions{display:flex;gap:6px}
+  .iconbtn{width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#dbe4ff;cursor:pointer;display:grid;place-items:center;transition:.15s}
+  .iconbtn:hover{background:rgba(255,255,255,.16);color:#fff}
+  .iconbtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .head-tag{margin-top:13px;display:inline-flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;color:#0f1f47;background:linear-gradient(180deg,#f0deaa,var(--gold));padding:3px 10px;border-radius:100px;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+  .head-tag svg{flex:0 0 auto}
+  .body{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;padding:16px 16px 26px;scrollbar-width:thin;scrollbar-color:#c9cfdb transparent}
+  .body::-webkit-scrollbar{width:9px}
+  .body::-webkit-scrollbar-thumb{background:#cdd3df;border-radius:9px;border:2px solid var(--cream)}
+  .body::-webkit-scrollbar-thumb:hover{background:#b6bdcc}
+  .title-block{padding:2px 2px 0}
+  .eyebrow{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold-deep);font-weight:700;display:flex;align-items:center;gap:8px}
+  .eyebrow::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(201,168,76,.55),transparent)}
+  .estab-name{font-family:var(--serif);font-size:24px;line-height:1.16;letter-spacing:-.01em;font-weight:600;color:var(--ink);margin:11px 0 9px}
+  .address{display:flex;gap:8px;font-size:12.5px;line-height:1.5;color:var(--slate)}
+  .address svg{flex:0 0 auto;margin-top:2px;color:#94a3b8}
+  .hero{margin-top:16px;position:relative;border-radius:16px;overflow:hidden;background:radial-gradient(130% 120% at 100% 0%, rgba(201,168,76,.16), transparent 60%),#fffdf7;border:1px solid #ece6d6;box-shadow:0 10px 30px -16px rgba(30,58,138,.30)}
+  .hero::before{content:"";position:absolute;top:0;left:0;width:4px;height:100%;background:linear-gradient(180deg,var(--gold),var(--gold-deep))}
+  .hero-in{padding:17px 18px 17px 22px}
+  .hero-label{font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:7px}
+  .hero-label .dot{width:5px;height:5px;border-radius:50%;background:var(--gold)}
+  .hero-value{display:flex;align-items:baseline;gap:5px;margin:9px 0 3px;font-family:var(--serif)}
+  .cur{font-size:24px;font-weight:600;color:var(--navy);line-height:1}
+  .num{font-size:46px;font-weight:700;letter-spacing:-.02em;line-height:1;color:var(--ink)}
+  .per{font-size:14px;font-weight:500;color:var(--slate);font-family:var(--font);margin-left:2px;align-self:flex-end;margin-bottom:5px}
+  .hero-meta{display:flex;align-items:center;gap:8px;margin-top:11px;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--navy);background:#fff;border:1px solid #e6dec8;padding:4px 10px;border-radius:100px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .chip b{color:var(--gold-deep);font-weight:800}
+  .hero-applies{margin-top:13px;padding-top:12px;border-top:1px dashed #e3dcc8;display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:var(--slate);line-height:1.45}
+  .hero-applies svg{flex:0 0 auto;margin-top:1px;color:var(--gold-deep)}
+  .hero-applies b{color:var(--ink);font-weight:600}
+  .section{margin-top:22px}
+  .sec-head{display:flex;align-items:flex-end;justify-content:space-between;margin:0 2px 12px}
+  .sec-title{display:flex;align-items:center;gap:8px}
+  .sec-title .mark{width:4px;height:16px;border-radius:3px;background:linear-gradient(var(--gold),var(--gold-deep))}
+  .sec-title h2{font-family:var(--serif);font-size:16px;font-weight:600;color:var(--ink)}
+  .sec-title .sub{font-size:11px;color:var(--slate);margin-top:2px}
+  .pill{font-size:11px;font-weight:700;color:var(--navy);background:#eef1fa;border:1px solid #dde3f7;padding:2px 9px;border-radius:100px;white-space:nowrap}
+  .haz-wrap{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-md)}
+  .haz-overall{display:flex;align-items:center;gap:14px;padding:15px 16px;background:linear-gradient(180deg,#fff7ec,#fffdfa);border-bottom:1px solid var(--line)}
+  .gauge{position:relative;flex:0 0 auto;width:66px;height:66px}
+  .gauge svg{transform:rotate(-90deg);display:block}
+  .gauge-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+  .gauge-c .score{font-size:19px;font-weight:800;line-height:1;color:var(--mod)}
+  .gauge-c .of{font-size:8.5px;font-weight:600;color:var(--slate);margin-top:1px;letter-spacing:.02em}
+  .ov-txt{flex:1;min-width:0}
+  .ov-txt .k{font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--slate)}
+  .ov-txt .lvl{font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--mod);margin-top:3px;line-height:1}
+  .ov-txt .breakdown{display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap}
+  .bd{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--slate)}
+  .bd .d{width:7px;height:7px;border-radius:50%}
+  .haz-grid{display:flex;flex-direction:column}
+  .haz-row{display:flex;align-items:center;gap:12px;padding:11px 15px;border-bottom:1px solid #f1f2f7;position:relative;transition:background .12s}
+  .haz-row:last-child{border-bottom:0}
+  .haz-row:hover{background:#fcfcfe}
+  .haz-row::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--rc)}
+  .haz-ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--rc-soft);color:var(--rc)}
+  .haz-ic svg{display:block}
+  .haz-meta{flex:1;min-width:0}
+  .haz-meta .nm{font-size:12.5px;font-weight:700;color:var(--ink);line-height:1.15}
+  .haz-meta .ds{font-size:10.5px;color:var(--slate);margin-top:2px;line-height:1.3}
+  .haz-meta .ds b{color:var(--ink);font-weight:700}
+  .haz-sev{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+  .sev-chip{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:999px;color:var(--rc);background:var(--rc-soft);border:1px solid var(--rc-bd);white-space:nowrap}
+  .meter{display:flex;gap:3px}
+  .meter i{width:14px;height:5px;border-radius:2px;background:#e6e9f0;display:block}
+  .meter i.on{background:var(--rc)}
+  .s-none{--rc:var(--safe);--rc-soft:#e7f8f0;--rc-bd:#bdeedd}
+  .s-low{--rc:var(--low);--rc-soft:#fdf4d9;--rc-bd:#f3e2a6}
+  .s-mod{--rc:var(--mod);--rc-soft:#fdeee1;--rc-bd:#f7d3b3}
+  .s-high{--rc:var(--high);--rc-soft:#fde6e6;--rc-bd:#f6c2c2}
+  .haz-foot{display:flex;align-items:flex-start;gap:7px;padding:10px 15px;background:#fafbfd;font-size:9.5px;color:var(--slate);line-height:1.4;border-top:1px solid var(--line)}
+  .haz-foot svg{flex:0 0 auto;margin-top:1px;color:#9aa6b8}
+  .nearby{display:flex;flex-direction:column;gap:8px}
+  .nb{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;transition:border-color .13s,box-shadow .13s,transform .1s;box-shadow:var(--shadow-sm);text-align:left;font-family:var(--font);width:100%}
+  .nb:hover{border-color:#c3ccef;box-shadow:var(--shadow-md);transform:translateY(-1px)}
+  .nb:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+  .nb-dist{flex:0 0 auto;width:48px;text-align:center}
+  .nb-dist .d{font-size:14px;font-weight:800;color:var(--navy);line-height:1}
+  .nb-dist .u{font-size:8.5px;color:var(--slate);letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+  .nb-div{width:1px;align-self:stretch;background:var(--line)}
+  .nb-mid{flex:1;min-width:0}
+  .nb-price{font-family:var(--serif);font-size:14px;font-weight:700;color:var(--ink);display:flex;align-items:baseline;gap:4px}
+  .nb-price small{font-size:10px;color:#94a0b3;font-weight:500;font-family:var(--font)}
+  .nb-where{font-size:10.5px;color:var(--slate);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nb-cls{flex:0 0 auto;font-size:9px;font-weight:800;color:var(--gold-deep);background:#fbf6e6;border:1px solid #efe3bd;padding:2px 6px;border-radius:6px;letter-spacing:.04em}
+  .nb-fly{flex:0 0 auto;width:28px;height:28px;border-radius:8px;background:#f3f5fb;color:var(--navy);display:grid;place-items:center;transition:.13s}
+  .nb:hover .nb-fly{background:var(--navy);color:#fff}
+  .nb.here{border-color:#d8c98f;background:linear-gradient(180deg,#fffdf6,#fff)}
+  .nb.here .nb-cls{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .nb.here .nb-dist .d{color:var(--gold-deep)}
+  .showmore{margin-top:11px;width:100%;border:1px dashed #cdd5e3;background:rgba(255,255,255,.6);color:var(--navy);font-weight:700;font-size:11.5px;letter-spacing:.2px;padding:11px;border-radius:11px;cursor:pointer;transition:.13s;display:flex;align-items:center;justify-content:center;gap:7px;font-family:var(--font)}
+  .showmore:hover{background:#fff;border-color:var(--navy)}
+  .showmore:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+  .showmore b{font-weight:800}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+<div style="min-height:100vh;display:flex;justify-content:center;align-items:flex-start;background:#dfe3ea;padding:0">
+<aside class="panel" role="complementary" aria-label="Establishment details">
+  <header class="header">
+    <div class="head-top">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">Z</span>
+        <span class="brand-txt"><b>ZONAL</b>VALUE&nbsp;&middot;&nbsp;PH</span>
+      </div>
+      <div class="head-actions">
+        <button class="iconbtn" title="Share" aria-label="Share">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 15V3m0 0L8 7m4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="iconbtn" title="Close" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+    <span class="head-tag">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Property Due-Diligence
+    </span>
+  </header>
+  <div class="body">
+    <div class="title-block">
+      <div class="eyebrow">Establishment</div>
+      <h1 class="estab-name">Bankerohan Public Market</h1>
+      <div class="address">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.4" stroke="currentColor" stroke-width="2"/></svg>
+        <span>Marfori Street, Barangay 5-A, Poblacion District, Davao City, 8000 Davao del Sur</span>
+      </div>
+    </div>
+    <section class="hero" aria-label="Zonal value">
+      <div class="hero-in">
+        <div class="hero-label"><span class="dot"></span> Zonal value of this land</div>
+        <div class="hero-value">
+          <span class="cur">&#8369;</span>
+          <span class="num">900</span>
+          <span class="per">/ sqm</span>
+        </div>
+        <div class="hero-meta">
+          <span class="chip"><b>RR</b> Residential Regular</span>
+          <span class="chip">BIR-indexed</span>
+        </div>
+        <div class="hero-applies">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+          <span>Value applies to <b>Marfori Street, Marilog Proper, Davao City</b></span>
+        </div>
+      </div>
+    </section>
+    <section class="section" aria-label="Hazard profile">
+      <div class="sec-head">
+        <div class="sec-title">
+          <span class="mark"></span>
+          <div>
+            <h2>Hazard Profile</h2>
+            <div class="sub">Risk assessment for this exact spot</div>
+          </div>
+        </div>
+        <span class="pill">6 checks</span>
+      </div>
+      <div class="haz-wrap">
+        <div class="haz-overall">
+          <div class="gauge" role="img" aria-label="Overall risk score 2.6 out of 4.0, moderate">
+            <svg width="66" height="66" viewBox="0 0 66 66">
+              <circle cx="33" cy="33" r="27" fill="none" stroke="#eef0f5" stroke-width="7"/>
+              <circle cx="33" cy="33" r="27" fill="none" stroke="#ea580c" stroke-width="7" stroke-linecap="round" stroke-dasharray="169.6" stroke-dashoffset="59.4"/>
+            </svg>
+            <div class="gauge-c"><span class="score">2.6</span><span class="of">/ 4.0</span></div>
+          </div>
+          <div class="ov-txt">
+            <div class="k">Overall Risk</div>
+            <div class="lvl">Moderate</div>
+            <div class="breakdown">
+              <span class="bd"><span class="d" style="background:var(--mod)"></span>2 moderate</span>
+              <span class="bd"><span class="d" style="background:var(--high)"></span>1 high</span>
+              <span class="bd"><span class="d" style="background:var(--low)"></span>1 low</span>
+            </div>
+          </div>
+        </div>
+        <div class="haz-grid">
+          <div class="haz-row s-mod">
+            <span class="haz-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3 14c2 0 2-1.5 4.5-1.5S10 14 12 14s2-1.5 4.5-1.5S19 14 21 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 19c2 0 2-1.5 4.5-1.5S10 19 12 19s2-1.5 4.5-1.5S19 19 21 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 4v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+            <div class="haz-meta"><div class="nm">Flood &middot; 100-year</div><div class="ds">Within modeled inundation zone</div></div>
+            <div class="haz-sev"><span class="sev-chip">Moderate</span><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div>
+          </div>
+          <div class="haz-row s-low">
+            <span class="haz-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3 20 9 9l4 5 3-4 5 10H3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
+            <div class="haz-meta"><div class="nm">Landslide</div><div class="ds">Low susceptibility on gentle terrain</div></div>
+            <div class="haz-sev"><span class="sev-chip">Low</span><span class="meter"><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+          </div>
+          <div class="haz-row s-none">
+            <span class="haz-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3 16c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 11a3 3 0 1 1 5 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+            <div class="haz-meta"><div class="nm">Storm Surge</div><div class="ds">Inland &mdash; outside surge reach</div></div>
+            <div class="haz-sev"><span class="sev-chip">None</span><span class="meter"><i class="on"></i><i></i><i></i><i></i></span></div>
+          </div>
+          <div class="haz-row s-mod">
+            <span class="haz-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 7h6l-3 5h6l-3 5h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="haz-meta"><div class="nm">Active Fault</div><div class="ds"><b>2.3 km</b> away &middot; moderate proximity</div></div>
+            <div class="haz-sev"><span class="sev-chip">Moderate</span><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div>
+          </div>
+          <div class="haz-row s-high">
+            <span class="haz-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 18h16M6 18V9m4 9V6m4 12v-7m4 7V8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+            <div class="haz-meta"><div class="nm">Liquefaction</div><div class="ds">Susceptible ground &mdash; may fail in a quake</div></div>
+            <div class="haz-sev"><span class="sev-chip">High</span><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></div>
+          </div>
+          <div class="haz-row s-none">
+            <span class="haz-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3 17c4 0 4-4 8-4 3 0 3 2.5 6 2.5M3 12c1.5-5 7-7 11-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div class="haz-meta"><div class="nm">Tsunami</div><div class="ds">Not prone</div></div>
+            <div class="haz-sev"><span class="sev-chip">None</span><span class="meter"><i class="on"></i><i></i><i></i><i></i></span></div>
+          </div>
+        </div>
+        <div class="haz-foot">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span>Geohazard overlays from PHIVOLCS &amp; Project NOAH. For due-diligence reference only.</span>
+        </div>
+      </div>
+    </section>
+    <section class="section" aria-label="Nearby zonal values">
+      <div class="sec-head">
+        <div class="sec-title">
+          <span class="mark"></span>
+          <div>
+            <h2>Nearby Zonal Values</h2>
+            <div class="sub">Tap a parcel to fly there</div>
+          </div>
+        </div>
+        <span class="pill">15 within 600 m</span>
+      </div>
+      <div class="nearby">
+        <button class="nb here" type="button">
+          <div class="nb-dist"><div class="d">80</div><div class="u">m</div></div>
+          <div class="nb-div"></div>
+          <div class="nb-mid"><div class="nb-price">&#8369;900 <small>/ sqm</small></div><div class="nb-where">Marfori Street &middot; Marilog Proper &middot; This location</div></div>
+          <span class="nb-cls">RR</span>
+          <span class="nb-fly"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </button>
+        <button class="nb" type="button">
+          <div class="nb-dist"><div class="d">320</div><div class="u">m</div></div>
+          <div class="nb-div"></div>
+          <div class="nb-mid"><div class="nb-price">&#8369;1,300 <small>/ sqm</small></div><div class="nb-where">Along Barangay Road &middot; Angalan, Balengaeng</div></div>
+          <span class="nb-cls">RR</span>
+          <span class="nb-fly"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </button>
+        <button class="nb" type="button">
+          <div class="nb-dist"><div class="d">540</div><div class="u">m</div></div>
+          <div class="nb-div"></div>
+          <div class="nb-mid"><div class="nb-price">&#8369;1,100 <small>/ sqm</small></div><div class="nb-where">Barangay Proper &middot; Angalan, Balengaeng</div></div>
+          <span class="nb-cls">RR</span>
+          <span class="nb-fly"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </button>
+        <button class="nb" type="button">
+          <div class="nb-dist"><div class="d">560</div><div class="u">m</div></div>
+          <div class="nb-div"></div>
+          <div class="nb-mid"><div class="nb-price">&#8369;1,050 <small>/ sqm</small></div><div class="nb-where">Crossing Marilog &middot; Marilog Proper</div></div>
+          <span class="nb-cls">RR</span>
+          <span class="nb-fly"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </button>
+        <button class="nb" type="button">
+          <div class="nb-dist"><div class="d">590</div><div class="u">m</div></div>
+          <div class="nb-div"></div>
+          <div class="nb-mid"><div class="nb-price">&#8369;1,400 <small>/ sqm</small></div><div class="nb-where">San Pedro Street &middot; Poblacion District</div></div>
+          <span class="nb-cls">CR</span>
+          <span class="nb-fly"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </button>
+      </div>
+      <button class="showmore" type="button">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Show <b>10 more</b> nearby values
+      </button>
+    </section>
+  </div>
+</aside>
+</div>

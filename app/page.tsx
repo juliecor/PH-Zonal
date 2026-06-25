@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import * as GeoJSON from 'geojson';
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Map as MapIcon,
   Satellite as SatelliteIcon,
@@ -29,12 +29,15 @@ import {
   Camera,
   Image as ImageIcon,
   Building2,
+  Crosshair,
+  Scan,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiMe } from "./lib/authClient";
 
 import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "./lib/types";
 import { normalizePH, suggestBusinesses } from "./lib/zonal-util";
+import { loadHazardProfile, type HazardProfile } from "./lib/pointHazards";
 import ReportBuilder from "./components/ReportBuilder";
 import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
 import PropertyCalculator from "./components/PropertyCalculator";
@@ -74,6 +77,95 @@ function getPriceTier(p: number) {
   if (p > 50_000)  return { label: "High-value", bg: "bg-violet-100",  text: "text-violet-800",  dot: "bg-violet-400"  };
   if (p > 20_000)  return { label: "Mid-market", bg: "bg-emerald-100", text: "text-emerald-800", dot: "bg-emerald-400" };
   return                  { label: "Value",      bg: "bg-[#c9a84c]/10", text: "text-[#9a7a20]",  dot: "bg-[#c9a84c]"  };
+}
+
+// ── Establishment hazard-profile helpers (design: .epx panel) ──────────────────
+const SEV_TONE = [
+  { color: "#10b981", soft: "#e7f8f0", bd: "#bdeedd" }, // none/safe
+  { color: "#ca8a04", soft: "#fdf4d9", bd: "#f3e2a6" }, // low
+  { color: "#ea580c", soft: "#fdeee1", bd: "#f7d3b3" }, // moderate
+  { color: "#dc2626", soft: "#fde6e6", bd: "#f6c2c2" }, // high
+];
+function sevTone(level: number) { return SEV_TONE[Math.max(0, Math.min(3, level))]; }
+function ScanHazChip({ level, label }: { level: number | null | undefined; label: string }) {
+  if (level == null) return null;
+  const t = sevTone(level);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, color: t.color, background: t.soft, border: `1px solid ${t.bd}`, whiteSpace: "nowrap" }}>
+      <span style={{ width: 6, height: 6, borderRadius: 99, background: t.color }} />{label}
+    </span>
+  );
+}
+const SEV_CLASS = ["s-none", "s-low", "s-mod", "s-high"];
+const SEV_WORD = ["None", "Low", "Moderate", "High"];
+function sevClass(level: number) { return level < 0 ? "s-na" : SEV_CLASS[Math.min(3, level)]; }
+function sevWord(level: number) { return level < 0 ? "No data" : SEV_WORD[Math.min(3, level)]; }
+function hzLabel(level: number, kind: string) { return level <= 0 ? `No ${kind}` : `${SEV_WORD[Math.min(3, level)]} ${kind}`; }
+const HAZ_ICON: Record<string, ReactNode> = {
+  flood: (<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3 14c2 0 2-1.5 4.5-1.5S10 14 12 14s2-1.5 4.5-1.5S19 14 21 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M3 19c2 0 2-1.5 4.5-1.5S10 19 12 19s2-1.5 4.5-1.5S19 19 21 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M12 4v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>),
+  landslide: (<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3 20 9 9l4 5 3-4 5 10H3Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/></svg>),
+  stormsurge: (<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3 16c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M5 11a3 3 0 1 1 5 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>),
+  fault: (<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 7h6l-3 5h6l-3 5h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>),
+  liquefaction: (<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 18h16M6 18V9m4 9V6m4 12v-7m4 7V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>),
+  tsunami: (<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M3 17c4 0 4-4 8-4 3 0 3 2.5 6 2.5M3 12c1.5-5 7-7 11-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>),
+};
+function HazardRows({ hz }: { hz: HazardProfile }) {
+  const order: Array<{ key: keyof HazardProfile; name: string }> = [
+    { key: "flood", name: "Flood · 100-year" },
+    { key: "landslide", name: "Landslide" },
+    { key: "stormsurge", name: "Storm Surge" },
+    { key: "fault", name: "Active Fault" },
+    { key: "liquefaction", name: "Liquefaction" },
+    { key: "tsunami", name: "Tsunami" },
+  ];
+  const cells = order.map((o) => ({ ...o, c: hz[o.key] }));
+  const rated = cells.filter((x) => x.c.level >= 0);
+  const avg = rated.length ? rated.reduce((s, x) => s + x.c.level, 0) / rated.length : 0;
+  const counts = { low: 0, mod: 0, high: 0 };
+  rated.forEach((x) => { if (x.c.level === 1) counts.low++; else if (x.c.level === 2) counts.mod++; else if (x.c.level === 3) counts.high++; });
+  const ovWord = avg >= 2.3 ? "High" : avg >= 1.3 ? "Moderate" : avg >= 0.4 ? "Low" : "Minimal";
+  const ovColor = avg >= 2.3 ? "var(--high)" : avg >= 1.3 ? "var(--mod)" : avg >= 0.4 ? "var(--low)" : "var(--safe)";
+  const C = 169.6; // 2πr, r=27
+  const off = C * (1 - Math.min(1, avg / 3));
+  return (
+    <div className="haz-wrap">
+      <div className="haz-overall">
+        <div className="gauge" role="img" aria-label={`Overall risk ${avg.toFixed(1)} of 3, ${ovWord}`}>
+          <svg width="66" height="66" viewBox="0 0 66 66">
+            <circle cx="33" cy="33" r="27" fill="none" stroke="#eef0f5" strokeWidth="7" />
+            <circle cx="33" cy="33" r="27" fill="none" stroke={ovColor} strokeWidth="7" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={off} transform="rotate(-90 33 33)" />
+          </svg>
+          <div className="gauge-c"><span className="score" style={{ color: ovColor }}>{avg.toFixed(1)}</span><span className="of">/ 3.0</span></div>
+        </div>
+        <div className="ov-txt">
+          <div className="k">Overall Risk</div>
+          <div className="lvl" style={{ color: ovColor }}>{ovWord}</div>
+          <div className="breakdown">
+            {counts.high > 0 && <span className="bd"><span className="d" style={{ background: "var(--high)" }} />{counts.high} high</span>}
+            {counts.mod > 0 && <span className="bd"><span className="d" style={{ background: "var(--mod)" }} />{counts.mod} moderate</span>}
+            {counts.low > 0 && <span className="bd"><span className="d" style={{ background: "var(--low)" }} />{counts.low} low</span>}
+            {counts.high + counts.mod + counts.low === 0 && <span className="bd"><span className="d" style={{ background: "var(--safe)" }} />all clear</span>}
+          </div>
+        </div>
+      </div>
+      <div className="haz-grid">
+        {cells.map((x) => (
+          <div key={x.key} className={`haz-row ${sevClass(x.c.level)}`}>
+            <span className="haz-ic">{HAZ_ICON[x.key]}</span>
+            <div className="haz-meta"><div className="nm">{x.name}</div><div className="ds">{x.c.label}</div></div>
+            <div className="haz-sev">
+              <span className="sev-chip">{sevWord(x.c.level)}</span>
+              <span className="meter">{[0, 1, 2, 3].map((i) => <i key={i} className={x.c.level >= 0 && i <= x.c.level ? "on" : ""} />)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="haz-foot">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" /><path d="M12 11v5M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+        <span>Geohazard data from PHIVOLCS &amp; Project NOAH. For due-diligence reference only.</span>
+      </div>
+    </div>
+  );
 }
 
 export function Home() {
@@ -133,12 +225,17 @@ export function Home() {
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const [scanNote, setScanNote] = useState("");
   const [scanLoading, setScanLoading] = useState(false);
+  const [scanHazards, setScanHazards] = useState<HazardProfile | null>(null);
+  const [scanHazardsLoading, setScanHazardsLoading] = useState(false);
+  const [scanNearby, setScanNearby] = useState<NearbyZonal[]>([]);
   // Clicked establishment (base-map POI) → name + zonal value of that land.
-  type NearbyZonal = { lat: number; lon: number; value: number; street: string; barangay: string; city: string; classification: string; dist: number };
+  type NearbyZonal = { lat?: number; lon?: number; value: number; street: string; barangay: string; city: string; province?: string; classification: string; dist?: number };
   const [poiCard, setPoiCard] = useState<null | {
     loading: boolean; name: string; address: string; lat: number; lon: number;
     value: number | null; classification: string; street: string; barangay: string; city: string;
     noData: boolean; scannedCity: string; nearby: NearbyZonal[]; nearbyLoading: boolean;
+    hazards: HazardProfile | null; hazardsLoading: boolean; kind?: "establishment" | "nearme";
+    cityTypical?: boolean;
   }>(null);
   const poiReqRef = useRef(0);
   const [floodRisk, setFloodRisk] = useState<{ level: number; label: string } | null>(null);
@@ -149,6 +246,9 @@ export function Home() {
   const [stormSurgeOverlayOn, setStormSurgeOverlayOn] = useState(false);
   const [faultRisk, setFaultRisk] = useState<{ distance_m: number; name: string; level: number; label: string } | null>(null);
   const [faultOverlayOn, setFaultOverlayOn] = useState(false);
+  const [liquefactionOn, setLiquefactionOn] = useState(false);
+  const [tsunamiOn, setTsunamiOn] = useState(false);
+  const [groundRuptureOn, setGroundRuptureOn] = useState(false);
   const [scanFloodOverlay, setScanFloodOverlay] = useState<{ url: string; north: number; south: number; east: number; west: number } | null>(null);
   const boundsReqRef = useRef(0);
 
@@ -318,7 +418,7 @@ export function Home() {
 
   const columns = useMemo(() => ["Street/Subdivision-","Vicinity-","Barangay-","City-","Province-","Classification-","ZonalValuepersqm.-"], []);
 
-  const [leftOpen, setLeftOpen] = useState(true);
+  const [leftOpen, setLeftOpen] = useState(false); // map-first: open via the "Search Zonal" toolbar button
   const [showFilters, setShowFilters] = useState(false);
   const [bottomOpen, setBottomOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(false);
@@ -330,6 +430,7 @@ export function Home() {
   const [drawMode, setDrawMode] = useState(false);
   const [landArea, setLandArea] = useState<number | null>(null);
   const [clearDrawSignal, setClearDrawSignal] = useState(0);
+  const [clearScanSignal, setClearScanSignal] = useState(0); // bump to erase the drawn scan square
   const [landPath, setLandPath] = useState<Array<{ lat: number; lng: number }> | null>(null);
   const [areaUnit, setAreaUnit] = useState<"sqm" | "ha" | "sqft">("sqm");
   const [calcOpen, setCalcOpen] = useState(false);
@@ -505,6 +606,13 @@ export function Home() {
     setMapKey((k) => k + 1);
   }
 
+  // Open the zonal search drawer, or close it AND clear the selection so the bottom
+  // "Selected Property" card vanishes too (keeps the default map clean).
+  function toggleSearchPanel() {
+    if (leftOpen) { setLeftOpen(false); setSelectedRow(null); setSelectedLocation(null); }
+    else { setLeftOpen(true); }
+  }
+
   function normalizeCityHint(city: string, province?: string) {
     const c = String(city || "").toUpperCase().trim();
     const p = String(province || "").toUpperCase().trim();
@@ -630,7 +738,7 @@ export function Home() {
     setFacetsLoading(true); setErr("");
     const generation = forGeneration ?? citiesReqGenerationRef.current;
     try {
-      const bag = noCacheRef.current ? {} as Record<string,{ts:number;cities:string[]}> : lsLoad<Record<string,{ts:number;cities:string[]}>>("facetCitiesCacheV1",{});
+      const bag = noCacheRef.current ? {} as Record<string,{ts:number;cities:string[]}> : lsLoad<Record<string,{ts:number;cities:string[]}>>("facetCitiesCacheV3",{});
       const key = String(forDomain||"").toLowerCase();
       const hit = (bag as any)[key];
       if (!noCacheRef.current && hit && Date.now()-(hit.ts??0)<1000*60*60*24*3) { if (generation===citiesReqGenerationRef.current) setFacetCities(hit.cities??[]); return; }
@@ -638,7 +746,7 @@ export function Home() {
       if (!res.ok) throw new Error(`Cities failed: ${res.status}`);
       const data = await res.json(); const cities = Array.isArray(data?.cities)?data.cities:[];
       if (generation===citiesReqGenerationRef.current) setFacetCities(cities);
-      try { if (!noCacheRef.current) { (bag as any)[key]={ts:Date.now(),cities}; lsSave("facetCitiesCacheV1",bag); } } catch {}
+      try { if (!noCacheRef.current) { (bag as any)[key]={ts:Date.now(),cities}; lsSave("facetCitiesCacheV3",bag); } } catch {}
     } catch(e:any) { if (generation===citiesReqGenerationRef.current) { setErr(e?.message??"Failed to load cities"); setFacetCities([]); } }
     finally { if (generation===citiesReqGenerationRef.current) setFacetsLoading(false); }
   }
@@ -649,7 +757,7 @@ export function Home() {
     if (!forCity) { setFacetBarangays([]); return; }
     setBarangaysLoading(true); setErr("");
     try {
-      const bag = noCacheRef.current ? {} as Record<string,{ts:number;list:string[]}> : lsLoad<Record<string,{ts:number;list:string[]}>>("facetBarangaysCacheV1",{});
+      const bag = noCacheRef.current ? {} as Record<string,{ts:number;list:string[]}> : lsLoad<Record<string,{ts:number;list:string[]}>>("facetBarangaysCacheV3",{});
       const key = `${String(forDomain||"").toLowerCase()}|${String(forCity||"").toLowerCase()}`;
       const hit = (bag as any)[key];
       if (!noCacheRef.current && hit && Date.now()-(hit.ts??0)<1000*60*60*24*3) { setFacetBarangays(hit.list??[]); return; }
@@ -657,7 +765,7 @@ export function Home() {
       if (!res.ok) throw new Error(`Barangays failed: ${res.status}`);
       const data = await res.json(); const list = Array.isArray(data?.barangays)?data.barangays:[];
       setFacetBarangays(list);
-      try { if (!noCacheRef.current) { (bag as any)[key]={ts:Date.now(),list}; lsSave("facetBarangaysCacheV1",bag); } } catch {}
+      try { if (!noCacheRef.current) { (bag as any)[key]={ts:Date.now(),list}; lsSave("facetBarangaysCacheV3",bag); } } catch {}
     } catch(e:any) { setErr(e?.message??"Failed to load barangays"); setFacetBarangays([]); }
     finally { setBarangaysLoading(false); }
   }
@@ -759,12 +867,23 @@ export function Home() {
     finally { if (myId!==reqIdRef.current) return; setPoiLoading(false); }
   }
 
+  // Combined-domain cities are tagged like "LAZI (SIQUIJOR)" / "BUENAVISTA (GUIMARAS)".
+  // For geocoding, that tag is the REAL province — strip it from the city and use it as
+  // the province, else the pin lands in the host province (Lazi → Negros, not Siquijor).
+  function geoOverride(city?: string, province?: string): { city: string; province: string } {
+    const c = String(city || "");
+    const m = c.match(/\(([A-Za-z][A-Za-z .]+)\)\s*$/);
+    if (m) return { city: c.replace(/\s*\([A-Za-z][A-Za-z .]+\)\s*$/, "").trim(), province: m[1].trim() };
+    return { city: c, province: String(province || "") };
+  }
+
   async function pinpointFilterLocation(filterCity?: string, filterBarangay?: string, filterProvince?: string) {
     const myId = ++filterPinpointRef.current;
     setGeoLoading(true); setSelectedRow(null); setPoiData(null); setDetailsErr(""); setAreaDescription(""); setAreaDescErr("");
     try {
-      const query = filterBarangay ? `${filterBarangay}, ${filterCity}, ${filterProvince}, Philippines` : filterCity ? `${filterCity}, ${filterProvince}, Philippines` : `${filterProvince}, Philippines`;
-      const res = await fetch("/api/geocode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query,hintBarangay:filterBarangay||"",hintCity:filterCity||"",hintProvince:filterProvince||""})});
+      const { city: gCity, province: gProv } = geoOverride(filterCity, filterProvince);
+      const query = filterBarangay ? `${filterBarangay}, ${gCity}, ${gProv}, Philippines` : gCity ? `${gCity}, ${gProv}, Philippines` : `${gProv}, Philippines`;
+      const res = await fetch("/api/geocode",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query,hintBarangay:filterBarangay||"",hintCity:gCity||"",hintProvince:gProv||""})});
       const data = await res.json().catch(()=>null);
       if (myId!==filterPinpointRef.current) return;
       if (!res.ok||!data?.ok) { console.log("Geocode failed for filter:", query); return; }
@@ -853,23 +972,40 @@ export function Home() {
     setScanLoading(true);
     setScanResults([]);
     setScanNote("");
+    setScanNearby([]);
     setNearMePoints([]);
     const myId = ++boundsReqRef.current;
-    // Paint the flood color inside the box right away (blue on satellite to match).
-    const satFlag = mapType === "satellite" ? 1 : 0;
-    setScanFloodOverlay({
-      url: `/api/flood-overlay?minLat=${b.minLat}&maxLat=${b.maxLat}&minLon=${b.minLon}&maxLon=${b.maxLon}&sat=${satFlag}`,
-      north: b.maxLat, south: b.minLat, east: b.maxLon, west: b.minLon,
-    });
+    const span = Math.max(b.maxLat - b.minLat, b.maxLon - b.minLon);
+    // Guard: a too-large box = slow + many Google geocode calls + an overwhelming list.
+    // Ask the user to zoom in. (For a whole city, the Search Zonal panel is the right tool.)
+    if (span > 0.05) {
+      setScanHazards(null); setScanHazardsLoading(false);
+      setScanResults([]);
+      setScanNote("Scanned area is too large — zoom in and scan a smaller spot. For a whole city, use Search Zonal.");
+      setScanLoading(false);
+      return;
+    }
+    // Hazard profile for the CENTER of the scanned area (uniform with the other panels).
+    setScanHazards(null); setScanHazardsLoading(true);
+    loadHazardProfile((b.minLat + b.maxLat) / 2, (b.minLon + b.maxLon) / 2)
+      .then((hz) => { if (myId === boundsReqRef.current) { setScanHazards(hz); setScanHazardsLoading(false); } })
+      .catch(() => { if (myId === boundsReqRef.current) setScanHazardsLoading(false); });
+    // (No flood-color fill inside the box — the drawn square stays as a clean outline.)
     try {
       const bounds = `minLat=${b.minLat}&maxLat=${b.maxLat}&minLon=${b.minLon}&maxLon=${b.maxLon}`;
 
-      // BUILDING MODE — a small box = the user pointed at one building/lot. Show ONLY
-      // that place's zonal value (matched to its street/barangay), nothing else.
-      const span = Math.max(b.maxLat - b.minLat, b.maxLon - b.minLon);
-      if (span < 0.006) {
+      // BUILDING MODE — a small box = the user pointed at one spot/block. Show ONLY that
+      // place's zonal value (matched to its street/barangay), nothing else. Threshold kept in
+      // sync with `isTiny` in app/api/scan-area/route.ts so the precise per-spot lookup runs.
+      if (span < 0.012) {
         const autoData = await fetch(`/api/scan-area`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ minLat:b.minLat, maxLat:b.maxLat, minLon:b.minLon, maxLon:b.maxLon, domain }) }).then((r)=>r.json()).catch(()=>null);
         if (myId !== boundsReqRef.current) return;
+        // Surrounding street values from our DB (same list the establishment panel shows).
+        const nb: any[] = autoData?.ok && Array.isArray(autoData.nearby) ? autoData.nearby : [];
+        setScanNearby(nb
+          .map((p: any) => ({ value: Number(p.value_per_sqm), street: String(p.street||""), barangay: String(p.barangay||""), city: String(p.city||""), province: String(p.province||""), classification: String(p.classification||p.classification_code||"") }))
+          .filter((p: NearbyZonal) => !!p.value)
+          .slice(0, 60));
         const pts: any[] = autoData?.ok && Array.isArray(autoData.points) ? autoData.points : [];
         // No same-city value for this spot → say so instead of borrowing another city's.
         if (autoData?.noData) {
@@ -928,6 +1064,9 @@ export function Home() {
     try {
       const poi = await fetchPoi(lat,lon); if (myId!==reqIdRef.current) return;
       setPoiData({counts:poi.counts,items:poi.items});
+      // ⚡ Fire the area description NOW (fire-and-forget) so it runs in PARALLEL with the
+      // ideal-business call below instead of waiting for it to finish (was ~8s sequential → ~5s).
+      describeArea({lat,lon,label:labelForDesc,row,poi:{counts:poi.counts,items:poi.items} as any});
       try {
         const aiRes = await fetch("/api/ideal-business",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({city:String(row?.["City-"]??""),barangay:String(row?.["Barangay-"]??""),province:String(row?.["Province-"]??""),classification:String(row?.["Classification-"]??""),zonalValuePerSqm:String(row?.["ZonalValuepersqm.-"]??""),poiCounts:poi.counts,lat,lon})});
         const aiData = await aiRes.json().catch(()=>null);
@@ -941,7 +1080,7 @@ export function Home() {
       } catch {
         setIdealBusinessText(suggestBusinesses({zonalValueText:String(row?.["ZonalValuepersqm.-"]??""),classification:String(row?.["Classification-"]??""),poi,barangay:String(row?.["Barangay-"]??""),city:String(row?.["City-"]??""),province:String(row?.["Province-"]??"")}).map(x=>`• ${x}`).join("\n"));
       }
-      describeArea({lat,lon,label:labelForDesc,row,poi:{counts:poi.counts,items:poi.items} as any});
+      // (describeArea already fired above, in parallel)
     } catch(e:any) { if (myId!==reqIdRef.current) return; setDetailsErr(e?.message??"Failed to load POI"); }
     finally { if (myId!==reqIdRef.current) return; setPoiLoading(false); }
   }
@@ -963,7 +1102,8 @@ export function Home() {
       const vicinity = normalizePH(r["Vicinity-"]); const rawRowBarangay = String(r["Barangay-"]??"").trim();
       const isAllAreas = /^(all\s*areas?|all)$/i.test(rawStreet)||/^(all\s*areas?|all)$/i.test(rawRowBarangay);
       const brgy = (rawRowBarangay&&!/^(all\s*areas?|all)$/i.test(rawRowBarangay))?rawRowBarangay:(barangay||rawRowBarangay);
-      const cty = normalizeCityHint(String(r["City-"]??""),String(r["Province-"]??"")); const prov = r["Province-"];
+      const ovr = geoOverride(String(r["City-"]??""), String(r["Province-"]??"")); // (SIQUIJOR)/(GUIMARAS) tag → real province for geocoding
+      const cty = normalizeCityHint(ovr.city, ovr.province); const prov = ovr.province;
       const location = await geocodeWithZonalData({query:(isAllAreas||!street?[brgy,cty,prov]:[street,brgy,cty,prov]).filter(Boolean).join(", "),street:!isAllAreas&&street?street:undefined,barangay:brgy||undefined,city:cty||undefined,province:prov||undefined,baseLatLon,valuePerSqm:parseZonalValueToNumber(r["ZonalValuepersqm.-"])??null,classification:String(r["Classification-"]??"")});
       if (myId!==reqIdRef.current) return;
       const finalLoc = location||baseLatLon||{lat:10.3085,lon:123.8906};
@@ -990,7 +1130,7 @@ export function Home() {
   // land, and a list of nearby zonal values (click one to fly there).
   async function onPoiClick(placeId: string, lat: number, lon: number) {
     const myId = ++poiReqRef.current;
-    setPoiCard({ loading: true, name: "", address: "", lat, lon, value: null, classification: "", street: "", barangay: "", city: "", noData: false, scannedCity: "", nearby: [], nearbyLoading: true });
+    setPoiCard({ loading: true, name: "", address: "", lat, lon, value: null, classification: "", street: "", barangay: "", city: "", noData: false, scannedCity: "", nearby: [], nearbyLoading: true, hazards: null, hazardsLoading: true });
     // 1) establishment name + address (cheap, cached)
     const det = await fetch(`/api/place-details?placeId=${encodeURIComponent(placeId)}`).then(r=>r.json()).catch(()=>null);
     if (myId !== poiReqRef.current) return;
@@ -999,7 +1139,18 @@ export function Home() {
     const plat = det?.ok && Number.isFinite(Number(det.lat)) ? Number(det.lat) : lat;
     const plon = det?.ok && Number.isFinite(Number(det.lon)) ? Number(det.lon) : lon;
     setPoiCard(c => c ? { ...c, name, address, lat: plat, lon: plon } : c);
-    // 2) value of that exact spot + nearby zonals around it, in parallel.
+    await hydratePoint(plat, plon, myId);
+  }
+
+  // Shared: fill the panel with the zonal value + hazards + nearby for a point.
+  // Used by both the establishment click and "Near me" so they look + behave identically.
+  async function hydratePoint(plat: number, plon: number, myId: number) {
+    // hazard profile for this exact spot (fire-and-forget; fills in when ready)
+    loadHazardProfile(plat, plon).then(hz => {
+      if (myId !== poiReqRef.current) return;
+      setPoiCard(c => c ? { ...c, hazards: hz, hazardsLoading: false } : c);
+    }).catch(() => { if (myId === poiReqRef.current) setPoiCard(c => c ? { ...c, hazardsLoading: false } : c); });
+    // value of that exact spot + nearby zonals around it, in parallel.
     const dV = 0.0009, dN = 0.006; // ~100m building box, ~1.3km nearby box
     const [sa, nb] = await Promise.all([
       fetch(`/api/scan-area`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ minLat: plat-dV, maxLat: plat+dV, minLon: plon-dV, maxLon: plon+dV, domain }) }).then(r=>r.json()).catch(()=>null),
@@ -1007,25 +1158,42 @@ export function Home() {
     ]);
     if (myId !== poiReqRef.current) return;
     const pt = sa?.ok && Array.isArray(sa.points) ? sa.points[0] : null;
-    // Build nearby list: distance to the clicked point, de-duped by street+value, nearest first.
+    // PREFER the DB nearby list (the barangay's full street values, straight from our
+    // database — rich even where nothing's been geocoded). Fall back to geocoded points.
     const seen = new Set<string>();
-    const nearby: NearbyZonal[] = (nb?.ok && Array.isArray(nb.points) ? nb.points : [])
-      .map((p: any) => {
-        const dx = (Number(p.lon) - plon) * Math.cos((plat * Math.PI) / 180);
-        const dy = Number(p.lat) - plat;
-        return {
-          lat: Number(p.lat), lon: Number(p.lon), value: Number(p.value_per_sqm),
-          street: String(p.street||""), barangay: String(p.barangay||""), city: String(p.city||""),
-          classification: String(p.classification_code||""), dist: Math.sqrt(dx*dx + dy*dy) * 111000,
-        };
-      })
-      .filter((p: NearbyZonal) => {
-        if (!p.value || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return false;
-        const k = `${p.street}|${p.value}`.toLowerCase();
-        if (seen.has(k)) return false; seen.add(k); return true;
-      })
-      .sort((a: NearbyZonal, b: NearbyZonal) => a.dist - b.dist)
-      .slice(0, 50);
+    let nearby: NearbyZonal[] = [];
+    const dbNearby: any[] = sa?.ok && Array.isArray(sa.nearby) ? sa.nearby : [];
+    if (dbNearby.length) {
+      nearby = dbNearby
+        .map((p: any) => ({
+          value: Number(p.value_per_sqm), street: String(p.street||""), barangay: String(p.barangay||""),
+          city: String(p.city||""), province: String(p.province||""), classification: String(p.classification||p.classification_code||""),
+        }))
+        .filter((p: NearbyZonal) => {
+          if (!p.value) return false;
+          const k = `${p.street}|${p.value}|${p.classification}`.toLowerCase();
+          if (seen.has(k)) return false; seen.add(k); return true;
+        })
+        .slice(0, 60);
+    } else {
+      nearby = (nb?.ok && Array.isArray(nb.points) ? nb.points : [])
+        .map((p: any) => {
+          const dx = (Number(p.lon) - plon) * Math.cos((plat * Math.PI) / 180);
+          const dy = Number(p.lat) - plat;
+          return {
+            lat: Number(p.lat), lon: Number(p.lon), value: Number(p.value_per_sqm),
+            street: String(p.street||""), barangay: String(p.barangay||""), city: String(p.city||""),
+            classification: String(p.classification_code||""), dist: Math.sqrt(dx*dx + dy*dy) * 111000,
+          };
+        })
+        .filter((p: NearbyZonal) => {
+          if (!p.value || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return false;
+          const k = `${p.street}|${p.value}`.toLowerCase();
+          if (seen.has(k)) return false; seen.add(k); return true;
+        })
+        .sort((a: NearbyZonal, b: NearbyZonal) => (a.dist??0) - (b.dist??0))
+        .slice(0, 50);
+    }
     setPoiCard(c => c ? {
       ...c, loading: false, nearbyLoading: false, nearby,
       value: pt?.value_per_sqm ?? null,
@@ -1035,7 +1203,48 @@ export function Home() {
       city: pt?.city ?? "",
       noData: !!sa?.noData,
       scannedCity: String(sa?.scannedCity ?? pt?.city ?? ""),
+      cityTypical: !!pt?.cityTypical,
     } : c);
+  }
+
+  // "Near me" → GPS → open the SAME panel (relabeled "Your Location") with the zonal
+  // value + hazard profile + nearby for the user's current spot. Uniform with clicks.
+  function runNearMe() {
+    const blank = { value: null as number | null, classification: "", street: "", barangay: "", city: "", noData: false, scannedCity: "", nearby: [] as NearbyZonal[], cityTypical: false };
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setPoiCard({ loading: false, name: "Location unavailable", address: "This device doesn't support geolocation.", lat: 0, lon: 0, ...blank, noData: true, nearbyLoading: false, hazards: null, hazardsLoading: false, kind: "nearme" });
+      return;
+    }
+    const myId = ++poiReqRef.current;
+    setPoiCard({ loading: true, name: "Your location", address: "Locating you…", lat: 0, lon: 0, ...blank, nearbyLoading: true, hazards: null, hazardsLoading: true, kind: "nearme" });
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude, lon = pos.coords.longitude;
+        if (myId !== poiReqRef.current) return;
+        setSelectedLocation({ lat, lon });
+        setPoiCard(c => c ? { ...c, lat, lon, address: `${lat.toFixed(5)}, ${lon.toFixed(5)}` } : c);
+        if (typeof window !== "undefined" && window.innerWidth < 640) setLeftOpen(false);
+        await hydratePoint(lat, lon, myId);
+      },
+      () => {
+        if (myId !== poiReqRef.current) return;
+        setPoiCard(c => c ? { ...c, loading: false, nearbyLoading: false, hazardsLoading: false, name: "Location unavailable", address: "Please allow location access to use Near me." } : c);
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+    );
+  }
+
+  // Fly the map to a nearby zonal item. DB items have no coords → geocode on demand
+  // (respecting (SIQUIJOR)/(GUIMARAS) tags), then pan there.
+  async function flyToNearby(n: NearbyZonal) {
+    if (n.lat != null && n.lon != null) { setSelectedLocation({ lat: n.lat, lon: n.lon }); setBottomOpen(true); return; }
+    const ovr = geoOverride(n.city, n.province);
+    const q = [n.street, n.barangay, ovr.city || n.city, ovr.province, "Philippines"].filter(Boolean).join(", ");
+    try {
+      const res = await fetch("/api/geocode", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ query:q, street:n.street, hintBarangay:n.barangay, hintCity:ovr.city||n.city, hintProvince:ovr.province }) });
+      const d = await res.json().catch(()=>null);
+      if (d?.ok && Number.isFinite(Number(d.lat))) { setSelectedLocation({ lat:Number(d.lat), lon:Number(d.lon) }); setBottomOpen(true); }
+    } catch {}
   }
 
   useEffect(()=>{ const t=setTimeout(()=>{ if (!domain) return; searchZonal({page:1}); },350); return ()=>clearTimeout(t); },[domain,city,barangay,classification,q]);
@@ -1051,7 +1260,7 @@ export function Home() {
       <ZonalSearchIndicator visible={loading} />
 
       <div className="absolute inset-0">
-        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} onPoiClick={onPoiClick} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} floodTilesOn={floodOverlayOn} landslideTilesOn={landslideOverlayOn} stormSurgeTilesOn={stormSurgeOverlayOn} faultsOn={faultOverlayOn} scanFloodOverlay={scanFloodOverlay} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
+        <MapComponent key={mapKey} selected={selectedLocation} disablePickOnMap={true} onPoiClick={onPoiClick} popupLabel={geoLabel} boundary={boundary} highlightRadiusMeters={80} containerId="map-container" mapType={mapType as "street"|"terrain"|"satellite"} showStreetHighlight={showStreetHighlight} streetGeojson={streetGeo} streetGeojsonEnabled={showStreetHighlight} areaLabels={areaLabels} valuePoints={nearMePoints} scanMode={scanMode} onScanComplete={onScanComplete} floodTilesOn={floodOverlayOn} landslideTilesOn={landslideOverlayOn} stormSurgeTilesOn={stormSurgeOverlayOn} faultsOn={faultOverlayOn} liquefactionOn={liquefactionOn} tsunamiOn={tsunamiOn} groundRuptureOn={groundRuptureOn} scanFloodOverlay={scanFloodOverlay} clearScanBoxSignal={clearScanSignal} drawingMode={drawMode} onAreaMeasured={(info)=>{ setLandArea(info?info.areaSqm:null); setLandPath(info?info.path:null); }} clearDrawingSignal={clearDrawSignal} />
       </div>
 
       {/* Brand pill */}
@@ -1253,7 +1462,7 @@ export function Home() {
                 <SlidersHorizontal size={13} />Filters
               </button>
               {isDev&&(
-                <button onClick={()=>{ if(typeof window!=="undefined"){localStorage.removeItem("facetCitiesCacheV1");localStorage.removeItem("facetBarangaysCacheV1");localStorage.removeItem("zonalCacheV1");loadCities(domain).catch(()=>{});} }} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition" style={{background:"rgba(255,255,255,0.10)",color:"#f5f0eb"}} title="Clear caches (dev only)">
+                <button onClick={()=>{ if(typeof window!=="undefined"){localStorage.removeItem("facetCitiesCacheV3");localStorage.removeItem("facetBarangaysCacheV3");localStorage.removeItem("zonalCacheV1");loadCities(domain).catch(()=>{});} }} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition" style={{background:"rgba(255,255,255,0.10)",color:"#f5f0eb"}} title="Clear caches (dev only)">
                   <RefreshCw size={13}/> Refresh
                 </button>
               )}
@@ -1285,13 +1494,15 @@ export function Home() {
                   <div className="max-h-56 overflow-auto">
                     {matches.map((m,idx)=>(
                       <button key={idx} className="w-full text-left px-3 py-2.5 text-sm hover:bg-[#f5f0eb] border-b last:border-b-0 transition"
-                        onClick={async()=>{
+                        onClick={()=>{
                           citiesReqGenerationRef.current++; setDomain(m.domain); setSelectedProvince(m.province); setSelectedProvinceCity(m.city);
                           setCity(""); setBarangay(""); setClassification(""); setQ(""); setPage(1); setRows([]); setErr("");
                           setSelectedRow(null); setPoiData(null); setDetailsErr(""); setFacetCities([]); setFacetBarangays([]);
                           setBoundary(null); setComps(null); setAreaDescription(""); setAreaDescErr(""); setRegionSearch("");
-                          await loadCities(m.domain,citiesReqGenerationRef.current); searchZonal({page:1});
-                          await pinpointFilterLocation(m.city,"",m.province); setShowRegionPicker(false); setShowFilters(true);
+                          setShowRegionPicker(false); setShowFilters(true);              // close picker instantly (don't wait on geocode)
+                          loadCities(m.domain,citiesReqGenerationRef.current);            // load city dropdown (non-blocking)
+                          pinpointFilterLocation(m.city,"",m.province);                  // geocode in background (non-blocking)
+                          // value query fires once via the debounced [domain] effect — no double-fetch
                         }}>
                         <div className="font-semibold text-gray-900 text-xs">{m.province} {searchMode==="city"?`→ ${m.city}`:""}</div>
                         <div className="text-[11px] text-gray-400 mt-0.5">{m.domain}</div>
@@ -1422,7 +1633,7 @@ export function Home() {
 
         {/* Drawer toggle — vertically centered on the map's left edge (like Google Maps)
             so it never crowds the top toolbar / search box. */}
-        <button onClick={()=>setLeftOpen(v=>!v)} className="h-16 self-center rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 border-l-0 shadow-xl px-2.5 flex items-center justify-center hover:bg-white transition z-50" title={leftOpen?"Collapse panel":"Expand panel"} aria-label={leftOpen?"Collapse panel":"Expand panel"}>
+        <button onClick={toggleSearchPanel} className="h-16 self-center rounded-r-2xl bg-white/95 backdrop-blur border border-gray-200 border-l-0 shadow-xl px-2.5 flex items-center justify-center hover:bg-white transition z-50" title={leftOpen?"Collapse panel":"Expand panel"} aria-label={leftOpen?"Collapse panel":"Expand panel"}>
           {leftOpen?<ChevronLeft size={20} style={{color:"#1e3a8a"}}/>:<ChevronRight size={20} style={{color:"#1e3a8a"}}/>}
         </button>
       </div>
@@ -1445,8 +1656,9 @@ export function Home() {
         )}
       </div>
 
-      {/* BOTTOM SHEET */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[92vw] sm:w-[560px]">
+      {/* BOTTOM SHEET — only when the search drawer is open AND a property/zonal is selected
+          (keeps the default map clean; vanishes when the drawer is closed). */}
+      <div className={["absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-[92vw] sm:w-[560px]", selectedRow ? "" : "hidden"].join(" ")}>
         <div className={["rounded-3xl border-2 border-gray-200 bg-white/98 backdrop-blur shadow-2xl overflow-hidden transition-all duration-300",bottomOpen?"max-h-[38vh]":"max-h-[52px]"].join(" ")}>
           <button onClick={()=>setBottomOpen(v=>!v)} className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-gray-50 transition border-b border-gray-100">
             <div className="min-w-0 text-left"><div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider flex items-center gap-1.5"><MapPin size={11} style={{color:"#1e3a8a"}}/> Selected Property</div><div className="text-sm font-bold text-gray-900 truncate mt-0.5">{selectedTitle}</div></div>
@@ -1731,8 +1943,11 @@ export function Home() {
       {/* MAP TOOLS: "Near me" (GPS) + "Scan area" (draw a box → zonal values inside) */}
       <MapTools
         onLocate={(lat, lon) => setSelectedLocation({ lat, lon })}
+        onNearMe={runNearMe}
+        onSearchZonal={toggleSearchPanel}
+        searchZonalActive={leftOpen}
         scanActive={scanMode}
-        onScanToggle={() => { setScanMode((v) => !v); setScanResults([]); setScanNote(""); setNearMePoints([]); setScanFloodOverlay(null); }}
+        onScanToggle={() => { setScanMode((v) => !v); setScanResults([]); setScanNote(""); setNearMePoints([]); setScanFloodOverlay(null); setScanHazards(null); setScanHazardsLoading(false); setScanNearby([]); setClearScanSignal((s) => s + 1); }}
         scanResults={scanResults}
         scanNote={scanNote}
         scanLoading={scanLoading}
@@ -1745,8 +1960,15 @@ export function Home() {
         onStormSurgeToggle={() => setStormSurgeOverlayOn((v) => !v)}
         faultsOn={faultOverlayOn}
         onFaultToggle={() => setFaultOverlayOn((v) => !v)}
+        liquefactionOn={liquefactionOn}
+        onLiquefactionToggle={() => setLiquefactionOn((v) => !v)}
+        tsunamiOn={tsunamiOn}
+        onTsunamiToggle={() => setTsunamiOn((v) => !v)}
+        groundRuptureOn={groundRuptureOn}
+        onGroundRuptureToggle={() => setGroundRuptureOn((v) => !v)}
         mapType={mapType}
         sidebarOpen={leftOpen}
+        leftPanelOpen={leftOpen || !!poiCard || scanLoading || scanResults.length > 0 || !!scanNote}
       />
 
       {/* ESTABLISHMENT PANEL — click a building/business icon on the map → full-height
@@ -1754,93 +1976,248 @@ export function Home() {
           (click one to fly there). */}
       {poiCard && (
         <div
-          className="fixed left-0 top-0 z-[58] flex h-full w-full flex-col bg-white shadow-2xl sm:w-[380px]"
-          style={{ borderRight: "2px solid #c9a84c", animation: "poiSlideIn 0.25s ease-out" }}
+          className="epx fixed left-0 top-0 z-[58] h-full w-full sm:w-[380px]"
+          style={{ animation: "poiSlideIn 0.25s ease-out" }}
         >
-          {/* Navy header */}
-          <div className="flex shrink-0 items-center justify-between px-4 py-3 text-white" style={{ background: "#1e3a8a" }}>
-            <span className="flex items-center gap-2 text-[14px] font-bold">
-              <Building2 size={17} style={{ color: "#c9a84c" }} /> Establishment
+          {/* Header */}
+          <header className="header">
+            <div className="head-top">
+              <div className="brand">
+                <span className="logo" aria-hidden="true">Z</span>
+                <span className="brand-txt"><b>ZONAL</b>VALUE&nbsp;·&nbsp;PH</span>
+              </div>
+              <div className="head-actions">
+                <button className="iconbtn" onClick={() => setPoiCard(null)} title="Close" aria-label="Close">
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+            <span className="head-tag">
+              {poiCard.kind === "nearme" ? <><Crosshair size={11} /> Zonal value near you</> : <><Building2 size={11} /> Property Due-Diligence</>}
             </span>
-            <button onClick={() => setPoiCard(null)} className="rounded-full p-1 text-white/70 hover:bg-white/15 hover:text-white" title="Close" aria-label="Close">
-              <X size={17} />
-            </button>
-          </div>
+          </header>
 
-          <div className="flex-1 overflow-y-auto">
-            {/* Name + the zonal value of THIS land */}
-            <div className="border-b border-gray-100 p-4">
+          <div className="body">
+            {/* Name + address */}
+            <div className="title-block">
+              <div className="eyebrow">{poiCard.kind === "nearme" ? "Your Location" : "Establishment"}</div>
               {poiCard.loading && !poiCard.name ? (
-                <div className="flex items-center gap-2 text-[13px] text-gray-600">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-[#1e3a8a]" /> Reading this place…
+                <h1 className="estab-name" style={{ opacity: 0.5 }}>Reading this place…</h1>
+              ) : (
+                <h1 className="estab-name">{poiCard.name || "This location"}</h1>
+              )}
+              {poiCard.address && (
+                <div className="address">
+                  <MapPin size={13} /><span>{poiCard.address}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Zonal value hero */}
+            <section className="hero" aria-label="Zonal value">
+              <div className="hero-in">
+                <div className="hero-label"><span className="dot" /> Zonal value of this land</div>
+                {poiCard.loading ? (
+                  <div className="hero-value" style={{ opacity: 0.6 }}><span className="num" style={{ fontSize: 26 }}>…</span></div>
+                ) : poiCard.value != null ? (
+                  <>
+                    <div className="hero-value">
+                      <span className="cur">₱</span>
+                      <span className="num">{poiCard.value.toLocaleString("en-PH")}</span>
+                      <span className="per">/ sqm</span>
+                    </div>
+                    <div className="hero-meta">
+                      {poiCard.classification && <span className="chip"><b>{poiCard.classification}</b></span>}
+                      {poiCard.cityTypical
+                        ? <span className="chip" style={{ background: "#fffbeb", borderColor: "#fde68a", color: "#92400e" }}>City-typical</span>
+                        : <span className="chip">BIR-indexed</span>}
+                    </div>
+                    {poiCard.cityTypical ? (
+                      <div className="hero-applies" style={{ alignItems: "flex-start" }}>
+                        <Crosshair size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+                        <span><b>Typical value for {[poiCard.barangay, poiCard.city].filter(Boolean).join(", ") || "this city"}.</b> The exact street here isn&rsquo;t in the BIR list yet, so this is the city&rsquo;s representative rate — not the exact lot.</span>
+                      </div>
+                    ) : (
+                      [poiCard.street, poiCard.barangay, poiCard.city].filter(Boolean).length > 0 && (
+                        <div className="hero-applies">
+                          <Crosshair size={13} />
+                          <span>Value applies to <b>{[poiCard.street, poiCard.barangay, poiCard.city].filter(Boolean).join(", ")}</b></span>
+                        </div>
+                      )
+                    )}
+                  </>
+                ) : (
+                  <div className="hero-applies" style={{ borderTop: "none", paddingTop: 6 }}>
+                    <span>No zonal value saved for {poiCard.scannedCity || "this area"} yet.</span>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* HAZARD PROFILE — above nearby values */}
+            <section className="section" aria-label="Hazard profile">
+              <div className="sec-head">
+                <div className="sec-title">
+                  <span className="mark" />
+                  <div><h2>Hazard Profile</h2><div className="sub">Risk for this exact spot</div></div>
+                </div>
+                <span className="pill">6 checks</span>
+              </div>
+              {poiCard.hazardsLoading || !poiCard.hazards ? (
+                <div className="haz-wrap" style={{ padding: 18, display: "flex", alignItems: "center", gap: 10, color: "#64748b", fontSize: 12 }}>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-[#1e3a8a]" /> Assessing geohazards…
                 </div>
               ) : (
-                <>
-                  <div className="text-[17px] font-black leading-tight" style={{ color: "#1e3a8a" }}>{poiCard.name || "This location"}</div>
-                  {poiCard.address && <div className="mt-1 text-[12px] leading-snug text-gray-500">{poiCard.address}</div>}
-                  <div className="mt-3 rounded-2xl p-3.5" style={{ background: "#f8f6f0", border: "1px solid #efe6d6" }}>
-                    {poiCard.loading ? (
-                      <div className="flex items-center gap-2 text-[12px] text-gray-500">
-                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-[#1e3a8a]" /> Finding the zonal value…
-                      </div>
-                    ) : poiCard.value != null ? (
-                      <>
-                        <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Zonal value of this land</div>
-                        <div className="text-[26px] font-black leading-none" style={{ color: "#1e3a8a" }}>
-                          ₱{poiCard.value.toLocaleString("en-PH")}<span className="text-[12px] font-semibold text-gray-400">/sqm</span>
-                        </div>
-                        <div className="mt-1 text-[11.5px] font-semibold text-gray-600">
-                          {[poiCard.street, poiCard.barangay, poiCard.city].filter(Boolean).join(", ")}
-                          {poiCard.classification ? ` · ${poiCard.classification}` : ""}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-[12px] text-gray-500">No zonal value saved for {poiCard.scannedCity || "this area"} yet.</div>
-                    )}
-                  </div>
-                </>
+                <HazardRows hz={poiCard.hazards} />
               )}
-            </div>
+            </section>
 
             {/* Nearby zonal values */}
-            <div className="sticky top-0 z-10 flex items-center justify-between bg-gray-50 px-4 py-2">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Nearby zonal values</span>
-              {!poiCard.nearbyLoading && poiCard.nearby.length > 0 && (
-                <span className="text-[11px] font-bold" style={{ color: "#c9a84c" }}>{poiCard.nearby.length}</span>
-              )}
-            </div>
-            {poiCard.nearbyLoading ? (
-              <div className="flex items-center gap-2 p-4 text-[12px] text-gray-500">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-[#1e3a8a]" /> Loading nearby values…
+            <section className="section" aria-label="Nearby zonal values">
+              <div className="sec-head">
+                <div className="sec-title">
+                  <span className="mark" />
+                  <div><h2>Nearby Zonal Values</h2><div className="sub">Tap a parcel to fly there</div></div>
+                </div>
+                {!poiCard.nearbyLoading && poiCard.nearby.length > 0 && <span className="pill">{poiCard.nearby.length} found</span>}
               </div>
-            ) : poiCard.nearby.length === 0 ? (
-              <div className="p-4 text-[12px] text-gray-500">No other saved zonal values near here yet.</div>
-            ) : (
-              poiCard.nearby.map((n, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setSelectedLocation({ lat: n.lat, lon: n.lon }); setBottomOpen(true); }}
-                  className="block w-full border-b border-gray-100 px-4 py-2.5 text-left transition hover:bg-[#f5f7fc]"
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-[14px] font-black" style={{ color: "#1e3a8a" }}>
-                      ₱{n.value.toLocaleString("en-PH")}<span className="text-[10px] font-semibold text-gray-400">/sqm</span>
-                    </span>
-                    <span className="shrink-0 text-[10px] font-semibold text-gray-400">{n.dist < 1000 ? `${Math.round(n.dist)} m` : `${(n.dist/1000).toFixed(1)} km`}</span>
-                  </div>
-                  {n.street && <div className="truncate text-[12px] font-semibold text-gray-700">{n.street}</div>}
-                  <div className="truncate text-[11px] text-gray-500">
-                    {[n.barangay, n.city].filter(Boolean).join(", ")}{n.classification ? ` · ${n.classification}` : ""}
-                  </div>
-                </button>
-              ))
+              {poiCard.nearbyLoading ? (
+                <div className="haz-wrap" style={{ padding: 16, display: "flex", alignItems: "center", gap: 10, color: "#64748b", fontSize: 12 }}>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-[#1e3a8a]" /> Loading nearby values…
+                </div>
+              ) : poiCard.nearby.length === 0 ? (
+                <div className="haz-wrap" style={{ padding: 16, color: "#64748b", fontSize: 12 }}>No other saved zonal values near here yet.</div>
+              ) : (
+                <div className="nearby">
+                  {poiCard.nearby.map((n, i) => (
+                    <button key={i} type="button" className="nb" onClick={() => flyToNearby(n)}>
+                      <div className="nb-dist">
+                        <div className="d">{n.dist != null ? (n.dist < 1000 ? Math.round(n.dist) : (n.dist / 1000).toFixed(1)) : "—"}</div>
+                        <div className="u">{n.dist != null && n.dist >= 1000 ? "km" : "m"}</div>
+                      </div>
+                      <div className="nb-div" />
+                      <div className="nb-mid">
+                        <div className="nb-price">₱{n.value.toLocaleString("en-PH")} <small>/ sqm</small></div>
+                        <div className="nb-where">{[n.street, n.barangay, n.city].filter(Boolean).join(" · ")}</div>
+                      </div>
+                      {n.classification && <span className="nb-cls">{n.classification}</span>}
+                      <span className="nb-fly"><ChevronRight size={14} /></span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+      )}
+
+      {/* SCAN RESULTS PANEL — same .epx format as the establishment panel (left rail) */}
+      {(scanLoading || scanResults.length > 0 || !!scanNote) && (
+        <div className="epx fixed left-0 top-0 z-[57] h-full w-full sm:w-[380px]" style={{ animation: "poiSlideIn 0.25s ease-out" }}>
+          <header className="header">
+            <div className="head-top">
+              <div className="brand">
+                <span className="logo" aria-hidden="true"><Scan size={15} style={{ color: "#1a2b56" }} /></span>
+                <span className="brand-txt"><b>SCAN</b>&nbsp;RESULTS</span>
+              </div>
+              <div className="head-actions">
+                <button className="iconbtn" onClick={() => { setScanResults([]); setScanNote(""); setScanMode(false); setScanFloodOverlay(null); setScanHazards(null); setScanHazardsLoading(false); setScanNearby([]); setClearScanSignal((s) => s + 1); }} title="Close" aria-label="Close"><X size={15} /></button>
+              </div>
+            </div>
+            <span className="head-tag"><Scan size={11} /> Area Scan</span>
+          </header>
+          <div className="body">
+            <div className="title-block">
+              <div className="eyebrow">Area Scan</div>
+              <h1 className="estab-name">{scanLoading ? "Scanning…" : scanResults.length ? `${scanResults.length} zonal value${scanResults.length > 1 ? "s" : ""}` : "No data here"}</h1>
+              <div className="address">
+                <MapPin size={13} />
+                <span>{scanResults.length ? "Found inside the area you scanned · tap one to fly there" : (scanNote || "Inside the area you scanned")}</span>
+              </div>
+            </div>
+            <section className="section" aria-label="Zonal values">
+              <div className="sec-head">
+                <div className="sec-title"><span className="mark" /><div><h2>Zonal Values</h2><div className="sub">Tap a parcel to fly there</div></div></div>
+                {!scanLoading && scanResults.length > 0 && <span className="pill">{scanResults.length} found</span>}
+              </div>
+              {scanLoading ? (
+                <div className="haz-wrap" style={{ padding: 18, display: "flex", alignItems: "center", gap: 10, color: "#64748b", fontSize: 12 }}>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-[#1e3a8a]" /> Reading the area…
+                </div>
+              ) : scanResults.length === 0 ? (
+                <div className="haz-wrap" style={{ padding: 16, color: "#64748b", fontSize: 12 }}>{scanNote || "No zonal values saved in that area yet."}</div>
+              ) : (
+                <div className="nearby">
+                  {scanResults.map((r, i) => (
+                    <button key={i} type="button" className="nb" style={{ flexDirection: "column", alignItems: "stretch", gap: 7 }} onClick={() => setSelectedLocation({ lat: r.lat, lon: r.lon })}>
+                      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+                        <span className="nb-price" style={{ fontSize: 18 }}>₱{Number(r.value_per_sqm).toLocaleString("en-PH")} <small>/ sqm</small></span>
+                        {r.matchType === "city typical"
+                          ? <span className="nb-cls" style={{ background: "#fffbeb", borderColor: "#fde68a", color: "#92400e" }}>City-typical</span>
+                          : (r.classification_code && <span className="nb-cls">{r.classification_code}</span>)}
+                      </div>
+                      <div className="nb-where" style={{ whiteSpace: "normal" }}>{[r.street, r.barangay, r.city].filter(Boolean).join(" · ")}</div>
+                      {r.matchType === "city typical" && <div style={{ fontSize: 10, color: "#92400e", lineHeight: 1.4 }}>Typical value for this city — the exact street here isn&rsquo;t in the BIR list yet.</div>}
+                      {(r.floodLabel != null || r.landslideLabel != null || r.stormSurgeLabel != null || r.faultDistance != null) && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 1 }}>
+                          {r.floodLevel != null && <ScanHazChip level={r.floodLevel} label={hzLabel(r.floodLevel, "flood")} />}
+                          {r.landslideLevel != null && <ScanHazChip level={r.landslideLevel} label={hzLabel(r.landslideLevel, "landslide")} />}
+                          {r.stormSurgeLevel != null && <ScanHazChip level={r.stormSurgeLevel} label={hzLabel(r.stormSurgeLevel, "surge")} />}
+                          {r.faultDistance != null && <ScanHazChip level={r.faultLevel ?? 0} label={`${r.faultDistance < 1000 ? Math.round(r.faultDistance) + " m" : (r.faultDistance / 1000).toFixed(1) + " km"} to fault`} />}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* Hazard profile for the scanned area — below the zonal values */}
+            <section className="section" aria-label="Hazard profile">
+              <div className="sec-head">
+                <div className="sec-title"><span className="mark" /><div><h2>Hazard Profile</h2><div className="sub">Center of the scanned area</div></div></div>
+                <span className="pill">6 checks</span>
+              </div>
+              {scanHazardsLoading || !scanHazards ? (
+                <div className="haz-wrap" style={{ padding: 18, display: "flex", alignItems: "center", gap: 10, color: "#64748b", fontSize: 12 }}>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-[#1e3a8a]" /> Assessing geohazards…
+                </div>
+              ) : (<HazardRows hz={scanHazards} />)}
+            </section>
+
+            {/* Nearby zonal values — surrounding street values from our DB (same as the
+                establishment panel). Shown for a focused (building) scan. */}
+            {scanNearby.length > 0 && (
+              <section className="section" aria-label="Nearby zonal values">
+                <div className="sec-head">
+                  <div className="sec-title"><span className="mark" /><div><h2>Nearby Zonal Values</h2><div className="sub">Streets around this spot · tap to fly</div></div></div>
+                  <span className="pill">{scanNearby.length}</span>
+                </div>
+                <div className="nearby">
+                  {scanNearby.map((n, i) => (
+                    <button key={i} type="button" className="nb" onClick={() => flyToNearby(n)}>
+                      <div className="nb-dist">
+                        <div className="d">{n.dist != null ? (n.dist < 1000 ? Math.round(n.dist) : (n.dist / 1000).toFixed(1)) : "—"}</div>
+                        <div className="u">{n.dist != null && n.dist >= 1000 ? "km" : "m"}</div>
+                      </div>
+                      <div className="nb-div" />
+                      <div className="nb-mid">
+                        <div className="nb-price">₱{n.value.toLocaleString("en-PH")} <small>/ sqm</small></div>
+                        <div className="nb-where">{[n.street, n.barangay, n.city].filter(Boolean).join(" · ")}</div>
+                      </div>
+                      {n.classification && <span className="nb-cls">{n.classification}</span>}
+                      <span className="nb-fly"><ChevronRight size={14} /></span>
+                    </button>
+                  ))}
+                </div>
+              </section>
             )}
           </div>
         </div>
       )}
     </main>
   );
-}''
+}
 
 export function HomePage() {
   // The full-screen map view (Home) renders its own header with the home icon

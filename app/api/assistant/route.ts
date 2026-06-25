@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { fuzzyMatchStreets } from "../../lib/zonal-util";
+import { provinceToDomain } from "../../lib/provinceDomain";
 
 export const runtime = "nodejs";
+
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -193,6 +196,25 @@ function fuzzyTypos(token: string, candidates: string[]): string[] {
   return fuzzyMatchStreets(token, candidates, 2).filter((c) => plausibleTypo(token, c));
 }
 
+// Levenshtein edit distance (small strings).
+function editDistance(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+
+// Stricter fuzzy for CITY names: a real city typo is ≤1 edit away. This stops a
+// BARANGAY name (e.g. "Sambag") from wrongly snapping to a similar TOWN ("Samboan").
+function cityTypos(token: string, candidates: string[]): string[] {
+  return fuzzyTypos(token, candidates).filter((c) => editDistance(token.toUpperCase(), c.toUpperCase()) <= 1);
+}
+
 // Parse a money value like "15,000.00" → 15000.
 function parseMoney(v: any): number | null {
   const n = Number(String(v ?? "").replace(/[^0-9.]/g, ""));
@@ -354,12 +376,13 @@ async function zonalQuery(
   baseUrl: string,
   cookie: string,
   domain: string,
-  params: { city?: string; barangay?: string; q?: string }
+  params: { city?: string; barangay?: string; q?: string; sort?: string }
 ): Promise<{ rows: Row[]; total: number }> {
   const sp = new URLSearchParams({ domain, page: "1" });
   if (params.city) sp.set("city", params.city);
   if (params.barangay) sp.set("barangay", params.barangay);
   if (params.q) sp.set("q", params.q);
+  if (params.sort) sp.set("sort", params.sort);
   const data = await getJson(`${baseUrl}/api/zonal?${sp.toString()}`, cookie);
   const rows = Array.isArray(data?.rows) ? data.rows : [];
   // totalRows is the TRUE count of all matching records (across all pages),
@@ -379,6 +402,22 @@ const RESOLVE_CACHE: Map<string, { ts: number; result: ResolveResult }> =
   (globalThis as any).__ASSISTANT_RESOLVE_CACHE__ ?? new Map();
 (globalThis as any).__ASSISTANT_RESOLVE_CACHE__ = RESOLVE_CACHE;
 const RESOLVE_TTL_MS = 1000 * 60 * 30; // 30 minutes
+
+// Authoritative (province, city) index straight from OUR DB (all 82 provinces) — the
+// same source the map's resolver uses. Cached so the assistant resolves places fast and
+// accurately, instead of hitting the slow external SpreadSimple sheet.
+const CPI_CACHE: { ts: number; pairs: any[] | null } =
+  (globalThis as any).__ASSISTANT_CPI__ ?? { ts: 0, pairs: null };
+(globalThis as any).__ASSISTANT_CPI__ = CPI_CACHE;
+async function getCityProvinceIndex(): Promise<any[] | null> {
+  if (CPI_CACHE.pairs && Date.now() - CPI_CACHE.ts < 1000 * 60 * 60) return CPI_CACHE.pairs;
+  const root = (BACKEND_URL || "").replace(/\/$/, "");
+  if (!root) return null;
+  const d = await getJson(`${root}/api/facets/city-province-index`, "");
+  const pairs = Array.isArray(d?.pairs) ? d.pairs : null;
+  if (pairs) { CPI_CACHE.pairs = pairs; CPI_CACHE.ts = Date.now(); }
+  return pairs;
+}
 
 async function resolveDomain(
   baseUrl: string,
@@ -404,31 +443,54 @@ async function resolveDomain(
   const provinceOnly: string[] = []; // only the province appears (still resolves the domain)
   const fuzzy = new Map<string, string>(); // "City, Province" -> domain (typo suggestions)
 
-  // Mirror the search box: try the fast in-memory city index first, then the
-  // broad master sheet. Stop as soon as we get a usable hit.
-  for (const source of ["city-search", "regions"] as const) {
-    for (const t of tokens) {
-      const data = await getJson(`${baseUrl}/api/${source}?q=${encodeURIComponent(t)}`, "");
-      const matches: any[] = Array.isArray(data?.matches) ? data.matches : [];
-      for (const m of matches) {
-        if (!m?.domain) continue;
-        const cityHit = m.city && cityMentioned(qNorm, m.city);
-        const provHit = m.province && provinceMentioned(qNorm, m.province);
-        if (cityHit && provHit) strong.push(m.domain);
-        else if (cityHit) weak.push(m.domain);
-        else if (provHit) provinceOnly.push(m.domain); // province named → domain is known
-        else if (m.city) {
-          // fuzzy (typo): query token close to one of the city's tokens
-          const close = cityTokensOf(m.city).some((ct) => fuzzyTypos(t, [ct]).length);
-          if (close) {
-            const label = `${m.city}${m.province ? `, ${m.province}` : ""}`;
-            if (!fuzzy.has(label)) fuzzy.set(label, m.domain);
+  // PRIMARY: our own authoritative (province, city) index — covers ALL 82 provinces,
+  // cached, no external network. Resolve the place straight from our DB (fast + accurate).
+  const idx = await getCityProvinceIndex();
+  if (idx) {
+    // NCR is stored as "NCR" but users say "Metro Manila"/"Kalakhang Maynila" (and the
+    // matcher ignores 3-letter names), so treat those as a Metro-Manila province mention.
+    const NCR_DOMAIN = provinceToDomain("NCR");
+    const qMentionsNCR = /\b(metro\s*manila|kalakhang\s*maynila|national\s*capital|ncr)\b/i.test(question);
+    for (const pair of idx) {
+      const prov = Array.isArray(pair) ? pair[0] : pair?.province;
+      const city = Array.isArray(pair) ? pair[1] : pair?.city;
+      const dom = provinceToDomain(prov);
+      if (!dom) continue;
+      const cityHit = city && cityMentioned(qNorm, city);
+      const provHit = (prov && provinceMentioned(qNorm, prov)) || (qMentionsNCR && dom === NCR_DOMAIN);
+      if (cityHit && provHit) strong.push(dom);
+      else if (cityHit) weak.push(dom);
+      else if (provHit) provinceOnly.push(dom);
+    }
+  }
+
+  // FALLBACK (only if the DB index found nothing): the search box's city-search +
+  // master sheet, which also surface typo "did you mean" suggestions.
+  if (!strong.length && !weak.length && !provinceOnly.length) {
+    for (const source of ["city-search", "regions"] as const) {
+      for (const t of tokens) {
+        const data = await getJson(`${baseUrl}/api/${source}?q=${encodeURIComponent(t)}`, "");
+        const matches: any[] = Array.isArray(data?.matches) ? data.matches : [];
+        for (const m of matches) {
+          if (!m?.domain) continue;
+          const cityHit = m.city && cityMentioned(qNorm, m.city);
+          const provHit = m.province && provinceMentioned(qNorm, m.province);
+          if (cityHit && provHit) strong.push(m.domain);
+          else if (cityHit) weak.push(m.domain);
+          else if (provHit) provinceOnly.push(m.domain); // province named → domain is known
+          else if (m.city) {
+            // fuzzy (typo): query token close to one of the city's tokens (≤1 edit)
+            const close = cityTokensOf(m.city).some((ct) => cityTypos(t, [ct]).length);
+            if (close) {
+              const label = `${m.city}${m.province ? `, ${m.province}` : ""}`;
+              if (!fuzzy.has(label)) fuzzy.set(label, m.domain);
+            }
           }
         }
+        if (strong.length) break;
       }
-      if (strong.length) break;
+      if (strong.length || weak.length || provinceOnly.length) break; // got a usable hit
     }
-    if (strong.length || weak.length || provinceOnly.length) break; // got a usable hit
   }
 
   // Pick: city+province wins, then city-only, then province-only. For a bare city
@@ -512,7 +574,7 @@ async function lookupZonal(baseUrl: string, cookie: string, domain: string, ques
       for (const t of placeTokens) {
         if (t.length < 4 || isProvinceWord(t)) continue;
         for (const x of cores) {
-          if (x.toks.some((ct) => fuzzyTypos(t, [ct]).length)) hits.add(x.full);
+          if (x.toks.some((ct) => cityTypos(t, [ct]).length)) hits.add(x.full);
         }
       }
       const list = Array.from(hits);
@@ -576,6 +638,12 @@ async function lookupZonal(baseUrl: string, cookie: string, domain: string, ques
   if (city && barangay && streetQ) attempts.push({ city, barangay, q: streetQ });
   if (city && streetQ) attempts.push({ city, q: streetQ });
   if (city) attempts.push({ city });
+  // Bare place (no city): try the FULL phrase first ("sambag ii" → exactly SAMBAG II, not
+  // every "Sambag"), then the single distinctive token.
+  if (!city) {
+    const barePhrase = placeTokens.filter((t) => t.length >= 2 && !isProvinceWord(t)).join(" ").trim();
+    if (barePhrase && barePhrase !== streetQ) attempts.push({ q: barePhrase });
+  }
   if (streetQ) attempts.push({ q: streetQ });
 
   // De-dup attempts and cap to 2 to keep token cost low (DB charges per search).
@@ -589,17 +657,24 @@ async function lookupZonal(baseUrl: string, cookie: string, domain: string, ques
     })
     .slice(0, 2);
 
-  // Don't spend a paid zonal search on non-location chit-chat: only query when we
-  // resolved a real city, or the message clearly has location/value intent.
-  const hasIntent = looksLikeLocationQuery(question);
+  // Don't spend a paid zonal search on non-location chit-chat: query when we resolved a
+  // real city, OR the message has location/value intent, OR it's a bare place name typed
+  // on its own ("lahug", "sambag ii") — so loosely-phrased questions still get answered.
+  const hasIntent = looksLikeLocationQuery(question) || looksLikeBarePlace(question);
   if (!city && !hasIntent) planned = [];
   // If the barangay or city is ambiguous, don't guess (and don't waste a token) — ask.
   if (ambiguous.length || cityAmbiguous.length) planned = [];
 
+  // Superlative intent → sort the rows by value so "most expensive / cheapest" is EXACT
+  // (the alphabetical sample would otherwise miss the priciest street).
+  const wantHigh = /\b(most\s*expensive|highest|priciest|dearest|pinaka\s*mahal|pinakamahal|mahal)\b/i.test(question);
+  const wantLow = /\b(cheapest|lowest|pinaka\s*mura|pinakamura|mura)\b/i.test(question);
+  const sort = wantHigh ? "value_desc" : wantLow ? "value_asc" : "";
+
   let rows: Row[] = [];
   let total = 0;
   for (const a of planned) {
-    const r = await zonalQuery(baseUrl, cookie, domain, a);
+    const r = await zonalQuery(baseUrl, cookie, domain, { ...a, sort });
     rows = r.rows;
     total = r.total;
     if (rows.length) break;
@@ -652,9 +727,33 @@ async function lookupZonal(baseUrl: string, cookie: string, domain: string, ques
     streetQ,
     suggestions,
     stats,
+    sorted: sort ? (wantHigh ? "high" : "low") : "", // rows are value-sorted for superlatives
     cityResolved: Boolean(city),
     barangayList: barangays, // full list for "what/how many barangays" questions
   };
+}
+
+// Stream the reply to the client: first line = JSON metadata (suggestions, hazards,
+// followups…), then the answer text streamed token-by-token (so it feels instant).
+function streamResponse(meta: any, opts: { text?: string; stream?: any }) {
+  const encoder = new TextEncoder();
+  const rs = new ReadableStream({
+    async start(controller) {
+      controller.enqueue(encoder.encode(JSON.stringify(meta) + "\n"));
+      try {
+        if (opts.text != null) {
+          controller.enqueue(encoder.encode(opts.text));
+        } else if (opts.stream) {
+          for await (const part of opts.stream) {
+            const delta = part?.choices?.[0]?.delta?.content || "";
+            if (delta) controller.enqueue(encoder.encode(delta));
+          }
+        }
+      } catch { /* client disconnected or stream error — just end */ }
+      controller.close();
+    },
+  });
+  return new Response(rs, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
 export async function POST(req: Request) {
@@ -679,7 +778,7 @@ export async function POST(req: Request) {
     // 0) Free instant answers for common general questions (no OpenAI, no search).
     const faq = faqAnswer(question);
     if (faq) {
-      return NextResponse.json({ ok: true, text: faq, matched: 0, suggestions: [], source: "faq" });
+      return streamResponse({ ok: true, matched: 0, suggestions: [], followups: [], hazard: null, hazards: [], source: "faq" }, { text: faq });
     }
 
     // Build absolute base URL + forward the user's auth cookie to internal APIs
@@ -728,7 +827,7 @@ export async function POST(req: Request) {
       look = { ...look, suggestions: resolvedSuggestions };
     }
 
-    const { rows, total, suggestions, stats, city: resolvedCity, barangay: resolvedBarangay, streetQ: resolvedStreet, barangayList } = look;
+    const { rows, total, suggestions, stats, sorted, city: resolvedCity, barangay: resolvedBarangay, streetQ: resolvedStreet, barangayList } = look;
     const dataLines = rows.slice(0, MAX_ROWS_IN_PROMPT).map(rowToLine);
 
     // Full barangay list for the resolved city, so the AI can answer "what/how many
@@ -908,10 +1007,16 @@ export async function POST(req: Request) {
       }
     }
 
+    // When rows are value-sorted (a superlative query with no barangay stats), the FIRST
+    // record is the exact highest/lowest — tell the model to use it (not the sample order).
+    const sortedNote =
+      sorted && !stats && dataLines.length > 0
+        ? `\n\n(THESE RECORDS ARE SORTED BY VALUE — ${sorted === "high" ? "HIGHEST" : "LOWEST"} FIRST across ALL ${total} records. For the "${sorted === "high" ? "most expensive" : "cheapest"}" answer, the FIRST record above is the exact one — quote its street, value, and classification.)`
+        : "";
     const dataBlock =
       dataLines.length > 0
         ? `TOTAL MATCHING RECORDS IN OUR DATABASE: ${total}${shownNote}\n\n` +
-          `SAMPLE OF MATCHING ZONAL RECORDS:\n${dataLines.join("\n")}${statsBlock}${landBlock}${barangayListBlock}${hazardBlock}`
+          `SAMPLE OF MATCHING ZONAL RECORDS:\n${dataLines.join("\n")}${sortedNote}${statsBlock}${landBlock}${barangayListBlock}${hazardBlock}`
         : `TOTAL MATCHING RECORDS IN OUR DATABASE: 0\n(none found for this query)${suggestionBlock}${barangayListBlock}${hazardBlock}`;
 
     // Follow-up quick-replies (tappable) after a successful location answer.
@@ -937,9 +1042,10 @@ export async function POST(req: Request) {
       "• General concept questions (what is a zonal value, what does a classification mean): explain it clearly and simply in 1–2 sentences. A zonal value is the BIR-assessed value per square meter used for taxes; it is not necessarily the market price. " +
       "• A specific location's value: use ONLY the zonal records provided below — quote the exact ₱/sqm and location, and NEVER invent or estimate a number.\n\n" +
       "RULES FOR LOCATION ANSWERS:\n" +
+      "(0) BE FORGIVING of phrasing. Users may just type a place name ('Lahug', 'Sambag II, Cebu City') or ask loosely/with typos. If SAMPLE RECORDS are provided below, treat it as a request for that place's zonal value and ANSWER DIRECTLY with the value(s) — do NOT reply by asking 'are you looking for the value?'. Only ask a clarifying question when NO records were found, or the records clearly span different cities (then ask which city). " +
       "(1) Quote the exact ₱/sqm value and location from the records — never make up a number. " +
       "(2) For 'how many' / counting questions, use TOTAL MATCHING RECORDS as the exact count — do NOT count only the sample rows (the sample is just a preview). " +
-      "(2b) For 'most expensive / highest / cheapest / lowest / average / range' questions, use VALUE STATS FOR THIS BARANGAY (it covers ALL records) — name the exact street and value. Do NOT pick the max from the small sample list, since the sample is only alphabetical and may miss the priciest street. " +
+      "(2b) For 'most expensive / highest / cheapest / lowest / average / range' questions: if VALUE STATS FOR THIS BARANGAY is provided, use it (it covers ALL records) — name the exact street and value. Otherwise, if a note says the records are SORTED BY VALUE, use the FIRST record (it is the exact highest/lowest across all records). Never pick the max from an unsorted/alphabetical sample. " +
       "(2c) For 'what / which / how many barangays' questions about a city, use the BARANGAYS IN <CITY> list (it is the complete list) — give the count and list them. " +
       "(3) If several records match (e.g. multiple classifications on one street), give the range or list a few, and mention the total count. " +
       "(4) If no record is provided but CLOSEST MATCHING PLACES are listed, the user likely misspelled it — politely ask 'Did you mean …?' and list those exact suggestions. If there are none, say you don't have a record for that exact location and suggest picking it on the map or checking the spelling. Either way, do NOT guess a number. " +
@@ -956,10 +1062,11 @@ export async function POST(req: Request) {
       .filter((m: any) => m && (m.role === "user" || m.role === "assistant") && m.content)
       .map((m: any) => ({ role: m.role, content: String(m.content).slice(0, MAX_MSG_CHARS) }));
 
-    const completion = await client.chat.completions.create({
+    const stream = await client.chat.completions.create({
       model: MODEL,
       temperature: 0.2,
       max_tokens: MAX_TOKENS,
+      stream: true,
       messages: [
         { role: "system", content: system },
         ...trimmedHistory,
@@ -967,17 +1074,19 @@ export async function POST(req: Request) {
       ],
     });
 
-    const text = String(completion.choices?.[0]?.message?.content ?? "").trim();
-    // Return suggestions so the UI can show clickable "Did you mean…?" chips.
-    return NextResponse.json({
-      ok: true,
-      text,
-      matched: dataLines.length,
-      suggestions: dataLines.length === 0 ? suggestions ?? [] : [],
-      followups,
-      hazard: hazardResp,
-      hazards: hazardsResp,
-    });
+    // Stream the answer; the metadata (suggestions / hazards / followups) rides in the
+    // first line so the UI can render cards + chips alongside the streaming text.
+    return streamResponse(
+      {
+        ok: true,
+        matched: dataLines.length,
+        suggestions: dataLines.length === 0 ? suggestions ?? [] : [],
+        followups,
+        hazard: hazardResp,
+        hazards: hazardsResp,
+      },
+      { stream },
+    );
   } catch (e: any) {
     console.error("assistant error:", e);
     return NextResponse.json(

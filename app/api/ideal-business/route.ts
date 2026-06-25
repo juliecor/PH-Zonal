@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { coastalNote } from "../../lib/coastal";
+import { aiCacheGet, aiCacheSet } from "../../lib/aiCache";
 
 export const runtime = "nodejs";
 
@@ -295,6 +296,11 @@ export async function POST(req: Request) {
     const lat = Number(body.lat);
     const lon = Number(body.lon);
 
+    // ✅ Cache by area+classification+value → instant repeats (skips the 3s LLM call).
+    const cacheKey = `ideal|${province}|${city}|${barangay}|${classification}|${zonalValuePerSqm}|${Number.isFinite(lat) ? lat.toFixed(3) : ""}|${Number.isFinite(lon) ? lon.toFixed(3) : ""}`;
+    const cachedIdeal = aiCacheGet(cacheKey);
+    if (cachedIdeal) return NextResponse.json(cachedIdeal);
+
     const loc = [barangay, city, province].filter(Boolean).join(", ") || "the selected area";
 
     // Real coastal/beach detection so tourism businesses are only suggested when valid.
@@ -423,7 +429,9 @@ LENGTH: Keep entire response under 150 words.
           quick.map((b) => ({ type: b })),
           { poiCounts, isUpland, isUrban, density, isAgricultural }
         );
-        return NextResponse.json({ ok: true, businesses: enriched, best_recommendation: "", raw_analysis: raw });
+        const fbPayload = { ok: true, businesses: enriched, best_recommendation: "", raw_analysis: raw };
+        if (enriched.length) aiCacheSet(cacheKey, fbPayload);
+        return NextResponse.json(fbPayload);
       }
 
       return NextResponse.json({ ok: false, error: "No business suggestions generated" }, { status: 500 });
@@ -433,7 +441,9 @@ LENGTH: Keep entire response under 150 words.
       analysis.businesses.slice(0, 3),
       { poiCounts, isUpland, isUrban, density, isAgricultural }
     );
-    return NextResponse.json({ ok: true, businesses: enriched, best_recommendation: analysis.best_recommendation, raw_analysis: raw });
+    const okPayload = { ok: true, businesses: enriched, best_recommendation: analysis.best_recommendation, raw_analysis: raw };
+    if (enriched.length) aiCacheSet(cacheKey, okPayload);
+    return NextResponse.json(okPayload);
   } catch (e: any) {
     console.error("ideal-business error:", e);
     return NextResponse.json({ ok: false, error: e?.message ?? "Unknown error" }, { status: 500 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { coastalNote } from "../../lib/coastal";
+import { aiCacheGet, aiCacheSet } from "../../lib/aiCache";
 
 export const runtime = "nodejs";
 
@@ -24,10 +25,16 @@ export async function POST(req: Request) {
     const barangay = String(body.barangay ?? "").trim();
     const province = String(body.province ?? "").trim();
     const classification = String(body.classification ?? "").trim();
-    const zonalValue = String(body.zonalValue ?? "").trim();
+    // the app sends `zonalValuePerSqm`; accept either key so the real value reaches the prompt
+    const zonalValue = String(body.zonalValuePerSqm ?? body.zonalValue ?? "").trim();
     const poiCounts = body.poiCounts ?? null;
     const lat = Number(body.lat);
     const lon = Number(body.lon);
+
+    // ✅ Cache by area (same barangay+classification+point → same description) — instant repeats.
+    const cacheKey = `desc|${province}|${city}|${barangay}|${classification}|${Number.isFinite(lat) ? lat.toFixed(3) : ""}|${Number.isFinite(lon) ? lon.toFixed(3) : ""}`;
+    const cachedDesc = aiCacheGet(cacheKey);
+    if (cachedDesc) return NextResponse.json(cachedDesc);
 
     const locationBits = [barangay, city, province].filter(Boolean).join(", ");
     const loc = locationBits || geoLabel || "the selected area";
@@ -136,7 +143,9 @@ LENGTH: Keep entire response under 200 words.
     const raw = completion.choices?.[0]?.message?.content ?? "";
     const cleaned = String(raw).replace(/\s+/g, " ").trim();
 
-    return NextResponse.json({ ok: true, text: cleaned });
+    const payload = { ok: true, text: cleaned };
+    if (cleaned) aiCacheSet(cacheKey, payload); // only cache real (non-empty) results
+    return NextResponse.json(payload);
   } catch (e: any) {
     console.error("describe-area error:", e);   
     return NextResponse.json(
