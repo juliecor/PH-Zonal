@@ -26,6 +26,8 @@ export type ScanResult = {
   faultDistance?: number | null;
   faultName?: string | null;
   matchType?: string | null;
+  classes?: { group: string; label: string; value: number; code: string }[]; // land-use breakdown (A/RR/CR…) for the toggle
+  pickedGroup?: string; // which land-use the user/auto selected
 };
 
 // A hazard legend styled like the scan-results panel (rounded card, navy header,

@@ -193,6 +193,37 @@ function cityRepresentative(recs: Rec[]): Rec | undefined {
   return sorted[Math.floor(sorted.length / 2)]; // median
 }
 
+// Group a BIR classification code into the land-use families the UI offers.
+function clsGroupOf(c: string): string {
+  const u = String(c || "").toUpperCase().replace(/\s+/g, "");
+  if (/^A(\d|$)/.test(u)) return "agricultural";  // A, A1..A50
+  if (/^RR/.test(u)) return "residential";
+  if (/^CR|^CC|^RC/.test(u)) return "commercial";
+  if (/^I/.test(u)) return "industrial";
+  return "other";
+}
+// Per-land-use representative value for a barangay (median, preferring the "interior /
+// all other streets" default rows) → powers the Agricultural / Residential / Commercial
+// breakdown + lets an empty-land scan pick the AGRICULTURAL value instead of built-up.
+function buildClassBreakdown(recs: Rec[]): { classes: { group: string; label: string; value: number; code: string }[]; counts: Record<string, number> } {
+  const LABEL: Record<string, string> = { agricultural: "Agricultural", residential: "Residential", commercial: "Commercial", industrial: "Industrial", other: "Other" };
+  const ORDER = ["agricultural", "residential", "commercial", "industrial", "other"];
+  const byG: Record<string, Rec[]> = {};
+  for (const r of recs) { if (!parseVal(r.value)) continue; const g = clsGroupOf(r.classification); (byG[g] = byG[g] || []).push(r); }
+  const classes: { group: string; label: string; value: number; code: string }[] = [];
+  const counts: Record<string, number> = {};
+  for (const g of ORDER) {
+    const rs = byG[g]; if (!rs || !rs.length) continue;
+    counts[g] = rs.length;
+    const defs = rs.filter((r) => CATCHALL_STREET.test(r.street));
+    const pool = defs.length ? defs : rs;
+    const sorted = pool.slice().sort((a, b) => parseVal(a.value)! - parseVal(b.value)!);
+    const mid = sorted[Math.floor(sorted.length / 2)];
+    classes.push({ group: g, label: LABEL[g], value: parseVal(mid.value)!, code: mid.classification });
+  }
+  return { classes, counts };
+}
+
 // Cache the per-(domain,city) representative (stable) so the wider fetch runs once per city.
 const CITY_REP_CACHE: Map<string, Rec | null> = (globalThis as any).__CITY_REP__ ?? new Map();
 (globalThis as any).__CITY_REP__ = CITY_REP_CACHE;
@@ -251,6 +282,7 @@ export async function POST(req: Request) {
     const minLat = Number(body?.minLat), maxLat = Number(body?.maxLat);
     const minLon = Number(body?.minLon), maxLon = Number(body?.maxLon);
     const domain = String(body?.domain ?? "").trim();
+    const mode = String(body?.mode ?? "").trim();   // "scan" = empty-land box (allow agricultural default); else a clicked spot/building
     if (![minLat, maxLat, minLon, maxLon].every(Number.isFinite) || maxLat <= minLat || maxLon <= minLon) {
       return NextResponse.json({ ok: false, error: "valid bounds required" }, { status: 400 });
     }
@@ -310,15 +342,31 @@ export async function POST(req: Request) {
         const recs = await fetchRecords(baseUrl, cookie, effDomain, effCity, dbBrgy);
         if (recs.length) {
           const { match, matchType } = matchInRecords(recs, bstreet);
-          const val = match ? parseVal(match.value) : null;
+          const { classes, counts } = buildClassBreakdown(recs);
+          let val = match ? parseVal(match.value) : null;
+          let chosenCode = match?.classification ?? "";
+          let chosenGroup = match ? clsGroupOf(match.classification) : "";
+          let chosenStreet = matchType.startsWith("exact") ? (match?.street || "") : (bstreet || match?.street || "");
+          // EMPTY-LAND scan over a rural (agriculture-dominant) barangay → the AGRICULTURAL
+          // value applies, not the built-up default — a mountain/forest lot isn't "Commercial".
+          // GUARD: only when the spot is genuinely INTERIOR — reverse-geocoding gave no real
+          // road name (e.g. "Unnamed Road"). A spot on a NAMED road is frontage, so it keeps
+          // its built-up RR/CR value even inside a farming barangay (fixes Mindoro West Coastal
+          // Road reading A4 ₱40 instead of its RR ₱300). Only for mode:"scan", never a clicked building.
+          const namedStreet = !!bstreet && bstreet.trim().length > 2 && !/unnamed|no\s*name/i.test(bstreet);
+          if (mode === "scan" && !matchType.startsWith("exact") && !namedStreet) {
+            const agri = classes.find((c) => c.group === "agricultural");
+            const builtUp = (counts.residential || 0) + (counts.commercial || 0) + (counts.industrial || 0);
+            if (agri && (counts.agricultural || 0) >= builtUp) { val = agri.value; chosenCode = agri.code; chosenGroup = "agricultural"; chosenStreet = "Interior / agricultural land"; }
+          }
           if (match && val) {
             return NextResponse.json({
-              ok: true, building: true, matchType,
+              ok: true, building: true, matchType, classes, defaultGroup: chosenGroup,
               nearby: buildNearby(recs),
               points: [{
                 lat: cLat0, lon: cLon0, value_per_sqm: val,
-                classification_code: match.classification,
-                street: matchType.startsWith("exact") ? match.street : (bstreet || match.street),
+                classification_code: chosenCode,
+                street: chosenStreet,
                 barangay: dbBrgy, city: effCity, province: match.province, matchType,
               }],
             });

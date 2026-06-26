@@ -1019,7 +1019,7 @@ export function Home() {
       // place's zonal value (matched to its street/barangay), nothing else. Threshold kept in
       // sync with `isTiny` in app/api/scan-area/route.ts so the precise per-spot lookup runs.
       if (span < 0.012) {
-        const autoData = await fetch(`/api/scan-area`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ minLat:b.minLat, maxLat:b.maxLat, minLon:b.minLon, maxLon:b.maxLon, domain }) }).then((r)=>r.json()).catch(()=>null);
+        const autoData = await fetch(`/api/scan-area`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ minLat:b.minLat, maxLat:b.maxLat, minLon:b.minLon, maxLon:b.maxLon, domain, mode:"scan" }) }).then((r)=>r.json()).catch(()=>null);
         if (myId !== boundsReqRef.current) return;
         // Surrounding street values from our DB (same list the establishment panel shows).
         const nb: any[] = autoData?.ok && Array.isArray(autoData.nearby) ? autoData.nearby : [];
@@ -1037,6 +1037,8 @@ export function Home() {
         }
         // Building lookup → keep just the single matched value; otherwise the nearest one.
         const only = autoData?.building ? pts.slice(0, 1) : dedupePoints(pts).slice(0, 1);
+        // carry the land-use breakdown (A/RR/CR) onto the result so the panel can offer a toggle
+        if (only[0] && Array.isArray(autoData?.classes)) { only[0].classes = autoData.classes; only[0].pickedGroup = autoData?.defaultGroup || ""; }
         await renderScanPoints(only, myId);
         return;
       }
@@ -1056,7 +1058,7 @@ export function Home() {
       if (found.length >= 15) return;
 
       // PHASE 2 — auto-geocode new records for this area, then merge + re-render.
-      const autoData = await fetch(`/api/scan-area`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ minLat:b.minLat, maxLat:b.maxLat, minLon:b.minLon, maxLon:b.maxLon, domain }) }).then((r)=>r.json()).catch(()=>null);
+      const autoData = await fetch(`/api/scan-area`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ minLat:b.minLat, maxLat:b.maxLat, minLon:b.minLon, maxLon:b.maxLon, domain, mode:"scan" }) }).then((r)=>r.json()).catch(()=>null);
       if (myId !== boundsReqRef.current) return;
       const auto: any[] = autoData?.ok && Array.isArray(autoData.points) ? autoData.points : [];
       const merged = dedupePoints([...cached, ...auto]);
@@ -2172,24 +2174,43 @@ export function Home() {
               ) : (
                 <div className="nearby">
                   {scanResults.map((r, i) => (
-                    <button key={i} type="button" className="nb" style={{ flexDirection: "column", alignItems: "stretch", gap: 7 }} onClick={() => setSelectedLocation({ lat: r.lat, lon: r.lon })}>
-                      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-                        <span className="nb-price" style={{ fontSize: 18 }}>₱{Number(r.value_per_sqm).toLocaleString("en-PH")} <small>/ sqm</small></span>
-                        {r.matchType === "city typical"
-                          ? <span className="nb-cls" style={{ background: "#fffbeb", borderColor: "#fde68a", color: "#92400e" }}>City-typical</span>
-                          : (r.classification_code && <span className="nb-cls">{r.classification_code}</span>)}
-                      </div>
-                      <div className="nb-where" style={{ whiteSpace: "normal" }}>{[r.street, r.barangay, r.city].filter(Boolean).join(" · ")}</div>
-                      {r.matchType === "city typical" && <div style={{ fontSize: 10, color: "#92400e", lineHeight: 1.4 }}>Representative city rate for this area.</div>}
-                      {(r.floodLabel != null || r.landslideLabel != null || r.stormSurgeLabel != null || r.faultDistance != null) && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 1 }}>
-                          {r.floodLevel != null && <ScanHazChip level={r.floodLevel} label={hzLabel(r.floodLevel, "flood")} />}
-                          {r.landslideLevel != null && <ScanHazChip level={r.landslideLevel} label={hzLabel(r.landslideLevel, "landslide")} />}
-                          {r.stormSurgeLevel != null && <ScanHazChip level={r.stormSurgeLevel} label={hzLabel(r.stormSurgeLevel, "surge")} />}
-                          {r.faultDistance != null && <ScanHazChip level={r.faultLevel ?? 0} label={`${r.faultDistance < 1000 ? Math.round(r.faultDistance) + " m" : (r.faultDistance / 1000).toFixed(1) + " km"} to fault`} />}
+                    <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <button type="button" className="nb" style={{ flexDirection: "column", alignItems: "stretch", gap: 7 }} onClick={() => setSelectedLocation({ lat: r.lat, lon: r.lon })}>
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+                          <span className="nb-price" style={{ fontSize: 18 }}>₱{Number(r.value_per_sqm).toLocaleString("en-PH")} <small>/ sqm</small></span>
+                          {r.matchType === "city typical"
+                            ? <span className="nb-cls" style={{ background: "#fffbeb", borderColor: "#fde68a", color: "#92400e" }}>City-typical</span>
+                            : (r.classification_code && <span className="nb-cls">{r.classification_code}</span>)}
+                        </div>
+                        <div className="nb-where" style={{ whiteSpace: "normal" }}>{[r.street, r.barangay, r.city].filter(Boolean).join(" · ")}</div>
+                        {r.matchType === "city typical" && <div style={{ fontSize: 10, color: "#92400e", lineHeight: 1.4 }}>Representative city rate for this area.</div>}
+                        {(r.floodLabel != null || r.landslideLabel != null || r.stormSurgeLabel != null || r.faultDistance != null) && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 1 }}>
+                            {r.floodLevel != null && <ScanHazChip level={r.floodLevel} label={hzLabel(r.floodLevel, "flood")} />}
+                            {r.landslideLevel != null && <ScanHazChip level={r.landslideLevel} label={hzLabel(r.landslideLevel, "landslide")} />}
+                            {r.stormSurgeLevel != null && <ScanHazChip level={r.stormSurgeLevel} label={hzLabel(r.stormSurgeLevel, "surge")} />}
+                            {r.faultDistance != null && <ScanHazChip level={r.faultLevel ?? 0} label={`${r.faultDistance < 1000 ? Math.round(r.faultDistance) + " m" : (r.faultDistance / 1000).toFixed(1) + " km"} to fault`} />}
+                          </div>
+                        )}
+                      </button>
+                      {/* land-use toggle: switch A / RR / CR when the auto-guess isn't right for this lot */}
+                      {Array.isArray(r.classes) && r.classes.length > 1 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 5, padding: "0 2px 2px" }}>
+                          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#94a3b8", marginRight: 1 }}>Land use:</span>
+                          {r.classes.map((c) => {
+                            const active = (r.pickedGroup ? r.pickedGroup === c.group : Number(r.value_per_sqm) === c.value);
+                            return (
+                              <button key={c.group} type="button"
+                                onClick={() => setScanResults((prev) => prev.map((x, idx) => idx === i ? ({ ...x, value_per_sqm: c.value, classification_code: c.code, pickedGroup: c.group }) : x))}
+                                style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 100, cursor: "pointer", transition: "all .15s ease", border: `1px solid ${active ? "#c9a84c" : "#e6dec8"}`, background: active ? "linear-gradient(180deg,#f0deaa,#c9a84c)" : "#fff", color: active ? "#1a2b56" : "#64748b" }}
+                                title={`Use the ${c.label.toLowerCase()} value`}>
+                                {c.label} ₱{Number(c.value).toLocaleString("en-PH")}
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}
