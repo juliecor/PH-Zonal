@@ -181,7 +181,7 @@ export default function MapTools({
   };
 
   // Icon-only on phones (label hidden), full label on >= sm. Keeps one tidy row.
-  const pill = "flex items-center gap-1.5 rounded-full p-2.5 sm:px-3.5 sm:py-2 text-[13px] font-bold shadow-lg transition hover:scale-105 active:scale-95";
+  const pill = "flex items-center gap-1.5 rounded-full p-2.5 sm:px-3.5 sm:py-2 text-[13px] font-bold shadow-[0_8px_22px_-8px_rgba(15,23,42,0.4)] transition-all duration-200 hover:scale-105 hover:shadow-[0_12px_28px_-10px_rgba(15,23,42,0.5)] active:scale-95";
   const lbl = "hidden sm:inline";
 
   // All overlay layers, grouped under one "Hazards" dropdown to keep the toolbar tidy.
@@ -200,7 +200,7 @@ export default function MapTools({
     <>
       {/* Top-center toolbar */}
       <div className={`fixed top-3 z-[60] flex max-w-[96vw] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 transition-[left] duration-300 sm:top-4 sm:gap-2 ${sidebarOpen ? "left-1/2 lg:left-[calc(50%+200px)]" : "left-1/2"}`}>
-        <button onClick={onSearchZonal} className={`${pill} text-white`} style={{ background: searchZonalActive ? "#b5923f" : NAVY, border: `2px solid ${GOLD}` }} title="Open the zonal-value search panel">
+        <button onClick={onSearchZonal} className={`${pill} text-white`} style={{ background: searchZonalActive ? "#b5923f" : NAVY, border: `2px solid ${GOLD}`, boxShadow: searchZonalActive ? "0 0 16px rgba(201,168,76,.55), 0 8px 20px -8px rgba(15,23,42,.45)" : undefined }} title="Open the zonal-value search panel">
           <Search size={15} style={{ color: searchZonalActive ? "#fff" : GOLD }} /> <span className={lbl}>Search Zonal</span>
         </button>
         <button onClick={onNearMe} className={`${pill} text-white`} style={{ background: NAVY, border: `2px solid ${GOLD}` }} title="Zonal value near me">

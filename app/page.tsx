@@ -145,7 +145,7 @@ function HazardRows({ hz }: { hz: HazardProfile }) {
         <div className="gauge" role="img" aria-label={`Overall risk ${avg.toFixed(1)} of 3, ${ovWord}`}>
           <svg width="66" height="66" viewBox="0 0 66 66">
             <circle cx="33" cy="33" r="27" fill="none" stroke="#eef0f5" strokeWidth="7" />
-            <circle cx="33" cy="33" r="27" fill="none" stroke={ovColor} strokeWidth="7" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={off} transform="rotate(-90 33 33)" />
+            <circle className="haz-ring" cx="33" cy="33" r="27" fill="none" stroke={ovColor} strokeWidth="7" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={off} transform="rotate(-90 33 33)" style={{ filter: `drop-shadow(0 0 5px ${ovColor})` }} />
           </svg>
           <div className="gauge-c"><span className="score" style={{ color: ovColor }}>{avg.toFixed(1)}</span><span className="of">/ 3.0</span></div>
         </div>
@@ -1322,7 +1322,7 @@ export function Home() {
             className="absolute z-50 w-[88vw] sm:w-[340px]"
             style={areaCardPos ? { left: areaCardPos.x, top: areaCardPos.y } : { top: 16, left: 16 }}
           >
-            <div className="rounded-2xl border-2 border-[#c9a84c] bg-white/98 backdrop-blur shadow-2xl overflow-hidden">
+            <div className="rounded-2xl border-2 border-[#c9a84c] bg-white/95 backdrop-blur-xl overflow-hidden" style={{boxShadow:"0 26px 50px -16px rgba(15,23,42,0.42), 0 0 22px -6px rgba(201,168,76,0.28)"}}>
               <div
                 onPointerDown={startAreaCardDrag}
                 className="px-4 py-2.5 flex items-center justify-between cursor-move select-none touch-none"
@@ -1463,8 +1463,8 @@ export function Home() {
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" size={15} style={{color:"#c9a84c"}} />
-              <input value={regionSearch} onChange={e=>setRegionSearch(e.target.value)} placeholder="Search city or province…" className="w-full rounded-xl border-0 pl-9 pr-8 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 transition" style={{background:"rgba(255,255,255,0.10)"}} />
-              {searchLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin"><div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full" /></div>}
+              <input value={regionSearch} onChange={e=>setRegionSearch(e.target.value)} placeholder="Search city or province…" className="zsearch w-full rounded-xl border-0 pl-9 pr-8 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none transition" style={{background:"rgba(255,255,255,0.10)"}} />
+              {searchLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2"><span className="zspin" /></div>}
               {regionSearch&&!searchLoading&&<button onClick={()=>setRegionSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition"><X size={15} /></button>}
             </div>
             {/* Mobile tokens bar (clear and visible) — hidden for admin */}
@@ -1545,7 +1545,7 @@ export function Home() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1.5">City</label>
-                  <select className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none transition disabled:opacity-50" value={city}
+                  <select className="zselect w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none transition disabled:opacity-50" value={city}
                     onChange={e=>{ const v=e.target.value; setCity(v); setShowStreetHighlight(false); setStreetGeo(null); setBarangay(""); setPage(1); setFacetBarangays([]); loadBarangays(domain,v); if(v) pinpointFilterLocation(v,"",selectedProvince); }}
                     disabled={facetsLoading||facetCities.length===0}>
                     <option value="">All Cities</option>{facetCities.map(c=><option key={c} value={c}>{c}</option>)}
@@ -1553,7 +1553,7 @@ export function Home() {
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1.5">Barangay</label>
-                  <select className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none transition disabled:opacity-50" value={barangay}
+                  <select className="zselect w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none transition disabled:opacity-50" value={barangay}
                     onChange={e=>{ const v=e.target.value; setBarangay(v); setShowStreetHighlight(false); setStreetGeo(null); setPage(1); if(city&&v) pinpointFilterLocation(city,v,selectedProvince); }}
                     disabled={!city||barangaysLoading}>
                     <option value="">All Barangays</option>{facetBarangays.map(b=><option key={b} value={b}>{b}</option>)}
@@ -1563,7 +1563,7 @@ export function Home() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1.5">Classification</label>
-                  <select className="w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none transition" value={classification} onChange={e=>{setClassification(e.target.value);setPage(1);}}>
+                  <select className="zselect w-full rounded-xl border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-800 focus:outline-none transition" value={classification} onChange={e=>{setClassification(e.target.value);setPage(1);}}>
                     <option value="">All Types</option>
                     <option value="COMMERCIAL REGULAR">COMMERCIAL REGULAR</option><option value="COMMERCIAL CONDOMINIUM">COMMERCIAL CONDOMINIUM</option><option value="COMMERCIAL">COMMERCIAL</option>
                     <option value="RESIDENTIAL">RESIDENTIAL</option><option value="RESIDENTIAL CONDOMINIUM">RESIDENTIAL CONDOMINIUM</option><option value="INDUSTRIAL">INDUSTRIAL</option>
@@ -1578,7 +1578,7 @@ export function Home() {
               </div>
               <div className="flex gap-2 pt-0.5">
                 <button onClick={()=>searchZonal({page:1})} disabled={loading} className="flex-1 rounded-xl px-4 py-2 text-xs font-bold transition disabled:opacity-50 flex items-center justify-center gap-2 text-[#f5f0eb]" style={{background:"#1e3a8a"}}>
-                  {loading?<><Zap size={13} className="animate-spin"/>Searching…</>:"Search"}
+                  {loading?<><Zap size={13} className="animate-spin"/>Searching<span className="zdots"><i/><i/><i/></span></>:"Search"}
                 </button>
                 <button onClick={()=>{setCity("");setBarangay("");setClassification("");setQ("");setPage(1);setRows([]);}} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 transition">Clear</button>
               </div>
@@ -1621,10 +1621,10 @@ export function Home() {
                 const tier = getPriceTier(pricePerSqm); const isActive = selectedRow?.rowIndex===r.rowIndex;
                 return (
                   <button key={`${r.rowIndex}-${i}`} onClick={()=>selectRow(r)}
-                    className={["w-full text-left rounded-2xl border-2 p-3 transition-all duration-150", isActive?"shadow-md":"border-gray-200 bg-white"].join(" ")}
-                    style={isActive?{borderColor:"#c9a84c",background:"#f5f0eb"}:undefined}
-                    onMouseEnter={e=>{ if(!isActive){(e.currentTarget as HTMLElement).style.borderColor="rgba(201,168,76,0.4)";(e.currentTarget as HTMLElement).style.background="rgba(245,240,235,0.4)";} }}
-                    onMouseLeave={e=>{ if(!isActive){(e.currentTarget as HTMLElement).style.borderColor="";(e.currentTarget as HTMLElement).style.background="";} }}
+                    className={["w-full text-left rounded-2xl border-2 p-3 transition-all duration-200", isActive?"":"border-gray-200 bg-white"].join(" ")}
+                    style={isActive?{borderColor:"#c9a84c",background:"linear-gradient(180deg,#f8f3ec,#f2ebdf)",boxShadow:"0 12px 28px -14px rgba(201,168,76,.5), inset 3px 0 0 #c9a84c"}:undefined}
+                    onMouseEnter={e=>{ if(!isActive){const t=e.currentTarget as HTMLElement; t.style.borderColor="rgba(201,168,76,0.45)"; t.style.background="rgba(245,240,235,0.6)"; t.style.boxShadow="0 12px 26px -13px rgba(15,23,42,0.22)"; t.style.transform="translateY(-1px)";} }}
+                    onMouseLeave={e=>{ if(!isActive){const t=e.currentTarget as HTMLElement; t.style.borderColor=""; t.style.background=""; t.style.boxShadow=""; t.style.transform="";} }}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="min-w-0 flex-1">
@@ -1701,7 +1701,7 @@ export function Home() {
               ):(
                 <>
                   <div className="mt-3 rounded-2xl overflow-hidden shadow-md ring-1 ring-black/5">
-                    <div className="p-4 flex items-center justify-between gap-3" style={{background:"linear-gradient(135deg,#1e3a8a,#1e40af)"}}>
+                    <div className="zhero p-4 flex items-center justify-between gap-3" style={{background:"linear-gradient(135deg,#1e3a8a,#1e40af)"}}>
                       <div className="min-w-0">
                         <div className="text-[10px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{color:"#c9a84c"}}><Coins size={12}/> Zonal Value</div>
                         <div className="text-3xl font-black text-white leading-none drop-shadow-sm">{parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])?fmtPesoNumber(parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])!):"Not Appraised"}</div>
@@ -2088,7 +2088,7 @@ export function Home() {
               </div>
               {poiCard.hazardsLoading || !poiCard.hazards ? (
                 <div className="haz-wrap" style={{ padding: 18, display: "flex", alignItems: "center", gap: 10, color: "#64748b", fontSize: 12 }}>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-[#1e3a8a]" /> Assessing geohazards…
+                  <span className="zspin" /> Assessing geohazards<span className="zdots"><i/><i/><i/></span>
                 </div>
               ) : (
                 <HazardRows hz={poiCard.hazards} />
@@ -2203,7 +2203,7 @@ export function Home() {
               </div>
               {scanHazardsLoading || !scanHazards ? (
                 <div className="haz-wrap" style={{ padding: 18, display: "flex", alignItems: "center", gap: 10, color: "#64748b", fontSize: 12 }}>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-[#1e3a8a]" /> Assessing geohazards…
+                  <span className="zspin" /> Assessing geohazards<span className="zdots"><i/><i/><i/></span>
                 </div>
               ) : (<HazardRows hz={scanHazards} />)}
             </section>
