@@ -90,7 +90,7 @@ export default function ClientConcernsPage() {
           align-items: center;
           gap: 0.5rem;
           font-size: 0.65rem;
-          font-weight: 600;
+          font-weight: 600; 
           letter-spacing: 0.16em;
           text-transform: uppercase;
           color: #c9a84c;
