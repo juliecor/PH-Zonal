@@ -447,7 +447,7 @@ export function Home() {
   const [landPath, setLandPath] = useState<Array<{ lat: number; lng: number }> | null>(null);
   const [areaUnit, setAreaUnit] = useState<"sqm" | "ha" | "sqft">("sqm");
   const [calcOpen, setCalcOpen] = useState(false);
-  const [calcSeed, setCalcSeed] = useState<{ value: number | null; label: string } | null>(null); // seed the calculator from an establishment click
+  const [calcSeed, setCalcSeed] = useState<{ perSqm: number | null; label: string } | null>(null); // seed the calculator from an establishment click
   const [briefOpen, setBriefOpen] = useState(false);
   const [streetViewOpen, setStreetViewOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -1893,7 +1893,9 @@ export function Home() {
       <PropertyCalculator
         open={calcOpen}
         onClose={()=>{ setCalcOpen(false); setCalcSeed(null); }}
-        defaultValue={calcSeed ? calcSeed.value : (landArea && parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]) ? landArea * parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"])! : null)}
+        valuePerSqm={calcSeed ? calcSeed.perSqm : (parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]) ?? null)}
+        defaultAreaSqm={calcSeed ? null : (landArea ?? null)}
+        defaultValue={calcSeed ? null : (landArea && parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]) ? landArea * parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"])! : null)}
         locationLabel={calcSeed ? calcSeed.label : selectedTitle}
       />
 
@@ -2102,7 +2104,7 @@ export function Home() {
                 />
                 <button
                   type="button"
-                  onClick={() => { setCalcSeed({ value: Math.round((poiCard.value || 0) * 250), label: poiCard.name || "Selected establishment" }); setCalcOpen(true); }}
+                  onClick={() => { setCalcSeed({ perSqm: poiCard.value, label: poiCard.name || "Selected establishment" }); setCalcOpen(true); }}
                   className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold text-white transition active:scale-[0.99]"
                   style={{ background: "#16276a", boxShadow: "0 8px 18px -8px rgba(22,39,106,0.6)" }}
                 >
