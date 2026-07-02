@@ -256,7 +256,7 @@ export default function WelcomePage() {
         }}
       >
         <Box sx={{ width: { xs: 180, md: 260 } }}>
-          <Image src="/pictures/fh.png" alt="Filipino Homes" width={260} height={35} style={{ width: "100%", height: "auto" }} />
+          <Image src="/pictures/zonalvalue-white.png" alt="ZonalValue.ph" width={260} height={71} style={{ width: "100%", height: "auto" }} />
         </Box>
         <Box sx={{ display: { xs: "none", md: "flex" }, gap: 2, alignItems: "center" }}>
           <Chip
@@ -490,8 +490,8 @@ export default function WelcomePage() {
           }}
         >
           <Image
-            src="/pictures/3d-fh.png"
-            alt="Filipino Homes 3D"
+            src="/pictures/zv-mark.png"
+            alt="ZonalValue.ph"
             width={380}
             height={380}
             style={{ objectFit: "contain" }}

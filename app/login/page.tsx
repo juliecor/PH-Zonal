@@ -264,8 +264,8 @@ export default function LoginPage() {
             }}
           >
             <Image
-              src="/pictures/3d-fh.png"
-              alt="Filipino Homes 3D"
+              src="/pictures/zv-mark.png"
+              alt="ZonalValue.ph"
               width={320}
               height={320}
               style={{ objectFit: "contain" }}
@@ -345,7 +345,7 @@ export default function LoginPage() {
                     "&:hover": { opacity: 0.8, transform: "scale(1.02)" },
                   }}
                 >
-                  <Image src="/pictures/fh.png" alt="Filipino Homes" width={260} height={21} />
+                  <Image src="/pictures/zonalvalue-white.png" alt="ZonalValue.ph" width={200} height={55} />
                 </Box>
               </Link>
             </Box>

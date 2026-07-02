@@ -417,8 +417,8 @@ export default function RegisterPage() {
             }}
           >
             <Image
-              src="/pictures/3d-fh.png"
-              alt="Filipino Homes 3D"
+              src="/pictures/zv-mark.png"
+              alt="ZonalValue.ph"
               width={300}
               height={300}
               style={{ objectFit: "contain" }}
@@ -537,7 +537,7 @@ export default function RegisterPage() {
                     "&:hover": { opacity: 0.8, transform: "scale(1.02)" },
                   }}
                 >
-                  <Image src="/pictures/fh.png" alt="Filipino Homes" width={240} height={19} />
+                  <Image src="/pictures/zonalvalue-white.png" alt="ZonalValue.ph" width={190} height={52} />
                 </Box>
               </Link>
             </Box>
