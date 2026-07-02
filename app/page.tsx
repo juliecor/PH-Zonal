@@ -39,6 +39,7 @@ import type { Boundary, LatLng, MapType, PoiData, RegionMatch, Row } from "./lib
 import { normalizePH, suggestBusinesses } from "./lib/zonal-util";
 import { loadHazardProfile, type HazardProfile } from "./lib/pointHazards";
 import ReportBuilder from "./components/ReportBuilder";
+import ShareResultButton from "./components/ShareResultButton";
 import ZonalSearchIndicator from "./components/ZonalSearchIndicator";
 import PropertyCalculator from "./components/PropertyCalculator";
 import InvestmentBrief from "./components/InvestmentBrief";
@@ -1759,6 +1760,15 @@ export function Home() {
                       );
                     })()}
                   </div>
+
+                  <ShareResultButton
+                    title={selectedTitle}
+                    name={String(selectedRow["Street/Subdivision-"] || selectedRow["Barangay-"] || selectedRow["City-"] || "Selected property")}
+                    address={[String(selectedRow["Barangay-"]||""), String(selectedRow["City-"]||""), String(selectedRow["Province-"]||"")].filter(Boolean).join(" · ")}
+                    valuePerSqm={parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"]) ?? null}
+                    classification={String(selectedRow["Classification-"]||"")}
+                    hazardText={floodRisk ? (["No flood risk","Low flood risk","Moderate flood risk","High flood risk"][floodRisk.level] ?? undefined) : undefined}
+                  />
 
                   {/* Nearby zonal comparables (whole-barangay stats, with loaded sample as fallback) */}
                   {(() => {
