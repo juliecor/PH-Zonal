@@ -19,11 +19,11 @@ const SITE_DESCRIPTION =
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Zonal Value Finder — BIR Zonal Values Across the Philippines | Filipino Homes",
-    template: "%s | FH Zonal Finder",
+    default: "zonalvalue.ph — BIR Zonal Values Across the Philippines",
+    template: "%s | zonalvalue.ph",
   },
   description: SITE_DESCRIPTION,
-  applicationName: "FH Zonal Finder",
+  applicationName: "zonalvalue.ph",
   keywords: [
     "zonal value",
     "BIR zonal value",
@@ -47,18 +47,18 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: "website",
-    siteName: "FH Zonal Finder",
+    siteName: "zonalvalue.ph",
     url: SITE_URL,
-    title: "Zonal Value Finder — BIR Zonal Values Across the Philippines",
+    title: "zonalvalue.ph — BIR Zonal Values Across the Philippines",
     description: SITE_DESCRIPTION,
     locale: "en_PH",
-    images: [{ url: "/pictures/3d-fh.png", alt: "FH Zonal Finder by Filipino Homes" }],
+    images: [{ url: "/pictures/og-zonalvalue.png", width: 1200, height: 630, alt: "zonalvalue.ph — BIR Zonal Values" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Zonal Value Finder — BIR Zonal Values Across the Philippines",
+    title: "zonalvalue.ph — BIR Zonal Values Across the Philippines",
     description: SITE_DESCRIPTION,
-    images: ["/pictures/3d-fh.png"],
+    images: ["/pictures/og-zonalvalue.png"],
   },
   robots: {
     index: true,
