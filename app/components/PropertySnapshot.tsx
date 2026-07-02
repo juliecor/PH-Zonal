@@ -6,8 +6,8 @@ import { toast } from "sonner";
 
 const NAVY = "#1e3a8a";
 const NAVY2 = "#1e40af";
-const GOLD = "#c9a84c";
-const CREAM = "#f5f0eb";
+const GOLD = "#155EEF";
+const CREAM = "#f1f5fc";
 
 function peso(n: number | null | undefined) {
   if (n == null || !Number.isFinite(n)) return "—";
@@ -43,8 +43,8 @@ function grade(poiCounts: any): { label: string; color: string } {
   const total = Object.values(c).reduce((a: number, v: any) => a + (typeof v === "number" ? v : 0), 0);
   if (total >= 20) return { label: "Excellent", color: "#15803d" };
   if (total >= 13) return { label: "Strong", color: "#15803d" };
-  if (total >= 8) return { label: "Moderate", color: "#9a7a20" };
-  if (total > 0) return { label: "Emerging", color: "#9a7a20" };
+  if (total >= 8) return { label: "Moderate", color: "#0f49c4" };
+  if (total > 0) return { label: "Emerging", color: "#0f49c4" };
   return { label: "Limited", color: "#6b7280" };
 }
 
@@ -119,11 +119,11 @@ export default function PropertySnapshot({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-3" onClick={onClose}>
-      <div className="w-full max-w-[440px] max-h-[92vh] overflow-auto rounded-2xl bg-white shadow-2xl border-2 border-[#c9a84c]" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-[440px] max-h-[92vh] overflow-auto rounded-2xl bg-white shadow-2xl border-2 border-[#155EEF]" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="px-4 py-3 flex items-center justify-between sticky top-0 z-10" style={{ background: NAVY }}>
-          <div className="flex items-center gap-2 text-[#f5f0eb] font-bold text-sm">
-            <ImageIcon size={16} style={{ color: GOLD }} /> Property Snapshot
+          <div className="flex items-center gap-2 text-[#f1f5fc] font-bold text-sm">
+            <ImageIcon size={16} style={{ color: "#8fb4ff" }} /> Property Snapshot
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-white/60 hover:text-white transition" title="Close"><X size={16} /></button>
         </div>
@@ -141,7 +141,7 @@ export default function PropertySnapshot({
                 </div>
                 <div>
                   <div style={{ color: "#fff", fontWeight: 800, fontSize: 15, lineHeight: 1 }}>FH Zonal Finder</div>
-                  <div style={{ color: "rgba(201,168,76,0.95)", fontSize: 10, fontWeight: 600, marginTop: 2 }}>BIR Zonal Property Snapshot</div>
+                  <div style={{ color: "rgba(21,94,239,0.95)", fontSize: 10, fontWeight: 600, marginTop: 2 }}>BIR Zonal Property Snapshot</div>
                 </div>
               </div>
 
@@ -164,7 +164,7 @@ export default function PropertySnapshot({
 
                 {/* Zonal value */}
                 <div style={{ marginTop: 14, background: `linear-gradient(135deg, ${NAVY}, ${NAVY2})`, borderRadius: 14, padding: 16 }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1, color: GOLD, textTransform: "uppercase" }}>Zonal Value</div>
+                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1, color: "#8fb4ff", textTransform: "uppercase" }}>Zonal Value</div>
                   <div style={{ fontSize: 30, fontWeight: 900, color: "#fff", lineHeight: 1.05 }}>{data.zonal ? peso(data.zonal) : "Not Appraised"}</div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>per square meter{data.classification ? ` · ${data.classification}` : ""}</div>
                 </div>
@@ -172,7 +172,7 @@ export default function PropertySnapshot({
                 {/* Drawn land — featured total value (the headline for selling) */}
                 {data.landAreaSqm ? (
                   <div style={{ marginTop: 10, background: CREAM, border: `2px solid ${GOLD}`, borderRadius: 14, padding: 14 }}>
-                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1, color: "#9a7a20", textTransform: "uppercase" }}>Total Land Value (Drawn Area)</div>
+                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1, color: "#0f49c4", textTransform: "uppercase" }}>Total Land Value (Drawn Area)</div>
                     <div style={{ fontSize: 26, fontWeight: 900, color: NAVY, lineHeight: 1.05 }}>{peso(data.landValue)}</div>
                     <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginTop: 3 }}>{Math.round(data.landAreaSqm).toLocaleString()} sqm × {peso(data.zonal)}/sqm</div>
                   </div>
@@ -181,7 +181,7 @@ export default function PropertySnapshot({
                 {/* Monthly + grade */}
                 <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
                   {data.monthly ? <Stat label="Est. Monthly (20% dn)" value={peso(data.monthly)} /> : null}
-                  <div style={{ flex: 1, background: CREAM, border: "1px solid #e8e0d8", borderRadius: 12, padding: "8px 10px" }}>
+                  <div style={{ flex: 1, background: CREAM, border: "1px solid #dde5f0", borderRadius: 12, padding: "8px 10px" }}>
                     <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: 0.5, color: "#9ca3af", textTransform: "uppercase" }}>Investment Grade</div>
                     <div style={{ fontSize: 14, fontWeight: 900, color: g.color }}>{g.label}</div>
                   </div>
@@ -208,7 +208,7 @@ export default function PropertySnapshot({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ flex: 1, background: CREAM, border: "1px solid #e8e0d8", borderRadius: 12, padding: "8px 10px" }}>
+    <div style={{ flex: 1, background: CREAM, border: "1px solid #dde5f0", borderRadius: 12, padding: "8px 10px" }}>
       <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: 0.5, color: "#9ca3af", textTransform: "uppercase" }}>{label}</div>
       <div style={{ fontSize: 15, fontWeight: 900, color: NAVY }}>{value}</div>
     </div>

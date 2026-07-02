@@ -73,11 +73,11 @@ export default function InvestmentBrief({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-3" onClick={onClose}>
-      <div className="w-full max-w-[440px] max-h-[88vh] overflow-auto rounded-2xl bg-white shadow-2xl border-2 border-[#c9a84c]" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-[440px] max-h-[88vh] overflow-auto rounded-2xl bg-white shadow-2xl border-2 border-[#155EEF]" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="px-4 py-3 flex items-center justify-between sticky top-0 z-10" style={{ background: "#1e3a8a" }}>
-          <div className="flex items-center gap-2 text-[#f5f0eb] font-bold text-sm">
-            <Sparkles size={16} style={{ color: "#c9a84c" }} /> AI Location Report
+          <div className="flex items-center gap-2 text-[#f1f5fc] font-bold text-sm">
+            <Sparkles size={16} style={{ color: "#8fb4ff" }} /> AI Location Report
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-white/60 hover:text-white transition" title="Close"><X size={16} /></button>
         </div>
@@ -151,7 +151,7 @@ function renderBrief(text: string) {
       flushBullets(`${key}-pre`);
       const heading = line.replace(/^#{1,6}\s+/, "");
       out.push(
-        <div key={key} className="text-[13px] font-black uppercase tracking-wide mt-3 mb-1 pb-1" style={{ color: "#1e3a8a", borderBottom: "1px solid #e8e0d8" }}>
+        <div key={key} className="text-[13px] font-black uppercase tracking-wide mt-3 mb-1 pb-1" style={{ color: "#1e3a8a", borderBottom: "1px solid #dde5f0" }}>
           {heading}
         </div>
       );

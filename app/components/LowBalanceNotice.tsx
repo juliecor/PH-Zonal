@@ -144,7 +144,7 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
         .lbn-accent {
           height: 4px;
         }
-        .lbn-accent.warning  { background: linear-gradient(90deg, #c9a84c, #e8c96a); }
+        .lbn-accent.warning  { background: linear-gradient(90deg, #155EEF, #8fb4ff); }
         .lbn-accent.critical { background: linear-gradient(90deg, #c0392b, #e74c3c); }
 
         /* ── Header ── */
@@ -162,9 +162,9 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
           flex-shrink: 0;
         }
         .lbn-icon-wrap.warning {
-          background: rgba(201,168,76,0.12);
-          border: 2px solid rgba(201,168,76,0.35);
-          color: #c9a84c;
+          background: rgba(21,94,239,0.12);
+          border: 2px solid rgba(21,94,239,0.35);
+          color: #155EEF;
         }
         .lbn-icon-wrap.critical {
           background: rgba(192,57,43,0.08);
@@ -181,7 +181,7 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
           text-transform: uppercase;
           margin-bottom: 0.3rem;
         }
-        .lbn-eyebrow.warning  { color: #c9a84c; }
+        .lbn-eyebrow.warning  { color: #155EEF; }
         .lbn-eyebrow.critical { color: #c0392b; }
 
         .lbn-title {
@@ -208,29 +208,29 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
           flex-shrink: 0;
           width: 36px; height: 36px;
           border-radius: 10px;
-          border: 1.5px solid #e2d9d0;
-          background: #f9f6f2;
+          border: 1.5px solid #dde5f0;
+          background: #f1f5fc;
           display: flex; align-items: center; justify-content: center;
           color: #7a8394;
           cursor: pointer;
           transition: background 0.14s, color 0.14s, border-color 0.14s;
         }
-        .lbn-close:hover { background: #f5f0eb; color: #0f1f38; border-color: #c9a84c; }
+        .lbn-close:hover { background: #f1f5fc; color: #0f1f38; border-color: #155EEF; }
 
         /* ── Body ── */
         .lbn-body { padding: 0 1.75rem 1.75rem; }
 
         /* Users list */
         .lbn-users-card {
-          background: #f9f6f2;
-          border: 1px solid #e8e0d8;
+          background: #f1f5fc;
+          border: 1px solid #dde5f0;
           border-radius: 12px;
           overflow: hidden;
           margin-bottom: 1.1rem;
         }
         .lbn-users-header {
           padding: 0.65rem 1rem;
-          border-bottom: 1px solid #e8e0d8;
+          border-bottom: 1px solid #dde5f0;
           font-size: 0.72rem;
           font-weight: 600;
           letter-spacing: 0.1em;
@@ -243,24 +243,24 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
           justify-content: space-between;
           gap: 0.75rem;
           padding: 0.8rem 1rem;
-          border-bottom: 1px solid #f0ebe4;
+          border-bottom: 1px solid #f1f5fc;
           transition: background 0.12s;
         }
         .lbn-user-row:last-child { border-bottom: none; }
-        .lbn-user-row:hover { background: #f5f0eb; }
+        .lbn-user-row:hover { background: #f1f5fc; }
 
         .lbn-user-left { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
         .lbn-user-avatar {
           width: 36px; height: 36px;
           border-radius: 9px;
-          background: rgba(201,168,76,0.12);
-          border: 1.5px solid rgba(201,168,76,0.3);
+          background: rgba(21,94,239,0.12);
+          border: 1.5px solid rgba(21,94,239,0.3);
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
           font-family: 'Cormorant Garamond', serif;
           font-size: 0.9rem;
           font-weight: 700;
-          color: #c9a84c;
+          color: #155EEF;
           text-transform: uppercase;
         }
         .lbn-user-name {
@@ -282,7 +282,7 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
           font-variant-numeric: tabular-nums;
         }
         .lbn-balance.critical { color: #c0392b; }
-        .lbn-balance.warning  { color: #b8860b; }
+        .lbn-balance.warning  { color: #155EEF; }
 
         .lbn-topup-link {
           display: inline-flex;
@@ -293,7 +293,7 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
           text-decoration: none;
           padding: 0.3rem 0.75rem;
           background: #0f1f38;
-          color: #f5f0eb;
+          color: #f1f5fc;
           border-radius: 7px;
           transition: background 0.14s;
         }
@@ -313,7 +313,7 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
           line-height: 1.6;
           font-weight: 400;
         }
-        .lbn-tip svg { flex-shrink: 0; margin-top: 2px; color: #c9a84c; }
+        .lbn-tip svg { flex-shrink: 0; margin-top: 2px; color: #155EEF; }
 
         /* ── Actions ── */
         .lbn-actions {
@@ -339,7 +339,7 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
         }
         .lbn-btn-primary.warning {
           background: #0f1f38;
-          color: #f5f0eb;
+          color: #f1f5fc;
           box-shadow: 0 3px 12px rgba(15,31,56,0.22);
         }
         .lbn-btn-primary.warning:hover {
@@ -363,7 +363,7 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
           gap: 0.5rem;
           padding: 0.8rem 1.2rem;
           border-radius: 10px;
-          border: 2px solid #e2d9d0;
+          border: 2px solid #dde5f0;
           background: #fff;
           font-family: 'DM Sans', sans-serif;
           font-size: 0.95rem;
@@ -372,7 +372,7 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
           cursor: pointer;
           transition: border-color 0.14s, background 0.14s;
         }
-        .lbn-btn-secondary:hover { border-color: #c9a84c; background: #fdf9f3; }
+        .lbn-btn-secondary:hover { border-color: #155EEF; background: #f1f5fc; }
 
         .lbn-btn-ghost {
           display: inline-flex;
@@ -394,8 +394,8 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
         /* ── Guide ── */
         .lbn-guide {
           margin-top: 1rem;
-          background: #f9f6f2;
-          border: 1px solid #e8e0d8;
+          background: #f1f5fc;
+          border: 1px solid #dde5f0;
           border-radius: 12px;
           padding: 1.1rem;
         }
@@ -419,7 +419,7 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
           width: 24px; height: 24px;
           border-radius: 50%;
           background: #0f1f38;
-          color: #f5f0eb;
+          color: #f1f5fc;
           font-size: 0.72rem;
           font-weight: 700;
           display: flex; align-items: center; justify-content: center;
@@ -434,12 +434,12 @@ export default function LowBalanceNotice({ threshold = 3, remindAfterHours = 24 
           gap: 0.5rem;
           margin-top: 0.85rem;
           padding-top: 0.8rem;
-          border-top: 1px solid #e8e0d8;
+          border-top: 1px solid #dde5f0;
           font-size: 0.85rem;
           color: #7a8394;
           font-weight: 400;
         }
-        .lbn-guide-footer svg { color: #c9a84c; flex-shrink: 0; }
+        .lbn-guide-footer svg { color: #155EEF; flex-shrink: 0; }
       `}</style>
 
       <div className="lbn-backdrop" role="dialog" aria-modal="true" aria-labelledby="lbn-title">

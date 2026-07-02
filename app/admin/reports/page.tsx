@@ -228,7 +228,7 @@ export default function AdminReportsPage() {
           font-weight: 500;
           letter-spacing: 0.14em;
           text-transform: uppercase;
-          color: #c9a84c;
+          color: #155EEF;
           margin-bottom: 0.2rem;
         }
         .rpt-title {
@@ -262,7 +262,7 @@ export default function AdminReportsPage() {
         }
         .filter-input {
           background: #fff;
-          border: 1.5px solid #e2d9d0;
+          border: 1.5px solid #dde5f0;
           border-radius: 9px;
           padding: 0.55rem 0.8rem 0.55rem 2.1rem;
           font-size: 0.825rem;
@@ -274,13 +274,13 @@ export default function AdminReportsPage() {
         }
         .filter-input::placeholder { color: #bbb5ae; }
         .filter-input:focus {
-          border-color: #c9a84c;
-          box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
+          border-color: #155EEF;
+          box-shadow: 0 0 0 3px rgba(21,94,239,0.1);
         }
 
         .filter-select {
           background: #fff;
-          border: 1.5px solid #e2d9d0;
+          border: 1.5px solid #dde5f0;
           border-radius: 9px;
           padding: 0.55rem 0.75rem;
           font-size: 0.825rem;
@@ -290,14 +290,14 @@ export default function AdminReportsPage() {
           cursor: pointer;
           transition: border-color 0.16s;
         }
-        .filter-select:focus { border-color: #c9a84c; }
+        .filter-select:focus { border-color: #155EEF; }
 
         .btn-apply {
           display: flex;
           align-items: center;
           gap: 0.4rem;
           background: #0f1f38;
-          color: #f5f0eb;
+          color: #f1f5fc;
           border: none;
           border-radius: 9px;
           padding: 0.55rem 1rem;
@@ -322,7 +322,7 @@ export default function AdminReportsPage() {
           gap: 0.4rem;
           background: #fff;
           color: #0f1f38;
-          border: 1.5px solid #e2d9d0;
+          border: 1.5px solid #dde5f0;
           border-radius: 9px;
           padding: 0.55rem 1rem;
           font-size: 0.825rem;
@@ -332,8 +332,8 @@ export default function AdminReportsPage() {
           transition: border-color 0.18s, background 0.18s, transform 0.13s, box-shadow 0.18s;
         }
         .btn-export:hover:not(:disabled) {
-          border-color: #c9a84c;
-          background: #fdf9f3;
+          border-color: #155EEF;
+          background: #f1f5fc;
           transform: translateY(-1px);
           box-shadow: 0 2px 10px rgba(15,31,56,0.12);
         }
@@ -341,32 +341,32 @@ export default function AdminReportsPage() {
 
         .btn-refresh, .btn-more {
           display: flex; align-items: center; gap: 0.4rem;
-          background: #fff; color: #0f1f38; border: 1.5px solid #e2d9d0;
+          background: #fff; color: #0f1f38; border: 1.5px solid #dde5f0;
           border-radius: 9px; padding: 0.55rem 0.9rem; font-size: 0.825rem; font-weight: 500; cursor: pointer;
           transition: border-color 0.18s, background 0.18s, transform 0.13s, box-shadow 0.18s;
         }
-        .btn-refresh:hover, .btn-more:hover { border-color: #c9a84c; background:#fdf9f3; transform: translateY(-1px); box-shadow: 0 2px 10px rgba(15,31,56,0.12); }
-        .more-menu { position: absolute; right: 0; margin-top: 6px; background:#fff; border:1px solid #e8e0d8; border-radius:10px; box-shadow:0 8px 24px rgba(15,31,56,0.12); overflow:hidden; z-index:5; }
+        .btn-refresh:hover, .btn-more:hover { border-color: #155EEF; background:#f1f5fc; transform: translateY(-1px); box-shadow: 0 2px 10px rgba(15,31,56,0.12); }
+        .more-menu { position: absolute; right: 0; margin-top: 6px; background:#fff; border:1px solid #e9eef8; border-radius:10px; box-shadow:0 8px 24px rgba(15,31,56,0.12); overflow:hidden; z-index:5; }
         .more-item { display:flex; align-items:center; gap:0.5rem; padding:0.55rem 0.9rem; font-size:0.82rem; color:#0f1f38; cursor:pointer; white-space:nowrap; }
-        .more-item:hover { background:#faf7f4; }
+        .more-item:hover { background:#f1f5fc; }
 
         /* ── Filters sheet ── */
         .flt-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); backdrop-filter:blur(2px); z-index:60; display:flex; justify-content:flex-end; }
-        .flt-panel { width:320px; max-width:90vw; height:100%; background:#fff; border-left:1px solid #e8e0d8; box-shadow:-8px 0 28px rgba(15,31,56,0.18); animation:fltIn .2s ease; display:flex; flex-direction:column; }
+        .flt-panel { width:320px; max-width:90vw; height:100%; background:#fff; border-left:1px solid #e9eef8; box-shadow:-8px 0 28px rgba(15,31,56,0.18); animation:fltIn .2s ease; display:flex; flex-direction:column; }
         @keyframes fltIn { from{ transform:translateX(30px); opacity:0 } to{ transform:translateX(0); opacity:1 } }
-        .flt-head { padding:1rem 1rem; border-bottom:1px solid #f0ebe4; font-weight:700; color:#0f1f38; display:flex; align-items:center; justify-content:space-between; }
+        .flt-head { padding:1rem 1rem; border-bottom:1px solid #f1f5fc; font-weight:700; color:#0f1f38; display:flex; align-items:center; justify-content:space-between; }
         .flt-body { padding:0.9rem 1rem; display:flex; flex-direction:column; gap:0.75rem; }
         .flt-label { font-size:0.75rem; color:#6b7585; font-weight:600; letter-spacing:.05em; }
-        .flt-inp { width:100%; background:#fff; border:1.5px solid #e2d9d0; border-radius:10px; padding:.55rem .75rem; font-size:.85rem; color:#0f1f38; outline:none; }
-        .flt-actions { margin-top:auto; padding:1rem; border-top:1px solid #f0ebe4; display:flex; gap:.5rem; }
-        .btn-primary { background:#0f1f38; color:#f5f0eb; border:none; border-radius:10px; padding:.6rem .95rem; font-weight:600; cursor:pointer; }
-        .btn-ghost { background:#fff; color:#0f1f38; border:1.5px solid #e2d9d0; border-radius:10px; padding:.6rem .95rem; font-weight:600; cursor:pointer; }
+        .flt-inp { width:100%; background:#fff; border:1.5px solid #dde5f0; border-radius:10px; padding:.55rem .75rem; font-size:.85rem; color:#0f1f38; outline:none; }
+        .flt-actions { margin-top:auto; padding:1rem; border-top:1px solid #f1f5fc; display:flex; gap:.5rem; }
+        .btn-primary { background:#0f1f38; color:#f1f5fc; border:none; border-radius:10px; padding:.6rem .95rem; font-weight:600; cursor:pointer; }
+        .btn-ghost { background:#fff; color:#0f1f38; border:1.5px solid #dde5f0; border-radius:10px; padding:.6rem .95rem; font-weight:600; cursor:pointer; }
 
         /* ── Card shell ── */
         .rpt-card {
           background: #fff;
           border-radius: 14px;
-          border: 1px solid #e8e0d8;
+          border: 1px solid #e9eef8;
           box-shadow: 0 2px 14px rgba(15,31,56,0.05);
           overflow: hidden;
         }
@@ -376,10 +376,10 @@ export default function AdminReportsPage() {
           display: flex;
           gap: 1rem;
           padding: 1rem 1.25rem;
-          border-bottom: 1px solid #f0ebe4;
+          border-bottom: 1px solid #f1f5fc;
         }
         .skel-cell {
-          background: linear-gradient(90deg, #f5f0eb 25%, #ede5da 50%, #f5f0eb 75%);
+          background: linear-gradient(90deg, #f1f5fc 25%, #e9eef8 50%, #f1f5fc 75%);
           background-size: 200% 100%;
           animation: shimmer 1.4s infinite;
           border-radius: 5px;
@@ -412,8 +412,8 @@ export default function AdminReportsPage() {
         }
 
         .rpt-table thead tr {
-          background: #f9f6f2;
-          border-bottom: 1.5px solid #e8e0d8;
+          background: #f1f5fc;
+          border-bottom: 1.5px solid #e9eef8;
           position: sticky; top: 0; z-index: 1;
         }
         .rpt-table th {
@@ -429,12 +429,12 @@ export default function AdminReportsPage() {
         .rpt-table th.align-right { text-align: right; }
 
         .rpt-table tbody tr {
-          border-bottom: 1px solid #f0ebe4;
+          border-bottom: 1px solid #f1f5fc;
           transition: background 0.12s;
         }
         .rpt-table tbody tr:nth-child(even) { background: #fffdfb; }
         .rpt-table tbody tr:last-child { border-bottom: none; }
-        .rpt-table tbody tr:hover { background: #faf7f4; }
+        .rpt-table tbody tr:hover { background: #f1f5fc; }
 
         .rpt-table td {
           padding: 0.85rem 1rem;
@@ -449,14 +449,14 @@ export default function AdminReportsPage() {
         .user-avatar {
           width: 28px; height: 28px;
           border-radius: 7px;
-          background: rgba(201,168,76,0.12);
-          border: 1px solid rgba(201,168,76,0.3);
+          background: rgba(21,94,239,0.12);
+          border: 1px solid rgba(21,94,239,0.3);
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
           font-family: 'Cormorant Garamond', serif;
           font-size: 0.75rem;
           font-weight: 700;
-          color: #c9a84c;
+          color: #155EEF;
           text-transform: uppercase;
         }
         .user-name {
@@ -516,7 +516,7 @@ export default function AdminReportsPage() {
           gap: 0.3rem;
           padding: 0.45rem 0.85rem;
           background: #fff;
-          border: 1.5px solid #e2d9d0;
+          border: 1.5px solid #dde5f0;
           border-radius: 8px;
           font-size: 0.78rem;
           font-family: 'DM Sans', sans-serif;
@@ -526,8 +526,8 @@ export default function AdminReportsPage() {
           transition: border-color 0.15s, background 0.15s, transform 0.12s;
         }
         .pag-btn:hover:not(:disabled) {
-          border-color: #c9a84c;
-          background: #fdf9f3;
+          border-color: #155EEF;
+          background: #f1f5fc;
           transform: translateY(-1px);
         }
         .pag-btn:disabled {
@@ -538,7 +538,7 @@ export default function AdminReportsPage() {
         .pag-current {
           padding: 0.45rem 0.75rem;
           background: #0f1f38;
-          color: #f5f0eb;
+          color: #f1f5fc;
           border-radius: 8px;
           font-size: 0.78rem;
           font-weight: 500;
@@ -796,13 +796,13 @@ export default function AdminReportsPage() {
 function Kpi({ label, value, note, colSpan = 4 }: { label: string; value: string; note?: string; colSpan?: number }) {
   return (
     <div style={{ gridColumn: `span ${colSpan} / span ${colSpan}` }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem', padding:'0.9rem 0.9rem', background:'#fff', border:'1px solid #e8e0d8', borderRadius:12 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem', padding:'0.9rem 0.9rem', background:'#fff', border:'1px solid #e9eef8', borderRadius:12 }}>
         <div>
           <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'.14em', color:'#1e3a8a' }}>{label}</div>
           <div style={{ marginTop:4, fontSize:22, fontWeight:700, color:'#0f1f38' }}>{value}</div>
           {note && <div style={{ marginTop:4, fontSize:12, color:'#6b7585' }}>{note}</div>}
         </div>
-        <span aria-hidden style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:24, height:24, borderRadius:999, border:'1px solid #e8e0d8', color:'#c9a84c', fontWeight:800 }}>•</span>
+        <span aria-hidden style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:24, height:24, borderRadius:999, border:'1px solid #e9eef8', color:'#155EEF', fontWeight:800 }}>•</span>
       </div>
     </div>
   );

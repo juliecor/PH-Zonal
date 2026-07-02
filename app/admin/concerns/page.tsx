@@ -53,10 +53,10 @@ const theme = createTheme({
     mode: "light",
     // Brand: navy + gold
     primary: { main: "#0f1f38", light: "#1e3a8a", dark: "#0a1628" },
-    secondary: { main: "#c9a84c" },
+    secondary: { main: "#155EEF" },
     success: { main: "#059669", light: "#d1fae5" },
     warning: { main: "#d97706", light: "#fef3c7" },
-    background: { default: "#f5f0eb", paper: "#ffffff" },
+    background: { default: "#f1f5fc", paper: "#ffffff" },
   },
   typography: {
     fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
@@ -274,7 +274,7 @@ export default function AdminConcernsPage() {
               </Stack>
               <Stack direction="row" spacing={1}>
                 <Box sx={{ px:1.25, py:0.5, borderRadius: 20, bgcolor:'rgba(30,58,138,0.06)', border:'1px solid rgba(30,58,138,0.2)', color:'#1e3a8a', fontSize:12, fontWeight:700 }}>Open: {openCount}</Box>
-                <Box sx={{ px:1.25, py:0.5, borderRadius: 20, bgcolor:'rgba(201,168,76,0.08)', border:'1px solid rgba(201,168,76,0.26)', color:'#7a5f16', fontSize:12, fontWeight:700 }}>Resolved: {rows.length - openCount}</Box>
+                <Box sx={{ px:1.25, py:0.5, borderRadius: 20, bgcolor:'rgba(21,94,239,0.08)', border:'1px solid rgba(21,94,239,0.26)', color:'#0f49c4', fontSize:12, fontWeight:700 }}>Resolved: {rows.length - openCount}</Box>
               </Stack>
             </Stack>
           </Paper>
@@ -499,7 +499,7 @@ export default function AdminConcernsPage() {
                                   alt="attachment"
                                   sx={{
                                     width: 72, height: 56, objectFit: "cover",
-                                    borderRadius: 2, border: "1px solid #e8e2da",
+                                    borderRadius: 2, border: "1px solid #e9eef8",
                                     display: "block", transition: "transform 0.15s, box-shadow 0.15s",
                                     "&:hover": { transform: "scale(1.04)", boxShadow: "0 4px 14px rgba(0,0,0,0.15)" },
                                   }}
@@ -516,7 +516,7 @@ export default function AdminConcernsPage() {
                           {r.resolution_url ? (
                             <Tooltip title="View completion photo">
                               <a href={r.resolution_url} target="_blank" rel="noreferrer">
-                                <Box component="img" src={r.resolution_url} alt="resolution" sx={{ width:72, height:56, objectFit:'cover', borderRadius:2, border:'1px solid #e8e2da', display:'block' }} />
+                                <Box component="img" src={r.resolution_url} alt="resolution" sx={{ width:72, height:56, objectFit:'cover', borderRadius:2, border:'1px solid #e9eef8', display:'block' }} />
                               </a>
                             </Tooltip>
                           ) : (
@@ -603,7 +603,7 @@ export default function AdminConcernsPage() {
             </TableContainer>
 
             {/* ── Pagination ── */}
-            <Divider sx={{ borderColor: "#f0ebe4" }} />
+            <Divider sx={{ borderColor: "#f1f5fc" }} />
             <Box
               sx={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -704,7 +704,7 @@ export default function AdminConcernsPage() {
                           component="img"
                           src={detailRow.attachment_url}
                           alt="attachment"
-                          sx={{ width: 260, maxHeight: 200, objectFit: "cover", border: "1px solid #e8e2da" }}
+                          sx={{ width: 260, maxHeight: 200, objectFit: "cover", border: "1px solid #e9eef8" }}
                         />
                       </a>
                     </Box>
@@ -739,7 +739,7 @@ export default function AdminConcernsPage() {
                       <Box>
                         <Typography variant="subtitle2" sx={{ color: "#6b7280", mb: 0.5 }}>After Photo</Typography>
                         <a href={detailRow.resolution_url} target="_blank" rel="noreferrer">
-                          <Box component="img" src={detailRow.resolution_url} alt="resolution" sx={{ width:260, maxHeight:200, objectFit:'cover', border:'1px solid #e8e2da' }} />
+                          <Box component="img" src={detailRow.resolution_url} alt="resolution" sx={{ width:260, maxHeight:200, objectFit:'cover', border:'1px solid #e9eef8' }} />
                         </a>
                         {detailRow.resolution_note ? (
                           <Typography sx={{ mt: 1, fontSize: 12, color: '#374151' }}>Note: {detailRow.resolution_note}</Typography>

@@ -293,7 +293,7 @@ export default function ReportBuilder(props: {
 
     // ══ PAGE 1 — branded cover (snapshot style) ═════════════════════════
     const NAVY: [number, number, number] = [30, 58, 138];
-    const GOLD: [number, number, number] = [201, 168, 76];
+    const GOLD: [number, number, number] = [143, 180, 255];
     const reportDate = new Date().toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
 
     const zonalNum = Number(String(selectedRow?.["ZonalValuepersqm.-"] ?? "").replace(/[^0-9.]/g, "")) || 0;
@@ -352,14 +352,14 @@ export default function ReportBuilder(props: {
     // Measured land box
     if (landAreaSqm && landAreaSqm > 0) {
       const boxH = 56;
-      pdf.setFillColor(245, 240, 235); pdf.setDrawColor(GOLD[0], GOLD[1], GOLD[2]); pdf.setLineWidth(1.5);
+      pdf.setFillColor(241, 245, 252); pdf.setDrawColor(GOLD[0], GOLD[1], GOLD[2]); pdf.setLineWidth(1.5);
       pdf.roundedRect(margin, cy, bigW, boxH, 10, 10, "FD");
-      pdf.setTextColor(154, 122, 32); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+      pdf.setTextColor(15, 73, 196); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
       pdf.text("MEASURED LAND", margin + 14, cy + 18);
       pdf.setTextColor(NAVY[0], NAVY[1], NAVY[2]); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13);
       pdf.text(`${Math.round(landAreaSqm).toLocaleString()} sqm (${(landAreaSqm / 10000).toFixed(3)} ha)`, margin + 14, cy + 40);
       if (estLandValue > 0) {
-        pdf.setTextColor(154, 122, 32); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+        pdf.setTextColor(15, 73, 196); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
         pdf.text("EST. LAND VALUE", pageW - margin - 14, cy + 18, { align: "right" });
         pdf.setTextColor(NAVY[0], NAVY[1], NAVY[2]); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13);
         pdf.text(`PHP ${Math.round(estLandValue).toLocaleString()}`, pageW - margin - 14, cy + 40, { align: "right" });
@@ -850,7 +850,7 @@ export default function ReportBuilder(props: {
           {/* Business & Market Opportunity */}
           <div>
             <label className="text-sm font-bold uppercase tracking-wide text-gray-900 mb-3 flex items-center gap-2">
-              <Building2 size={16} style={{color:"#c9a84c"}} /> Business &amp; Market Opportunity
+              <Building2 size={16} style={{color:"#155EEF"}} /> Business &amp; Market Opportunity
             </label>
             <div
               className={`w-full rounded-lg border border-gray-300 px-4 py-3 leading-relaxed bg-gray-50 text-gray-800 transition-all ${
@@ -877,7 +877,7 @@ export default function ReportBuilder(props: {
           {/* Recommended Business Uses */}
           <div>
             <label className="text-sm font-bold uppercase tracking-wide text-gray-900 mb-3 flex items-center gap-2">
-              <Briefcase size={16} style={{color:"#c9a84c"}} /> Recommended Business Uses
+              <Briefcase size={16} style={{color:"#155EEF"}} /> Recommended Business Uses
             </label>
             <textarea
               className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#1e3a8a] focus:border-transparent resize-none"

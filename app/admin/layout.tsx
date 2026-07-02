@@ -87,7 +87,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           height: 100vh;
           display: flex;
           flex-direction: column;
-          background: #f5f0eb;
+          background: #f1f5fc;
           font-family: 'DM Sans', sans-serif;
           overflow: hidden;
         }
@@ -102,7 +102,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           justify-content: space-between;
           padding: 0 1.75rem;
           height: 60px;
-          border-bottom: 1px solid #ede8e0;
+          border-bottom: 1px solid #e9eef8;
           margin-left: 260px;
           width: calc(100% - 260px);
         }
@@ -115,15 +115,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           gap: 0.75rem;
         }
         /* Hamburger — mobile only */
-        .al-hamburger { background: #f5f0eb; border: none; border-radius: 9px; padding: 8px; cursor: pointer; display: none; align-items: center; justify-content: center; transition: background 0.15s; color: #0f1f38; }
-        .al-hamburger:hover { background: #ede8e0; }
+        .al-hamburger { background: #f1f5fc; border: none; border-radius: 9px; padding: 8px; cursor: pointer; display: none; align-items: center; justify-content: center; transition: background 0.15s; color: #0f1f38; }
+        .al-hamburger:hover { background: #e9eef8; }
         @media (max-width:860px) { .al-hamburger { display:flex; } }
         .al-topbar-mark {
           width: 32px; height: 32px;
           background: #0f1f38;
           border-radius: 9px;
           display: flex; align-items: center; justify-content: center;
-          color: #c9a84c;
+          color: #8fb4ff;
           flex-shrink: 0;
         }
         .al-topbar-brand {
@@ -148,7 +148,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .al-topbar-divider {
           width: 1px;
           height: 28px;
-          background: #ede8e0;
+          background: #e9eef8;
         }
         .al-topbar-right {
           display: flex;
@@ -156,23 +156,23 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           gap: 0.75rem;
         }
         /* Sidebar logout styles */
-        .sb-logout-row { padding:0.85rem 0.75rem; border-top:1px solid #f0ebe4; }
-        .sb-logout-btn { width:100%; display:flex; align-items:center; gap:0.65rem; padding:0.62rem 1rem; border-radius:10px; background:transparent; border:1.5px solid #ede8e0; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:0.83rem; font-weight:500; color:#6b7585; transition:border-color 0.15s,background 0.15s,color 0.15s; }
-        .sb-logout-btn:hover { border-color:#e2d9d0; background:#f9f7f4; color:#0f1f38; }
+        .sb-logout-row { padding:0.85rem 0.75rem; border-top:1px solid #f1f5fc; }
+        .sb-logout-btn { width:100%; display:flex; align-items:center; gap:0.65rem; padding:0.62rem 1rem; border-radius:10px; background:transparent; border:1.5px solid #e9eef8; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:0.83rem; font-weight:500; color:#6b7585; transition:border-color 0.15s,background 0.15s,color 0.15s; }
+        .sb-logout-btn:hover { border-color:#dde5f0; background:#f9f7f4; color:#0f1f38; }
         /* Admin badge */
         .al-admin-badge {
           display: inline-flex;
           align-items: center;
           gap: 0.35rem;
           padding: 0.28rem 0.75rem;
-          background: rgba(201,168,76,0.08);
-          border: 1px solid rgba(201,168,76,0.28);
+          background: rgba(21,94,239,0.08);
+          border: 1px solid rgba(21,94,239,0.28);
           border-radius: 50px;
           font-size: 0.67rem;
           font-weight: 700;
           letter-spacing: 0.1em;
           text-transform: uppercase;
-          color: #8a6d15;
+          color: #0f49c4;
         }
         .al-admin-dot {
           width: 6px; height: 6px;
@@ -215,7 +215,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           height:100%;
         }
 
-        .al-logout-row { padding:0.75rem 1rem; border-top:1px solid #f0ebe4; margin-top:auto; }
+        .al-logout-row { padding:0.75rem 1rem; border-top:1px solid #f1f5fc; margin-top:auto; }
 
         /* ── Mobile Drawer Overlay ── */
         .al-mobile-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); backdrop-filter:blur(3px); z-index:300; display:flex; animation:alMbFadeIn 0.2s ease; }

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, type ReactNode } from "react";
 import { MapPin, X, Loader2, Scan, Waves, Mountain, Tornado, Activity, Search, Droplets, AlertTriangle, Layers, ChevronDown } from "lucide-react";
 
 const NAVY = "#1e3a8a";
-const GOLD = "#c9a84c";
+const GOLD = "#155EEF";
+const GOLD_ON_DARK = "#8fb4ff";
 
 export type ScanResult = {
   lat: number;
@@ -202,19 +203,19 @@ export default function MapTools({
     <>
       {/* Top-center toolbar */}
       <div className={`fixed top-3 z-[60] flex max-w-[96vw] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 transition-[left] duration-300 sm:top-4 sm:gap-2 ${sidebarOpen ? "left-1/2 lg:left-[calc(50%+200px)]" : "left-1/2"}`}>
-        <button onClick={onSearchZonal} className={`${pill} text-white`} style={{ background: searchZonalActive ? "#b5923f" : NAVY, border: `2px solid ${GOLD}`, boxShadow: searchZonalActive ? "0 0 16px rgba(201,168,76,.55), 0 8px 20px -8px rgba(15,23,42,.45)" : undefined }} title="Open the zonal-value search panel">
-          <Search size={15} style={{ color: searchZonalActive ? "#fff" : GOLD }} /> <span className={lbl}>Search Zonal</span>
+        <button onClick={onSearchZonal} className={`${pill} text-white`} style={{ background: searchZonalActive ? "#0f49c4" : NAVY, border: `2px solid ${GOLD_ON_DARK}`, boxShadow: searchZonalActive ? "0 0 16px rgba(21,94,239,.55), 0 8px 20px -8px rgba(15,23,42,.45)" : undefined }} title="Open the zonal-value search panel">
+          <Search size={15} style={{ color: searchZonalActive ? "#fff" : GOLD_ON_DARK }} /> <span className={lbl}>Search Zonal</span>
         </button>
-        <button onClick={onNearMe} className={`${pill} text-white`} style={{ background: NAVY, border: `2px solid ${GOLD}` }} title="Zonal value near me">
-          <MapPin size={15} style={{ color: GOLD }} /> <span className={lbl}>Near me</span>
+        <button onClick={onNearMe} className={`${pill} text-white`} style={{ background: NAVY, border: `2px solid ${GOLD_ON_DARK}` }} title="Zonal value near me">
+          <MapPin size={15} style={{ color: GOLD_ON_DARK }} /> <span className={lbl}>Near me</span>
         </button>
         <button
           onClick={onScanToggle}
           className={`${pill} text-white`}
-          style={{ background: scanActive ? "#e11d48" : NAVY, border: `2px solid ${GOLD}` }}
+          style={{ background: scanActive ? "#e11d48" : NAVY, border: `2px solid ${GOLD_ON_DARK}` }}
           title="Draw a box on the map to find zonal values inside it"
         >
-          <Scan size={15} style={{ color: scanActive ? "#fff" : GOLD }} />{" "}
+          <Scan size={15} style={{ color: scanActive ? "#fff" : GOLD_ON_DARK }} />{" "}
           <span className={lbl}>{scanActive ? "Draw a box…" : "Scan area"}</span>
         </button>
         {/* Hazards — grouped into one dropdown to keep the toolbar tidy */}
@@ -222,17 +223,17 @@ export default function MapTools({
           <button
             onClick={() => setHazardsOpen((v) => !v)}
             className={`${pill} text-white`}
-            style={{ background: activeHazards ? "#0f766e" : NAVY, border: `2px solid ${GOLD}` }}
+            style={{ background: activeHazards ? "#0f766e" : NAVY, border: `2px solid ${GOLD_ON_DARK}` }}
             title="Show/hide hazard overlays (flood, landslide, fault, liquefaction, tsunami…)"
           >
-            <Layers size={15} style={{ color: activeHazards ? "#fff" : GOLD }} />
+            <Layers size={15} style={{ color: activeHazards ? "#fff" : GOLD_ON_DARK }} />
             <span className={lbl}>Hazards</span>
             {activeHazards > 0 && (
-              <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-extrabold text-[#0f766e]" style={{ background: GOLD }}>
+              <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-extrabold text-white" style={{ background: GOLD }}>
                 {activeHazards}
               </span>
             )}
-            <ChevronDown size={13} className={`transition-transform ${hazardsOpen ? "rotate-180" : ""}`} style={{ color: GOLD }} />
+            <ChevronDown size={13} className={`transition-transform ${hazardsOpen ? "rotate-180" : ""}`} style={{ color: GOLD_ON_DARK }} />
           </button>
 
           {hazardsOpen && (
@@ -340,7 +341,7 @@ export default function MapTools({
           {floodOn && (
             <LegendCard
               title="100-yr flood"
-              icon={<Waves size={13} style={{ color: GOLD }} />}
+              icon={<Waves size={13} style={{ color: GOLD_ON_DARK }} />}
               items={mapType === "satellite"
                 ? [["#7dd3fc", "Low"], ["#38a5f5", "Moderate"], ["#035aaf", "High"]]
                 : [["#ca8a04", "Low"], ["#ea580c", "Moderate"], ["#dc2626", "High"]]}
@@ -349,42 +350,42 @@ export default function MapTools({
           {landslideOn && (
             <LegendCard
               title="Landslide"
-              icon={<Mountain size={13} style={{ color: GOLD }} />}
+              icon={<Mountain size={13} style={{ color: GOLD_ON_DARK }} />}
               items={[["#ca8a04", "Low"], ["#9a3412", "Moderate"], ["#78350f", "High"]]}
             />
           )}
           {stormSurgeOn && (
             <LegendCard
               title="Storm surge"
-              icon={<Tornado size={13} style={{ color: GOLD }} />}
+              icon={<Tornado size={13} style={{ color: GOLD_ON_DARK }} />}
               items={[["#8b5cf6", "Low"], ["#7c3aed", "Moderate"], ["#6d28d9", "High"]]}
             />
           )}
           {faultsOn && (
             <LegendCard
               title="Active faults"
-              icon={<Activity size={13} style={{ color: GOLD }} />}
+              icon={<Activity size={13} style={{ color: GOLD_ON_DARK }} />}
               items={[["#b91c1c", "Fault line"]]}
             />
           )}
           {liquefactionOn && (
             <LegendCard
               title="Liquefaction"
-              icon={<Droplets size={13} style={{ color: GOLD }} />}
+              icon={<Droplets size={13} style={{ color: GOLD_ON_DARK }} />}
               items={[["#e0a23a", "Susceptible area"]]}
             />
           )}
           {tsunamiOn && (
             <LegendCard
               title="Tsunami-prone"
-              icon={<Waves size={13} style={{ color: GOLD }} />}
+              icon={<Waves size={13} style={{ color: GOLD_ON_DARK }} />}
               items={[["#22b8cf", "Prone coastal area"]]}
             />
           )}
           {groundRuptureOn && (
             <LegendCard
               title="Ground rupture"
-              icon={<AlertTriangle size={13} style={{ color: GOLD }} />}
+              icon={<AlertTriangle size={13} style={{ color: GOLD_ON_DARK }} />}
               items={[["#dc2626", "Active fault"], ["#a855f7", "Trench"]]}
             />
           )}

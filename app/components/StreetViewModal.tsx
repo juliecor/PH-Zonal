@@ -74,11 +74,11 @@ export default function StreetViewModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-3" onClick={onClose}>
-      <div className="w-full max-w-[640px] rounded-2xl bg-white shadow-2xl border-2 border-[#c9a84c] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-[640px] rounded-2xl bg-white shadow-2xl border-2 border-[#155EEF] overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="px-4 py-3 flex items-center justify-between" style={{ background: "#1e3a8a" }}>
-          <div className="flex items-center gap-2 text-[#f5f0eb] font-bold text-sm min-w-0">
-            <Camera size={16} style={{ color: "#c9a84c" }} />
+          <div className="flex items-center gap-2 text-[#f1f5fc] font-bold text-sm min-w-0">
+            <Camera size={16} style={{ color: "#8fb4ff" }} />
             <span className="truncate">Street View{locationLabel ? ` — ${locationLabel}` : ""}</span>
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-white/60 hover:text-white transition shrink-0" title="Close"><X size={16} /></button>

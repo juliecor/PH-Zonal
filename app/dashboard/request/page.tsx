@@ -5,7 +5,7 @@ import { apiCreateTokenRequest, apiMe, apiMyTokenRequests } from "../../lib/auth
 import { toast } from "sonner";
 
 const STATUS_STYLES: Record<string, { bg: string; color: string; border: string; dot: string }> = {
-  pending:  { bg: "rgba(201,168,76,0.1)",  color: "#9a7a20", border: "rgba(201,168,76,0.3)",  dot: "#c9a84c" },
+  pending:  { bg: "rgba(21,94,239,0.1)",  color: "#0f49c4", border: "rgba(21,94,239,0.3)",  dot: "#155EEF" },
   approved: { bg: "rgba(30,58,138,0.07)",  color: "#1e3a8a", border: "rgba(30,58,138,0.15)",  dot: "#1e3a8a" },
   denied:   { bg: "rgba(192,57,43,0.07)",  color: "#c0392b", border: "rgba(192,57,43,0.2)",   dot: "#c0392b" },
 };
@@ -41,8 +41,8 @@ export default function ClientRequestPage() {
       <>
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:wght@300;400;500&display=swap');
-          .admin-notice { font-family:'DM Sans',sans-serif; display:flex; align-items:center; gap:0.7rem; padding:1rem 1.25rem; background:#f9f6f2; border:1px solid #e8e0d8; border-radius:12px; font-size:0.85rem; color:#6b7585; }
-          .admin-notice svg { color:#c9a84c; flex-shrink:0; }
+          .admin-notice { font-family:'DM Sans',sans-serif; display:flex; align-items:center; gap:0.7rem; padding:1rem 1.25rem; background:#f1f5fc; border:1px solid #e9eef8; border-radius:12px; font-size:0.85rem; color:#6b7585; }
+          .admin-notice svg { color:#155EEF; flex-shrink:0; }
         `}</style>
         <div className="admin-notice">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -58,15 +58,15 @@ export default function ClientRequestPage() {
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:wght@300;400;500&display=swap');
 
         .clreq-wrap { font-family:'DM Sans',sans-serif; display:flex; flex-direction:column; gap:1.5rem; }
-        .clreq-eyebrow { font-size:0.68rem; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:#c9a84c; margin-bottom:0.2rem; }
+        .clreq-eyebrow { font-size:0.68rem; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:#155EEF; margin-bottom:0.2rem; }
         .clreq-page-title { font-family:'Cormorant Garamond',serif; font-size:1.9rem; font-weight:700; color:#1e3a8a; line-height:1.1; }
 
         .balance-chip { display:inline-flex; align-items:center; gap:0.4rem; padding:0.3rem 0.85rem; background:rgba(30,58,138,0.06); border:1px solid rgba(30,58,138,0.1); border-radius:20px; font-size:0.75rem; font-weight:500; color:#1e3a8a; align-self:flex-start; }
-        .balance-chip svg { color:#c9a84c; }
+        .balance-chip svg { color:#155EEF; }
 
-        .clreq-card { background:#fff; border-radius:14px; border:1px solid #e8e0d8; box-shadow:0 2px 14px rgba(30,58,138,0.05); overflow:hidden; }
-        .clreq-card-header { padding:1.2rem 1.5rem; border-bottom:1px solid #f0ebe4; display:flex; align-items:center; gap:0.6rem; }
-        .clreq-card-header svg { color:#c9a84c; }
+        .clreq-card { background:#fff; border-radius:14px; border:1px solid #e9eef8; box-shadow:0 2px 14px rgba(30,58,138,0.05); overflow:hidden; }
+        .clreq-card-header { padding:1.2rem 1.5rem; border-bottom:1px solid #e9eef8; display:flex; align-items:center; gap:0.6rem; }
+        .clreq-card-header svg { color:#155EEF; }
         .clreq-card-title { font-family:'Cormorant Garamond',serif; font-size:1.15rem; font-weight:700; color:#1e3a8a; }
         .clreq-card-body { padding:1.5rem; }
 
@@ -75,28 +75,28 @@ export default function ClientRequestPage() {
         .req-field-label { font-size:0.68rem; font-weight:500; letter-spacing:0.09em; text-transform:uppercase; color:#1e3a8a; }
         .req-input-wrap { position:relative; display:flex; align-items:center; }
         .req-input-icon { position:absolute; left:0.75rem; color:#9aa3b0; pointer-events:none; display:flex; align-items:center; }
-        .req-input { background:#fff; border:1.5px solid #e2d9d0; border-radius:9px; padding:0.62rem 0.8rem 0.62rem 2.2rem; font-size:0.875rem; font-family:'DM Sans',sans-serif; color:#1e3a8a; outline:none; transition:border-color 0.16s,box-shadow 0.16s; }
+        .req-input { background:#fff; border:1.5px solid #dde5f0; border-radius:9px; padding:0.62rem 0.8rem 0.62rem 2.2rem; font-size:0.875rem; font-family:'DM Sans',sans-serif; color:#1e3a8a; outline:none; transition:border-color 0.16s,box-shadow 0.16s; }
         .req-input.qty { width:100px; }
         .req-input.msg { width:280px; max-width:100%; }
         .req-input::placeholder { color:#bbb5ae; }
-        .req-input:focus { border-color:#c9a84c; box-shadow:0 0 0 3px rgba(201,168,76,0.1); }
+        .req-input:focus { border-color:#155EEF; box-shadow:0 0 0 3px rgba(21,94,239,0.1); }
 
-        .btn-submit { display:flex; align-items:center; gap:0.4rem; background:#1e3a8a; color:#f5f0eb; border:none; border-radius:9px; padding:0.65rem 1.2rem; font-size:0.85rem; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; align-self:flex-end; transition:background 0.18s,transform 0.13s,box-shadow 0.18s; box-shadow:0 2px 10px rgba(30,58,138,0.16); white-space:nowrap; }
+        .btn-submit { display:flex; align-items:center; gap:0.4rem; background:#1e3a8a; color:#f1f5fc; border:none; border-radius:9px; padding:0.65rem 1.2rem; font-size:0.85rem; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; align-self:flex-end; transition:background 0.18s,transform 0.13s,box-shadow 0.18s; box-shadow:0 2px 10px rgba(30,58,138,0.16); white-space:nowrap; }
         .btn-submit:hover:not(:disabled) { background:#1e40af; transform:translateY(-1px); box-shadow:0 4px 14px rgba(30,58,138,0.22); }
         .btn-submit:disabled { opacity:0.55; cursor:not-allowed; transform:none; }
-        .spinner { width:13px; height:13px; border:2px solid rgba(245,240,235,0.3); border-top-color:#f5f0eb; border-radius:50%; animation:spin 0.7s linear infinite; }
+        .spinner { width:13px; height:13px; border:2px solid rgba(245,240,235,0.3); border-top-color:#f1f5fc; border-radius:50%; animation:spin 0.7s linear infinite; }
         @keyframes spin { to{transform:rotate(360deg)} }
 
         .req-error { display:flex; align-items:center; gap:0.45rem; margin-top:0.9rem; padding:0.65rem 0.9rem; background:#fff3f3; border:1px solid #f5c6c6; border-radius:8px; font-size:0.8rem; color:#c0392b; }
 
         .req-list { display:flex; flex-direction:column; gap:0; }
-        .req-list-item { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding:1rem 1.5rem; border-bottom:1px solid #f0ebe4; transition:background 0.12s; }
+        .req-list-item { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding:1rem 1.5rem; border-bottom:1px solid #e9eef8; transition:background 0.12s; }
         .req-list-item:last-child { border-bottom:none; }
-        .req-list-item:hover { background:#faf7f4; }
+        .req-list-item:hover { background:#f1f5fc; }
         .req-list-left { display:flex; align-items:flex-start; gap:0.85rem; flex:1; min-width:0; }
-        .req-list-icon { width:36px; height:36px; border-radius:9px; background:rgba(201,168,76,0.1); border:1.5px solid rgba(201,168,76,0.25); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:#c9a84c; }
+        .req-list-icon { width:36px; height:36px; border-radius:9px; background:rgba(21,94,239,0.1); border:1.5px solid rgba(21,94,239,0.25); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:#155EEF; }
         .req-list-qty { font-weight:500; color:#1e3a8a; font-size:0.875rem; }
-        .req-list-msg { margin-top:0.25rem; padding:0.3rem 0.6rem; background:#f9f6f2; border-left:2px solid #c9a84c; border-radius:0 5px 5px 0; font-size:0.75rem; color:#6b7585; font-style:italic; display:inline-block; }
+        .req-list-msg { margin-top:0.25rem; padding:0.3rem 0.6rem; background:#f1f5fc; border-left:2px solid #155EEF; border-radius:0 5px 5px 0; font-size:0.75rem; color:#6b7585; font-style:italic; display:inline-block; }
         .req-list-right { display:flex; flex-direction:column; align-items:flex-end; gap:0.4rem; flex-shrink:0; }
         .status-badge { display:inline-flex; align-items:center; gap:0.3rem; padding:0.2rem 0.65rem; border-radius:20px; font-size:0.68rem; font-weight:500; letter-spacing:0.07em; text-transform:uppercase; border:1px solid; }
         .status-dot { width:5px; height:5px; border-radius:50%; }

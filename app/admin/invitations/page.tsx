@@ -136,7 +136,7 @@ const HeaderOrbs = () => (
     <Box sx={{
       position: "absolute", top: -30, right: 60, width: 160, height: 160,
       borderRadius: "50%",
-      background: "radial-gradient(circle, rgba(201,168,76,0.35) 0%, transparent 70%)",
+      background: "radial-gradient(circle, rgba(21,94,239,0.35) 0%, transparent 70%)",
       animation: `${floatA} 7s ease-in-out infinite`,
       pointerEvents: "none",
     }} />
@@ -144,7 +144,7 @@ const HeaderOrbs = () => (
     <Box sx={{
       position: "absolute", bottom: -20, right: 220, width: 90, height: 90,
       borderRadius: "50%",
-      background: "radial-gradient(circle, rgba(201,168,76,0.30) 0%, transparent 70%)",
+      background: "radial-gradient(circle, rgba(21,94,239,0.30) 0%, transparent 70%)",
       animation: `${floatB} 5s ease-in-out infinite`,
       pointerEvents: "none",
     }} />
@@ -176,11 +176,11 @@ const StatBadge = ({ count }: { count: number }) => (
     px: 1.5, py: 0.6,
     borderRadius: 1,
     bgcolor: count > 0
-      ? "rgba(201,168,76,0.12)"
+      ? "rgba(21,94,239,0.12)"
       : "rgba(255,255,255,0.06)",
     border: "1px solid",
     borderColor: count > 0
-      ? "rgba(201,168,76,0.3)"
+      ? "rgba(21,94,239,0.3)"
       : "rgba(255,255,255,0.1)",
     transition: "all 0.25s ease",
     animation: count > 0 ? `${fadeSlideIn} 0.3s ease` : "none",
@@ -351,7 +351,7 @@ export default function AdminInvitationsPage() {
         {/* ── Thin accent stripe ── */}
         <Box sx={{
           height: 3,
-          background: "linear-gradient(90deg, #1e3a8a, #c9a84c, #1e3a8a)",
+          background: "linear-gradient(90deg, #1e3a8a, #155EEF, #1e3a8a)",
           backgroundSize: "300% 100%",
           animation: `${shimmer} 4s linear infinite`,
         }} />
@@ -371,8 +371,8 @@ export default function AdminInvitationsPage() {
             display: "flex", alignItems: "flex-start", gap: 1.5,
             px: 2, py: 1.75,
             borderRadius: 1,
-            bgcolor: "rgba(201,168,76,0.06)",
-            border: "1px solid rgba(201,168,76,0.18)",
+            bgcolor: "rgba(21,94,239,0.06)",
+            border: "1px solid rgba(21,94,239,0.18)",
           }}>
             <Box sx={{ color: "primary.main", mt: 0.15, flexShrink: 0, display: "flex" }}>
               <IconUsers />
@@ -440,8 +440,8 @@ export default function AdminInvitationsPage() {
               <Box sx={{
                 mt: 1.5, p: 1.5,
                 borderRadius: 1,
-                bgcolor: "rgba(201,168,76,0.06)",
-                border: "1px dashed rgba(201,168,76,0.28)",
+                bgcolor: "rgba(21,94,239,0.06)",
+                border: "1px dashed rgba(21,94,239,0.28)",
                 animation: `${fadeSlideIn} 0.3s ease`,
               }}>
                 <Typography variant="caption" sx={{
@@ -462,9 +462,9 @@ export default function AdminInvitationsPage() {
                       size="small"
                       sx={{
                         fontSize: 11, height: 22, borderRadius: 0.5,
-                        bgcolor: "rgba(201,168,76,0.10)",
-                        color: "#7a5f16",
-                        border: "1px solid rgba(201,168,76,0.28)",
+                        bgcolor: "rgba(21,94,239,0.10)",
+                        color: "#0f49c4",
+                        border: "1px solid rgba(21,94,239,0.28)",
                         fontFamily: "monospace",
                         "& .MuiChip-label": { px: 1 },
                       }}
@@ -493,7 +493,7 @@ export default function AdminInvitationsPage() {
                     <Chip key={d} label={`${d} • ${c}`} size="small" sx={{ fontSize:11, height:20, bgcolor:'rgba(30,58,138,0.08)', color:'#1e3a8a', border:'1px solid rgba(30,58,138,0.22)' }} />
                   ))}
                   <Box sx={{ flex:1, minWidth:160, height:8, borderRadius:999, bgcolor:'rgba(30,58,138,0.08)', position:'relative' }}>
-                    <Box sx={{ position:'absolute', inset:0, width:`${Math.min(100, Math.round((emails.length/maxHint)*100))}%`, background:'linear-gradient(90deg,#1e3a8a,#c9a84c)', borderRadius:999, transition:'width .25s' }} />
+                    <Box sx={{ position:'absolute', inset:0, width:`${Math.min(100, Math.round((emails.length/maxHint)*100))}%`, background:'linear-gradient(90deg,#1e3a8a,#155EEF)', borderRadius:999, transition:'width .25s' }} />
                   </Box>
                 </Box>
               </Box>
@@ -546,12 +546,12 @@ export default function AdminInvitationsPage() {
                   ? "linear-gradient(135deg, #1e3a8a 0%, #0f1f38 60%, #d1b769 100%)"
                   : undefined,
                 boxShadow: canSend
-                  ? "0 4px 20px rgba(30,58,138,0.35), 0 1px 4px rgba(201,168,76,0.25)"
+                  ? "0 4px 20px rgba(30,58,138,0.35), 0 1px 4px rgba(21,94,239,0.25)"
                   : "none",
                 transition: "all 0.25s ease",
                 "&:hover": canSend ? {
                   background: "linear-gradient(135deg, #1e40af 0%, #102a54 60%, #e0c979 100%)",
-                  boxShadow: "0 6px 24px rgba(30,58,138,0.45), 0 2px 6px rgba(201,168,76,0.35)",
+                  boxShadow: "0 6px 24px rgba(30,58,138,0.45), 0 2px 6px rgba(21,94,239,0.35)",
                   transform: "translateY(-1px)",
                 } : {},
                 "&:active": { transform: "translateY(0)" },

@@ -141,15 +141,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:wght@300;400;500&display=swap');
 
-        .cl-root { height:100vh; display:flex; flex-direction:column; background:#f5f0eb; font-family:'DM Sans',sans-serif; overflow:hidden; }
+        .cl-root { height:100vh; display:flex; flex-direction:column; background:#f1f5fc; font-family:'DM Sans',sans-serif; overflow:hidden; }
 
         /* ── Top bar ── */
         .cl-topbar { flex-shrink:0; background:#1e3a8a; z-index:50; display:flex; align-items:center; justify-content:space-between; padding:0 1.25rem; height:56px; box-shadow:0 2px 16px rgba(30,58,138,0.18); margin-left:260px; width:calc(100% - 260px); }
         @media (max-width:860px) { .cl-topbar { margin-left:0; width:100%; } }
         .cl-topbar-left { display:flex; align-items:center; gap:0.65rem; }
         .cl-topbar-logo { display:flex; align-items:center; gap:0.55rem; text-decoration:none; }
-        .cl-topbar-mark { width:30px; height:30px; border:1.5px solid #c9a84c; border-radius:7px; display:flex; align-items:center; justify-content:center; color:#c9a84c; }
-        .cl-topbar-name { font-family:'Cormorant Garamond',serif; font-size:1.1rem; font-weight:600; color:#f5f0eb; letter-spacing:0.02em; }
+        .cl-topbar-mark { width:30px; height:30px; border:1.5px solid #8fb4ff; border-radius:7px; display:flex; align-items:center; justify-content:center; color:#8fb4ff; }
+        .cl-topbar-name { font-family:'Cormorant Garamond',serif; font-size:1.1rem; font-weight:600; color:#f1f5fc; letter-spacing:0.02em; }
 
         /* Hamburger — mobile only */
         .cl-hamburger { background:rgba(255,255,255,0.1); border:none; border-radius:10px; padding:8px; cursor:pointer; display:none; align-items:center; justify-content:center; transition:background 0.15s; }
@@ -181,9 +181,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
         /* ── Profile section ── */
         .sb-profile-section { padding:1.25rem 1.25rem 1rem; border-bottom:1px solid rgba(255,255,255,0.06); background:linear-gradient(135deg,#1e3a8a 0%,#1e40af 100%); display:flex; align-items:center; gap:0.85rem; flex-shrink:0; }
-        .sb-profile-av-btn { width:48px; height:48px; border-radius:14px; background:rgba(201,168,76,0.15); border:2px solid rgba(201,168,76,0.5); display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-size:1.2rem; font-weight:700; color:#c9a84c; text-transform:uppercase; user-select:none; flex-shrink:0; }
-        .sb-profile-name { font-size:0.875rem; font-weight:600; color:#f5f0eb; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
-        .sb-profile-role { font-size:0.68rem; color:rgba(201,168,76,0.85); text-transform:capitalize; margin-top:2px; letter-spacing:0.06em; }
+        .sb-profile-av-btn { width:48px; height:48px; border-radius:14px; background:rgba(21,94,239,0.15); border:2px solid rgba(21,94,239,0.5); display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-size:1.2rem; font-weight:700; color:#8fb4ff; text-transform:uppercase; user-select:none; flex-shrink:0; }
+        .sb-profile-name { font-size:0.875rem; font-weight:600; color:#f1f5fc; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+        .sb-profile-role { font-size:0.68rem; color:rgba(21,94,239,0.85); text-transform:capitalize; margin-top:2px; letter-spacing:0.06em; }
 
         /* ── Token pill ── */
         .sb-token-pill { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:20px; padding:0 6px; border-radius:20px; font-size:0.7rem; font-weight:700; letter-spacing:0.02em; line-height:1; color:#fff; flex-shrink:0; }
@@ -207,13 +207,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         }
 
         /* ── Logout row ── */
-        .sb-logout-row { padding:0.75rem 1rem; border-top:1px solid #f0ebe4; margin-top:auto; flex-shrink:0; }
-        .sb-logout-btn { width:100%; display:flex; align-items:center; gap:0.65rem; padding:0.65rem 1rem; border-radius:10px; background:transparent; border:1.5px solid #e2d9d0; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:0.83rem; font-weight:500; color:#6b7585; transition:border-color 0.15s,background 0.15s,color 0.15s; }
+        .sb-logout-row { padding:0.75rem 1rem; border-top:1px solid #f1f5fc; margin-top:auto; flex-shrink:0; }
+        .sb-logout-btn { width:100%; display:flex; align-items:center; gap:0.65rem; padding:0.65rem 1rem; border-radius:10px; background:transparent; border:1.5px solid #dde5f0; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:0.83rem; font-weight:500; color:#6b7585; transition:border-color 0.15s,background 0.15s,color 0.15s; }
         .sb-logout-btn:hover { border-color:#1e40af; background:#dbeafe; color:#1e3a8a; }
 
         /* ── Search Zonal button (light tone) ── */
         .sb-search-row { padding:0.75rem 1rem 0; }
-        .sb-search-btn { width:100%; display:flex; align-items:center; gap:0.55rem; padding:0.6rem 0.9rem; border-radius:10px; border:1.5px solid #e8e0d8; background:#ffffff; color:#0f1f38; font-weight:700; cursor:pointer; }
+        .sb-search-btn { width:100%; display:flex; align-items:center; gap:0.55rem; padding:0.6rem 0.9rem; border-radius:10px; border:1.5px solid #e9eef8; background:#ffffff; color:#0f1f38; font-weight:700; cursor:pointer; }
         .sb-search-btn:hover { background:#fff8e6; border-color:#e6d7b0; }
 
         /* ── Main content ── */
@@ -241,10 +241,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         .notif-title { font-size:1.05rem; font-weight:700; color:#111; }
         .notif-mark-btn { font-size:0.75rem; font-weight:600; color:#e05c2d; background:none; border:none; cursor:pointer; padding:0; transition:opacity 0.15s; }
         .notif-mark-btn:hover { opacity:0.7; }
-        .notif-tabs { display:flex; gap:0; border-bottom:1.5px solid #f0ebe4; margin:0 -1.3rem; padding:0 1.3rem; }
+        .notif-tabs { display:flex; gap:0; border-bottom:1.5px solid #f1f5fc; margin:0 -1.3rem; padding:0 1.3rem; }
         .notif-tab-btn { padding:0.5rem 0; margin-right:1.2rem; font-size:0.82rem; font-weight:500; color:#9aa3b0; background:none; border:none; cursor:pointer; border-bottom:2.5px solid transparent; margin-bottom:-1.5px; display:flex; align-items:center; gap:0.4rem; transition:color 0.15s,border-color 0.15s; }
         .notif-tab-btn.active { color:#111; font-weight:600; border-bottom-color:#e05c2d; }
-        .notif-count-badge { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:17px; padding:0 5px; background:#f0ebe4; border-radius:20px; font-size:0.65rem; font-weight:700; color:#555; }
+        .notif-count-badge { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:17px; padding:0 5px; background:#f1f5fc; border-radius:20px; font-size:0.65rem; font-weight:700; color:#555; }
         .notif-tab-btn.active .notif-count-badge { background:#fde8df; color:#e05c2d; }
         .notif-list { padding:0.4rem 0; max-height:400px; overflow-y:auto; }
         .notif-item { display:flex; align-items:flex-start; gap:0.9rem; padding:0.9rem 1.3rem; position:relative; transition:background 0.12s; cursor:default; }
@@ -375,13 +375,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 function Kpi({ label, value, note, colSpan = 4, highlight }: { label: string; value: string; note?: string; colSpan?: number; highlight?: 'token' }) {
   return (
     <div style={{ gridColumn: `span ${colSpan} / span ${colSpan}` }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem', padding:'0.9rem 0.9rem', background:'#fff', border:'1px solid #e8e0d8', borderRadius:12, boxShadow:'0 2px 12px rgba(30,64,175,0.04)' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem', padding:'0.9rem 0.9rem', background:'#fff', border:'1px solid #e9eef8', borderRadius:12, boxShadow:'0 2px 12px rgba(30,64,175,0.04)' }}>
         <div>
           <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'.14em', color:'#1e3a8a' }}>{label}</div>
           <div style={{ marginTop:4, fontSize:22, fontWeight:700, color:'#0f1f38' }}>{value}</div>
           {note && <div style={{ marginTop:4, fontSize:12, color:'#6b7585' }}>{note}</div>}
         </div>
-        <span aria-hidden style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:24, height:24, borderRadius:999, border:'1px solid #e8e0d8', color: highlight==='token' ? '#c9a84c' : '#1e3a8a', fontWeight:800 }}>•</span>
+        <span aria-hidden style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:24, height:24, borderRadius:999, border:'1px solid #e9eef8', color: highlight==='token' ? '#155EEF' : '#1e3a8a', fontWeight:800 }}>•</span>
       </div>
     </div>
   );

@@ -37,7 +37,7 @@ const SUGGESTIONS = [
 ];
 
 const NAVY = "#1e3a8a";
-const GOLD = "#c9a84c";
+const GOLD = "#8fb4ff";
 
 export default function ZonalAssistant({
   domain,
@@ -452,7 +452,7 @@ export default function ZonalAssistant({
               height: min(620px, 85vh);
               border-radius: 26px;
               background: #ffffff;
-              border: 1px solid rgba(201, 168, 76, 0.5);
+              border: 1px solid rgba(21, 94, 239, 0.5);
               box-shadow: 0 24px 60px -12px rgba(15, 23, 60, 0.5),
                 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
               animation: za-rise 0.28s cubic-bezier(0.22, 1, 0.36, 1);
@@ -480,7 +480,7 @@ export default function ZonalAssistant({
             }
             .za-chip {
               border-radius: 14px;
-              border: 1.5px solid rgba(201, 168, 76, 0.55);
+              border: 1.5px solid rgba(21, 94, 239, 0.55);
               background: #fff;
               color: ${NAVY};
               padding: 9px 13px;
@@ -489,8 +489,8 @@ export default function ZonalAssistant({
             }
             .za-chip:hover {
               transform: translateY(-1px);
-              border-color: ${GOLD};
-              box-shadow: 0 6px 14px -6px rgba(201, 168, 76, 0.6);
+              border-color: #155EEF;
+              box-shadow: 0 6px 14px -6px rgba(21, 94, 239, 0.6);
             }
             .za-suggest {
               border-radius: 9999px;
@@ -678,7 +678,7 @@ function HazardCard({ hazard, showPlace }: { hazard: NonNullable<HazardData>; sh
   ];
   return (
     <div className="pl-11">
-      <div style={{ border: `1.5px solid ${GOLD}`, borderRadius: 14, background: "#fff", overflow: "hidden", boxShadow: "0 3px 12px rgba(15,23,60,0.08)" }}>
+      <div style={{ border: `1.5px solid #155EEF`, borderRadius: 14, background: "#fff", overflow: "hidden", boxShadow: "0 3px 12px rgba(15,23,60,0.08)" }}>
         <div style={{ background: NAVY, color: "#fff", padding: "7px 12px", fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", gap: 6 }}>
           <span>⚠️ Hazard check</span>
           {showPlace && hazard.place && (

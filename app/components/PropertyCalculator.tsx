@@ -91,11 +91,11 @@ export default function PropertyCalculator({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-3" onClick={onClose}>
-      <div className="w-full max-w-[440px] max-h-[90vh] overflow-auto rounded-2xl bg-white shadow-2xl border-2 border-[#c9a84c]" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-[440px] max-h-[90vh] overflow-auto rounded-2xl bg-white shadow-2xl border-2 border-[#155EEF]" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="px-4 py-3 flex items-center justify-between sticky top-0 z-10" style={{ background: "#1e3a8a" }}>
-          <div className="flex items-center gap-2 text-[#f5f0eb] font-bold text-sm">
-            <Calculator size={16} style={{ color: "#c9a84c" }} /> Cost Calculator
+          <div className="flex items-center gap-2 text-white font-bold text-sm">
+            <Calculator size={16} style={{ color: "#8fb4ff" }} /> Cost Calculator
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-white/60 hover:text-white transition" title="Close"><X size={16} /></button>
         </div>
@@ -138,12 +138,12 @@ export default function PropertyCalculator({
 
           {/* AT-A-GLANCE summary */}
           <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl p-3 text-center" style={{ background: "#f5f0eb", border: "1px solid #e8e0d8" }}>
-              <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: "#9a7a20" }}>Taxes &amp; Fees</div>
+            <div className="rounded-xl p-3 text-center" style={{ background: "#f1f5fc", border: "1px solid #dde5f0" }}>
+              <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: "#0f49c4" }}>Taxes &amp; Fees</div>
               <div className="text-base font-black" style={{ color: "#1e3a8a" }}>{fmtPeso(totalFees)}</div>
             </div>
-            <div className="rounded-xl p-3 text-center" style={{ background: "#f5f0eb", border: "1px solid #e8e0d8" }}>
-              <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: "#9a7a20" }}>Monthly ({downPct}% down)</div>
+            <div className="rounded-xl p-3 text-center" style={{ background: "#f1f5fc", border: "1px solid #dde5f0" }}>
+              <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: "#0f49c4" }}>Monthly ({downPct}% down)</div>
               <div className="text-base font-black" style={{ color: "#1e3a8a" }}>{fmtPeso(monthly)}</div>
             </div>
           </div>
@@ -219,15 +219,15 @@ export default function PropertyCalculator({
             </div>
 
             <div className="mt-3 rounded-xl p-3 text-center text-white" style={{ background: "linear-gradient(135deg,#1e3a8a,#1e40af)" }}>
-              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#c9a84c" }}>Estimated Monthly Payment</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#8fb4ff" }}>Estimated Monthly Payment</div>
               <div className="text-2xl font-black">{fmtPeso(monthly)}</div>
               <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.7)" }}>{fmtPeso(principal)} loan · {termYears} yrs · {fmtPeso(totalInterest)} total interest</div>
             </div>
           </div>
 
           {/* ── CASH NEEDED ── */}
-          <div className="rounded-xl p-3" style={{ background: "#f5f0eb", border: "1px solid #e8e0d8" }}>
-            <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "#9a7a20" }}>Cash a buyer needs upfront</div>
+          <div className="rounded-xl p-3" style={{ background: "#f1f5fc", border: "1px solid #dde5f0" }}>
+            <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "#0f49c4" }}>Cash a buyer needs upfront</div>
             <div className="flex items-center justify-between text-[12px]">
               <span className="text-gray-600">If financed ({downPct}% down + buyer fees)</span>
               <span className="font-black" style={{ color: "#1e3a8a" }}>{fmtPeso(cashIfFinanced)}</span>
@@ -265,7 +265,7 @@ function Row({ label, sub, value, toggle }: { label: string; sub: string; value:
 function Mini({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div className="rounded-lg px-2 py-1.5" style={highlight ? { background: "#1e3a8a" } : { background: "#f1f0ec" }}>
-      <div className="text-[8px] font-bold uppercase tracking-wide" style={{ color: highlight ? "#c9a84c" : "#9ca3af" }}>{label}</div>
+      <div className="text-[8px] font-bold uppercase tracking-wide" style={{ color: highlight ? "#8fb4ff" : "#9ca3af" }}>{label}</div>
       <div className="text-[12px] font-black" style={{ color: highlight ? "#fff" : "#1e3a8a" }}>{value}</div>
     </div>
   );

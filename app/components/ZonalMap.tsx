@@ -436,7 +436,7 @@ export default function ZonalMap({
       const verts = drawVerticesRef.current;
       if (verts.length >= 2) {
         drawPolygonRef.current = leaflet.polygon(verts, {
-          color: "#1e3a8a", weight: 2, fillColor: "#c9a84c", fillOpacity: 0.25,
+          color: "#1e3a8a", weight: 2, fillColor: "#155EEF", fillOpacity: 0.25,
         }).addTo(map);
       }
       verts.forEach((v, i) => {

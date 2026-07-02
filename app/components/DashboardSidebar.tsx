@@ -44,7 +44,7 @@ export default function DashboardSidebar({ title, links }: { title: string; link
           display: flex;
           flex-direction: column;
           background: #fff;
-          border-right: 1px solid #ede8e0;
+          border-right: 1px solid #e9eef8;
           font-family: 'DM Sans', sans-serif;
           overflow: hidden;
         }
@@ -53,7 +53,7 @@ export default function DashboardSidebar({ title, links }: { title: string; link
         .dsb-user {
           flex-shrink: 0;
           padding: 1.6rem 1.25rem 1.3rem;
-          border-bottom: 1px solid #f0ebe4;
+          border-bottom: 1px solid #f1f5fc;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -70,7 +70,7 @@ export default function DashboardSidebar({ title, links }: { title: string; link
           height: 86px;
           border-radius: 50%;
           overflow: hidden;
-          border: 2.5px solid rgba(201,168,76,0.6);
+          border: 2.5px solid rgba(21,94,239,0.6);
           box-shadow: 0 4px 14px rgba(15,31,56,0.12);
         }
         .dsb-avatar-online {
@@ -107,9 +107,9 @@ export default function DashboardSidebar({ title, links }: { title: string; link
           display: inline-flex;
           align-items: center;
           padding: 0.2rem 0.65rem;
-          border: 1px solid rgba(201,168,76,0.3);
-          background: rgba(201,168,76,0.07);
-          color: #8a6d15;
+          border: 1px solid rgba(21,94,239,0.3);
+          background: rgba(21,94,239,0.07);
+          color: #0f49c4;
           border-radius: 50px;
           font-size: 0.65rem;
           font-weight: 700;
@@ -127,7 +127,7 @@ export default function DashboardSidebar({ title, links }: { title: string; link
           gap: 0.1rem;
         }
         .dsb-nav::-webkit-scrollbar { width: 4px; }
-        .dsb-nav::-webkit-scrollbar-thumb { background: #ede8e0; border-radius: 999px; }
+        .dsb-nav::-webkit-scrollbar-thumb { background: #e9eef8; border-radius: 999px; }
         .dsb-nav::-webkit-scrollbar-track { background: transparent; }
 
         .dsb-sec {
@@ -166,16 +166,16 @@ export default function DashboardSidebar({ title, links }: { title: string; link
           transition: background 0.13s;
         }
         .dsb-link:hover {
-          background: #f9f7f4;
+          background: #f1f5fc;
           color: #0f1f38;
         }
         .dsb-link.active {
-          background: #fdf8f0;
+          background: #f1f5fc;
           color: #0f1f38;
           font-weight: 600;
         }
         .dsb-link.active::before {
-          background: #c9a84c;
+          background: #155EEF;
         }
         .dsb-link.disabled {
           opacity: 0.4;
@@ -194,7 +194,7 @@ export default function DashboardSidebar({ title, links }: { title: string; link
           transition: color 0.13s;
         }
         .dsb-link:hover .dsb-icon { color: #4a5568; }
-        .dsb-link.active .dsb-icon { color: #c9a84c; }
+        .dsb-link.active .dsb-icon { color: #155EEF; }
 
         .dsb-label {
           flex: 1;

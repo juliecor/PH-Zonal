@@ -85,42 +85,42 @@ export default function ReportsPage() {
         .crpt-filters { display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; }
         .fi-wrap { position:relative; display:flex; align-items:center; }
         .fi-icon { position:absolute; left:0.7rem; color:#9aa3b0; pointer-events:none; display:flex; align-items:center; }
-        .fi-input { background:#fff; border:1.5px solid #e2d9d0; border-radius:9px; padding:0.52rem 0.8rem 0.52rem 2.1rem; font-size:0.82rem; font-family:'DM Sans',sans-serif; color:#1e3a8a; outline:none; transition:border-color 0.16s,box-shadow 0.16s; width:130px; }
+        .fi-input { background:#fff; border:1.5px solid #dde5f0; border-radius:9px; padding:0.52rem 0.8rem 0.52rem 2.1rem; font-size:0.82rem; font-family:'DM Sans',sans-serif; color:#1e3a8a; outline:none; transition:border-color 0.16s,box-shadow 0.16s; width:130px; }
         .fi-input.wide { width:160px; }
         .fi-input::placeholder { color:#bbb5ae; }
-        .fi-input:focus { border-color:#c9a84c; box-shadow:0 0 0 3px rgba(201,168,76,0.1); }
+        .fi-input:focus { border-color:#155EEF; box-shadow:0 0 0 3px rgba(21,94,239,0.1); }
         .fi-input[type="date"] { padding-left:2.1rem; color-scheme:light; }
-        .fi-select { background:#fff; border:1.5px solid #e2d9d0; border-radius:9px; padding:0.52rem 0.75rem; font-size:0.82rem; font-family:'DM Sans',sans-serif; color:#1e3a8a; outline:none; cursor:pointer; transition:border-color 0.16s; }
-        .fi-select:focus { border-color:#c9a84c; }
+        .fi-select { background:#fff; border:1.5px solid #dde5f0; border-radius:9px; padding:0.52rem 0.75rem; font-size:0.82rem; font-family:'DM Sans',sans-serif; color:#1e3a8a; outline:none; cursor:pointer; transition:border-color 0.16s; }
+        .fi-select:focus { border-color:#155EEF; }
 
-        .btn-apply { display:flex; align-items:center; gap:0.4rem; background:#1e3a8a; color:#f5f0eb; border:none; border-radius:9px; padding:0.52rem 1rem; font-size:0.82rem; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; transition:background 0.18s,transform 0.13s,box-shadow 0.18s; box-shadow:0 2px 10px rgba(30,58,138,0.16); white-space:nowrap; }
+        .btn-apply { display:flex; align-items:center; gap:0.4rem; background:#1e3a8a; color:#f1f5fc; border:none; border-radius:9px; padding:0.52rem 1rem; font-size:0.82rem; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; transition:background 0.18s,transform 0.13s,box-shadow 0.18s; box-shadow:0 2px 10px rgba(30,58,138,0.16); white-space:nowrap; }
         .btn-apply:hover { background:#1e40af; transform:translateY(-1px); box-shadow:0 4px 14px rgba(30,58,138,0.22); }
 
-        .btn-csv { display:flex; align-items:center; gap:0.4rem; background:#fff; color:#1e3a8a; border:1.5px solid #e2d9d0; border-radius:9px; padding:0.52rem 1rem; font-size:0.82rem; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; transition:border-color 0.18s,background 0.18s,transform 0.13s; white-space:nowrap; }
+        .btn-csv { display:flex; align-items:center; gap:0.4rem; background:#fff; color:#1e3a8a; border:1.5px solid #dde5f0; border-radius:9px; padding:0.52rem 1rem; font-size:0.82rem; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; transition:border-color 0.18s,background 0.18s,transform 0.13s; white-space:nowrap; }
         .btn-csv:hover:not(:disabled) { border-color:#10b981; color:#065f46; background:#f0fdf4; transform:translateY(-1px); }
         .btn-csv:disabled { opacity:0.5; cursor:not-allowed; }
         .btn-csv-spinner { width:12px; height:12px; border:2px solid rgba(30,58,138,0.2); border-top-color:#1e3a8a; border-radius:50%; animation:csvSpin 0.7s linear infinite; }
         @keyframes csvSpin { to{transform:rotate(360deg)} }
 
-        .crpt-card { background:#fff; border-radius:14px; border:1px solid #e8e0d8; box-shadow:0 2px 14px rgba(30,58,138,0.05); overflow:hidden; position:relative; }
-        .crpt-loading-bar { position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#c9a84c 0%,#e8c96c 50%,#c9a84c 100%); background-size:200% 100%; animation:slideBar 1.2s linear infinite; z-index:10; }
+        .crpt-card { background:#fff; border-radius:14px; border:1px solid #e9eef8; box-shadow:0 2px 14px rgba(30,58,138,0.05); overflow:hidden; position:relative; }
+        .crpt-loading-bar { position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#155EEF 0%,#e8c96c 50%,#155EEF 100%); background-size:200% 100%; animation:slideBar 1.2s linear infinite; z-index:10; }
         @keyframes slideBar { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
         .crpt-error { display:flex; align-items:center; gap:0.5rem; padding:1rem 1.25rem; background:#fff3f3; border:1px solid #f5c6c6; border-radius:10px; font-size:0.85rem; color:#c0392b; }
         .crpt-table-wrap { overflow-x:auto; }
         .crpt-table { width:100%; min-width:640px; border-collapse:collapse; font-size:0.825rem; }
-        .crpt-table thead tr { background:#f9f6f2; border-bottom:1.5px solid #e8e0d8; }
+        .crpt-table thead tr { background:#f1f5fc; border-bottom:1.5px solid #e9eef8; }
         .crpt-table th { padding:0.8rem 1rem; text-align:left; font-size:0.68rem; font-weight:500; letter-spacing:0.1em; text-transform:uppercase; color:#6b7585; white-space:nowrap; }
         .crpt-table th.align-right { text-align:right; }
-        .crpt-table tbody tr { border-bottom:1px solid #f0ebe4; transition:background 0.12s; }
+        .crpt-table tbody tr { border-bottom:1px solid #f1f5fc; transition:background 0.12s; }
         .crpt-table tbody tr:last-child { border-bottom:none; }
-        .crpt-table tbody tr:hover { background:#faf7f4; }
+        .crpt-table tbody tr:hover { background:#f1f5fc; }
         .crpt-table td { padding:0.85rem 1rem; color:#2d3748; vertical-align:middle; }
         .crpt-table td.muted { color:#aaa; }
         .crpt-table td.align-right { text-align:right; }
 
         .skel-td { padding:0.85rem 1rem; }
-        .skel-bar { background:linear-gradient(90deg,#f5f0eb 25%,#ede5da 50%,#f5f0eb 75%); background-size:200% 100%; animation:shimmer 1.4s infinite; border-radius:5px; height:11px; }
+        .skel-bar { background:linear-gradient(90deg,#f1f5fc 25%,#e9eef8 50%,#f1f5fc 75%); background-size:200% 100%; animation:shimmer 1.4s infinite; border-radius:5px; height:11px; }
         @keyframes shimmer { to{background-position:-200% 0} }
 
         .zonal-badge { display:inline-block; padding:0.2rem 0.6rem; background:rgba(30,58,138,0.06); border:1px solid rgba(30,58,138,0.1); border-radius:6px; font-size:0.8rem; font-weight:500; color:#1e3a8a; }
@@ -133,10 +133,10 @@ export default function ReportsPage() {
         .pag-info { font-size:0.78rem; color:#9aa3b0; font-weight:300; }
         .pag-info strong { color:#1e3a8a; font-weight:500; }
         .pag-controls { display:flex; align-items:center; gap:0.4rem; }
-        .pag-btn { display:flex; align-items:center; gap:0.3rem; padding:0.45rem 0.85rem; background:#fff; border:1.5px solid #e2d9d0; border-radius:8px; font-size:0.78rem; font-family:'DM Sans',sans-serif; font-weight:500; color:#1e3a8a; cursor:pointer; transition:border-color 0.15s,background 0.15s,transform 0.12s; }
-        .pag-btn:hover:not(:disabled) { border-color:#c9a84c; background:#fdf9f3; transform:translateY(-1px); }
+        .pag-btn { display:flex; align-items:center; gap:0.3rem; padding:0.45rem 0.85rem; background:#fff; border:1.5px solid #dde5f0; border-radius:8px; font-size:0.78rem; font-family:'DM Sans',sans-serif; font-weight:500; color:#1e3a8a; cursor:pointer; transition:border-color 0.15s,background 0.15s,transform 0.12s; }
+        .pag-btn:hover:not(:disabled) { border-color:#155EEF; background:#f1f5fc; transform:translateY(-1px); }
         .pag-btn:disabled { opacity:0.4; cursor:not-allowed; }
-        .pag-current { padding:0.45rem 0.75rem; background:#1e3a8a; color:#f5f0eb; border-radius:8px; font-size:0.78rem; font-weight:500; min-width:36px; text-align:center; }
+        .pag-current { padding:0.45rem 0.75rem; background:#1e3a8a; color:#f1f5fc; border-radius:8px; font-size:0.78rem; font-weight:500; min-width:36px; text-align:center; }
       `}</style>
 
       <div className="crpt-wrap">

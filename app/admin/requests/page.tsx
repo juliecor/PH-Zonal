@@ -118,7 +118,7 @@ export default function AdminRequestsPage() {
           font-weight: 500;
           letter-spacing: 0.14em;
           text-transform: uppercase;
-          color: #c9a84c;
+          color: #155EEF;
           margin-bottom: 0.2rem;
         }
         .req-title {
@@ -133,19 +133,19 @@ export default function AdminRequestsPage() {
           align-items: center;
           gap: 0.4rem;
           padding: 0.35rem 0.8rem;
-          background: rgba(201,168,76,0.12);
-          border: 1px solid rgba(201,168,76,0.3);
+          background: rgba(21,94,239,0.12);
+          border: 1px solid rgba(21,94,239,0.3);
           border-radius: 20px;
           font-size: 0.75rem;
           font-weight: 500;
-          color: #c9a84c;
+          color: #155EEF;
           white-space: nowrap;
           align-self: center;
         }
         .req-count-dot {
           width: 6px; height: 6px;
           border-radius: 50%;
-          background: #c9a84c;
+          background: #155EEF;
           animation: pulse 1.8s ease-in-out infinite;
         }
         @keyframes pulse {
@@ -157,7 +157,7 @@ export default function AdminRequestsPage() {
         .req-list-card {
           background: #fff;
           border-radius: 14px;
-          border: 1px solid #e8e0d8;
+          border: 1px solid #dde5f0;
           box-shadow: 0 2px 14px rgba(15,31,56,0.05);
           overflow: hidden;
         }
@@ -165,7 +165,7 @@ export default function AdminRequestsPage() {
         /* ── Skeleton ── */
         .skel-item {
           padding: 1.25rem 1.5rem;
-          border-bottom: 1px solid #f0ebe4;
+          border-bottom: 1px solid #f1f5fc;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -173,7 +173,7 @@ export default function AdminRequestsPage() {
         }
         .skel-left { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
         .skel-bar {
-          background: linear-gradient(90deg, #f5f0eb 25%, #ede5da 50%, #f5f0eb 75%);
+          background: linear-gradient(90deg, #f1f5fc 25%, #e9eef8 50%, #f1f5fc 75%);
           background-size: 200% 100%;
           animation: shimmer 1.4s infinite;
           border-radius: 5px;
@@ -182,7 +182,7 @@ export default function AdminRequestsPage() {
         .skel-btns { display: flex; gap: 0.5rem; }
         .skel-btn {
           width: 72px; height: 32px;
-          background: linear-gradient(90deg, #f5f0eb 25%, #ede5da 50%, #f5f0eb 75%);
+          background: linear-gradient(90deg, #f1f5fc 25%, #e9eef8 50%, #f1f5fc 75%);
           background-size: 200% 100%;
           animation: shimmer 1.4s infinite;
           border-radius: 8px;
@@ -209,11 +209,11 @@ export default function AdminRequestsPage() {
           justify-content: space-between;
           gap: 1.25rem;
           padding: 1.25rem 1.5rem;
-          border-bottom: 1px solid #f0ebe4;
+          border-bottom: 1px solid #f1f5fc;
           transition: background 0.14s;
         }
         .req-item:last-child { border-bottom: none; }
-        .req-item:hover { background: #faf7f4; }
+        .req-item:hover { background: #f1f5fc; }
 
         /* Left content */
         .req-item-left { display: flex; align-items: flex-start; gap: 0.9rem; flex: 1; min-width: 0; }
@@ -221,14 +221,14 @@ export default function AdminRequestsPage() {
         .req-avatar {
           width: 40px; height: 40px;
           border-radius: 10px;
-          background: rgba(201,168,76,0.12);
-          border: 1.5px solid rgba(201,168,76,0.3);
+          background: rgba(21,94,239,0.12);
+          border: 1.5px solid rgba(21,94,239,0.3);
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
           font-family: 'Cormorant Garamond', serif;
           font-size: 1rem;
           font-weight: 700;
-          color: #c9a84c;
+          color: #155EEF;
           text-transform: uppercase;
         }
 
@@ -262,7 +262,7 @@ export default function AdminRequestsPage() {
           gap: 0.3rem;
           padding: 0.18rem 0.6rem;
           background: #0f1f38;
-          color: #f5f0eb;
+          color: #f1f5fc;
           border-radius: 6px;
           font-size: 0.72rem;
           font-weight: 500;
@@ -275,8 +275,8 @@ export default function AdminRequestsPage() {
         .req-message {
           margin-top: 0.5rem;
           padding: 0.45rem 0.7rem;
-          background: #f9f6f2;
-          border-left: 2px solid #c9a84c;
+          background: #f1f5fc;
+          border-left: 2px solid #155EEF;
           border-radius: 0 6px 6px 0;
           font-size: 0.78rem;
           color: #6b7585;
@@ -310,7 +310,7 @@ export default function AdminRequestsPage() {
         }
         .btn-approve {
           background: #0f1f38;
-          color: #f5f0eb;
+          color: #f1f5fc;
           box-shadow: 0 2px 8px rgba(15,31,56,0.18);
         }
         .btn-approve:hover:not(:disabled) {
@@ -376,7 +376,7 @@ export default function AdminRequestsPage() {
                 placeholder="Search name or email…"
                 className="filter-input"
                 ref={searchRef}
-                style={{ paddingLeft: '2.1rem', border: '1.5px solid #e2d9d0', borderRadius: 9, height: 34, fontSize: 13 }}
+                style={{ paddingLeft: '2.1rem', border: '1.5px solid #dde5f0', borderRadius: 9, height: 34, fontSize: 13 }}
               />
             </div>
             {!loading && !err && (
@@ -495,13 +495,13 @@ export default function AdminRequestsPage() {
 function Kpi({ label, value, note, colSpan = 4 }: { label: string; value: string; note?: string; colSpan?: number }) {
   return (
     <div style={{ gridColumn: `span ${colSpan} / span ${colSpan}` }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem', padding:'0.9rem 0.9rem', background:'#fff', border:'1px solid #e8e0d8', borderRadius:12 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem', padding:'0.9rem 0.9rem', background:'#fff', border:'1px solid #dde5f0', borderRadius:12 }}>
         <div>
           <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'.14em', color:'#1e3a8a' }}>{label}</div>
           <div style={{ marginTop:4, fontSize:22, fontWeight:700, color:'#0f1f38' }}>{value}</div>
           {note && <div style={{ marginTop:4, fontSize:12, color:'#6b7585' }}>{note}</div>}
         </div>
-        <span aria-hidden style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:24, height:24, borderRadius:999, border:'1px solid #e8e0d8', color:'#c9a84c', fontWeight:800 }}>•</span>
+        <span aria-hidden style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:24, height:24, borderRadius:999, border:'1px solid #dde5f0', color:'#155EEF', fontWeight:800 }}>•</span>
       </div>
     </div>
   );

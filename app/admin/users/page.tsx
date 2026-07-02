@@ -174,7 +174,7 @@ export default function AdminUsersPage() {
           font-weight: 600;
           letter-spacing: 0.16em;
           text-transform: uppercase;
-          color: #c9a84c;
+          color: #155EEF;
           margin-bottom: 0.4rem;
         }
         .usr-eyebrow::before {
@@ -182,7 +182,7 @@ export default function AdminUsersPage() {
           display: inline-block;
           width: 18px;
           height: 2px;
-          background: #c9a84c;
+          background: #155EEF;
           border-radius: 2px;
         }
         .usr-title {
@@ -201,12 +201,12 @@ export default function AdminUsersPage() {
           display: inline-flex;
           align-items: center;
           padding: 0.45rem 1.1rem;
-          background: rgba(201,168,76,0.08);
-          border: 1px solid rgba(201,168,76,0.25);
+          background: rgba(21,94,239,0.08);
+          border: 1px solid rgba(21,94,239,0.25);
           border-radius: 50px;
           font-size: 0.8rem;
           font-weight: 600;
-          color: #8a6d15;
+          color: #0f49c4;
           white-space: nowrap;
         }
 
@@ -238,7 +238,7 @@ export default function AdminUsersPage() {
           width: 100%;
           box-sizing: border-box;
           background: #fff;
-          border: 1.5px solid #e2d9d0;
+          border: 1.5px solid #dde5f0;
           border-radius: 50px;
           padding: 0.62rem 1rem 0.62rem 2.5rem;
           font-size: 0.83rem;
@@ -248,17 +248,17 @@ export default function AdminUsersPage() {
           box-shadow: 0 1px 4px rgba(15,31,56,0.06);
           transition: border-color 0.16s, box-shadow 0.16s;
         }
-        .filter-input::placeholder { color: #c0b8b0; }
+        .filter-input::placeholder { color: #dde5f0; }
         .filter-input:focus {
-          border-color: #c9a84c;
-          box-shadow: 0 0 0 3px rgba(201,168,76,0.12), 0 1px 4px rgba(15,31,56,0.06);
+          border-color: #155EEF;
+          box-shadow: 0 0 0 3px rgba(21,94,239,0.12), 0 1px 4px rgba(15,31,56,0.06);
         }
 
         .toolbar-right { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
         .toolbar-label { font-size: 0.75rem; color: #9aa3b0; }
         .filter-select {
           background: #fff;
-          border: 1.5px solid #e2d9d0;
+          border: 1.5px solid #dde5f0;
           border-radius: 10px;
           padding: 0.58rem 0.8rem;
           font-size: 0.83rem;
@@ -269,13 +269,13 @@ export default function AdminUsersPage() {
           box-shadow: 0 1px 4px rgba(15,31,56,0.06);
           transition: border-color 0.16s;
         }
-        .filter-select:focus { border-color: #c9a84c; }
+        .filter-select:focus { border-color: #155EEF; }
         .btn-refresh {
           display: flex;
           align-items: center;
           gap: 0.4rem;
           background: #fff;
-          border: 1.5px solid #e2d9d0;
+          border: 1.5px solid #dde5f0;
           border-radius: 10px;
           padding: 0.58rem 1rem;
           font-size: 0.83rem;
@@ -287,17 +287,17 @@ export default function AdminUsersPage() {
           transition: all 0.15s;
         }
         .btn-refresh:hover {
-          border-color: #c9a84c;
-          background: #fffbf2;
+          border-color: #155EEF;
+          background: #f1f5fc;
           transform: translateY(-1px);
-          box-shadow: 0 3px 10px rgba(201,168,76,0.15);
+          box-shadow: 0 3px 10px rgba(21,94,239,0.15);
         }
 
         /* ── Card ── */
         .usr-card {
           background: #fff;
           border-radius: 16px;
-          border: 1px solid #eae2d9;
+          border: 1px solid #dde5f0;
           box-shadow: 0 2px 12px rgba(15,31,56,0.06), 0 4px 24px rgba(15,31,56,0.04);
           overflow: hidden;
         }
@@ -307,11 +307,11 @@ export default function AdminUsersPage() {
           display: flex;
           gap: 1rem;
           padding: 1.1rem 1.5rem;
-          border-bottom: 1px solid #f5f0eb;
+          border-bottom: 1px solid #f1f5fc;
           align-items: center;
         }
         .skel-bar {
-          background: linear-gradient(90deg, #f5f0eb 25%, #ede8e0 50%, #f5f0eb 75%);
+          background: linear-gradient(90deg, #f1f5fc 25%, #e9eef8 50%, #f1f5fc 75%);
           background-size: 200% 100%;
           animation: shimmer 1.4s infinite;
           border-radius: 6px;
@@ -342,7 +342,7 @@ export default function AdminUsersPage() {
           font-size: 0.835rem;
         }
         .usr-table thead tr {
-          border-bottom: 1.5px solid #f0ebe4;
+          border-bottom: 1.5px solid #f1f5fc;
         }
         .usr-table th {
           padding: 0.9rem 1.4rem;
@@ -352,16 +352,16 @@ export default function AdminUsersPage() {
           letter-spacing: 0.1em;
           text-transform: uppercase;
           color: #9aa3b0;
-          background: #faf8f5;
+          background: #f1f5fc;
           white-space: nowrap;
         }
         .usr-table th.align-right { text-align: right; }
         .usr-table tbody tr {
-          border-bottom: 1px solid #f5f0eb;
+          border-bottom: 1px solid #f1f5fc;
           transition: background 0.12s;
         }
         .usr-table tbody tr:last-child { border-bottom: none; }
-        .usr-table tbody tr:hover { background: #faf7f3; }
+        .usr-table tbody tr:hover { background: #f1f5fc; }
         .usr-table td {
           padding: 0.9rem 1.4rem;
           color: #374151;
@@ -429,10 +429,10 @@ export default function AdminUsersPage() {
           align-items: center;
           gap: 0.3rem;
           padding: 0.28rem 0.7rem;
-          background: rgba(201,168,76,0.08);
-          border: 1px solid rgba(201,168,76,0.22);
+          background: rgba(21,94,239,0.08);
+          border: 1px solid rgba(21,94,239,0.22);
           border-radius: 50px;
-          color: #8a6d15;
+          color: #0f49c4;
           font-weight: 600;
           font-size: 0.82rem;
           font-variant-numeric: tabular-nums;
@@ -442,8 +442,8 @@ export default function AdminUsersPage() {
         .topup-cell { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }
         .topup-input {
           width: 78px;
-          background: #faf8f5;
-          border: 1.5px solid #e2d9d0;
+          background: #f1f5fc;
+          border: 1.5px solid #dde5f0;
           border-radius: 10px;
           padding: 0.46rem 0.65rem;
           font-size: 0.82rem;
@@ -454,16 +454,16 @@ export default function AdminUsersPage() {
           transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
         }
         .topup-input:focus {
-          border-color: #c9a84c;
+          border-color: #155EEF;
           background: #fff;
-          box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
+          box-shadow: 0 0 0 3px rgba(21,94,239,0.1);
         }
         .btn-add {
           display: flex;
           align-items: center;
           gap: 0.3rem;
           background: #0f1f38;
-          color: #f5f0eb;
+          color: #f1f5fc;
           border: none;
           border-radius: 10px;
           padding: 0.46rem 0.95rem;
@@ -491,11 +491,11 @@ export default function AdminUsersPage() {
           width: 48px;
           height: 48px;
           border-radius: 14px;
-          background: #f5f0eb;
+          background: #f1f5fc;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          color: #c0b8b0;
+          color: #dde5f0;
           margin-bottom: 0.85rem;
         }
         .usr-empty-title { font-size: 0.9rem; font-weight: 600; color: #6b7585; margin-bottom: 0.25rem; }
@@ -516,7 +516,7 @@ export default function AdminUsersPage() {
           display: flex; align-items: center; gap: 0.3rem;
           padding: 0.5rem 0.95rem;
           background: #fff;
-          border: 1.5px solid #e2d9d0;
+          border: 1.5px solid #dde5f0;
           border-radius: 10px;
           font-size: 0.78rem;
           font-family: 'DM Sans', sans-serif;
@@ -527,15 +527,15 @@ export default function AdminUsersPage() {
           transition: all 0.15s;
         }
         .pag-btn:hover:not(:disabled) {
-          border-color: #c9a84c;
-          background: #fffbf2;
+          border-color: #155EEF;
+          background: #f1f5fc;
           transform: translateY(-1px);
         }
         .pag-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
         .pag-current {
           padding: 0.5rem 0.9rem;
           background: #0f1f38;
-          color: #f5f0eb;
+          color: #f1f5fc;
           border-radius: 10px;
           font-size: 0.78rem;
           font-weight: 600;
@@ -544,7 +544,7 @@ export default function AdminUsersPage() {
           letter-spacing: 0.04em;
         }
 
-        .usr-row-highlight { box-shadow: inset 0 0 0 9999px rgba(201,168,76,0.1); transition: box-shadow 1.8s ease; }
+        .usr-row-highlight { box-shadow: inset 0 0 0 9999px rgba(21,94,239,0.1); transition: box-shadow 1.8s ease; }
       `}</style>
 
       <div className="usr-wrap">

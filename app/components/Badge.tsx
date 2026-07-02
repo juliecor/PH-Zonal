@@ -11,8 +11,8 @@ type Props = React.PropsWithChildren<{
 }>;
 
 const toneStyles: Record<Tone, { bg: string; border: string; color: string }> = {
-  neutral: { bg: "#f5f0eb", border: "#e8e0d8", color: "#374151" },
-  gold: { bg: "rgba(201,168,76,0.12)", border: "rgba(201,168,76,0.35)", color: "#7a5f16" },
+  neutral: { bg: "#f1f5fc", border: "#e9eef8", color: "#374151" },
+  gold: { bg: "rgba(21,94,239,0.12)", border: "rgba(21,94,239,0.35)", color: "#0f49c4" },
   navy: { bg: "#dbeafe", border: "#bfdbfe", color: "#1e3a8a" },
   success: { bg: "#dcfce7", border: "#86efac", color: "#065f46" },
   warning: { bg: "#fef3c7", border: "#fde68a", color: "#92400e" },

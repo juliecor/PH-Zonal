@@ -771,7 +771,7 @@ export default function GMap({
           paths: [],
           strokeColor: "#1e3a8a",
           strokeWeight: 2,
-          fillColor: "#c9a84c",
+          fillColor: "#155EEF",
           fillOpacity: 0.25,
           editable: true,
           clickable: false,

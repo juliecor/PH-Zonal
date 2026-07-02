@@ -93,7 +93,7 @@ export default function ClientConcernsPage() {
           font-weight: 600; 
           letter-spacing: 0.16em;
           text-transform: uppercase;
-          color: #c9a84c;
+          color: #155EEF;
           margin-bottom: 0.4rem;
         }
         .cc-eyebrow::before {
@@ -101,7 +101,7 @@ export default function ClientConcernsPage() {
           display: inline-block;
           width: 18px;
           height: 2px;
-          background: #c9a84c;
+          background: #155EEF;
           border-radius: 2px;
         }
         .cc-title {
@@ -127,7 +127,7 @@ export default function ClientConcernsPage() {
         }
         .cc-card-header {
           padding: 1.2rem 1.5rem;
-          border-bottom: 1px solid #f0ebe4;
+          border-bottom: 1px solid #f1f5fc;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -168,14 +168,14 @@ export default function ClientConcernsPage() {
           letter-spacing: 0.03em;
         }
         .cc-label-req {
-          color: #c9a84c;
+          color: #155EEF;
           margin-left: 2px;
         }
         .cc-input, .cc-select, .cc-textarea {
           width: 100%;
           box-sizing: border-box;
-          background: #faf8f5;
-          border: 1.5px solid #e2d9d0;
+          background: #f1f5fc;
+          border: 1.5px solid #dde5f0;
           border-radius: 10px;
           padding: 0.65rem 0.9rem;
           font-size: 0.84rem;
@@ -184,11 +184,11 @@ export default function ClientConcernsPage() {
           outline: none;
           transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
         }
-        .cc-input::placeholder, .cc-textarea::placeholder { color: #c0b8b0; }
+        .cc-input::placeholder, .cc-textarea::placeholder { color: #dde5f0; }
         .cc-input:focus, .cc-select:focus, .cc-textarea:focus {
-          border-color: #c9a84c;
+          border-color: #155EEF;
           background: #fff;
-          box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
+          box-shadow: 0 0 0 3px rgba(21,94,239,0.1);
         }
         .cc-select { cursor: pointer; }
         .cc-textarea {
@@ -210,7 +210,7 @@ export default function ClientConcernsPage() {
           gap: 0.4rem;
           padding: 0.55rem 1rem;
           background: #fff;
-          border: 1.5px solid #e2d9d0;
+          border: 1.5px solid #dde5f0;
           border-radius: 10px;
           font-size: 0.8rem;
           font-family: 'DM Sans', sans-serif;
@@ -221,8 +221,8 @@ export default function ClientConcernsPage() {
           white-space: nowrap;
         }
         .cc-upload-btn:hover {
-          border-color: #c9a84c;
-          background: #fffbf2;
+          border-color: #155EEF;
+          background: #f1f5fc;
           color: #0f1f38;
         }
         .cc-upload-hint { font-size: 0.75rem; color: #9aa3b0; }
@@ -230,8 +230,8 @@ export default function ClientConcernsPage() {
           font-size: 0.74rem;
           color: #0f1f38;
           font-weight: 500;
-          background: rgba(201,168,76,0.08);
-          border: 1px solid rgba(201,168,76,0.2);
+          background: rgba(21,94,239,0.08);
+          border: 1px solid rgba(21,94,239,0.2);
           border-radius: 6px;
           padding: 0.24rem 0.6rem;
         }
@@ -240,7 +240,7 @@ export default function ClientConcernsPage() {
           max-width: 220px;
           max-height: 148px;
           border-radius: 10px;
-          border: 1px solid #e2d9d0;
+          border: 1px solid #dde5f0;
           display: block;
           object-fit: cover;
           box-shadow: 0 2px 8px rgba(15,31,56,0.08);
@@ -264,7 +264,7 @@ export default function ClientConcernsPage() {
           align-items: center;
           gap: 0.45rem;
           background: #0f1f38;
-          color: #f5f0eb;
+          color: #f1f5fc;
           border: none;
           border-radius: 10px;
           padding: 0.68rem 1.4rem;
@@ -287,7 +287,7 @@ export default function ClientConcernsPage() {
         .cc-spin {
           width: 13px; height: 13px;
           border: 2px solid rgba(245,240,235,0.3);
-          border-top-color: #f5f0eb;
+          border-top-color: #f1f5fc;
           border-radius: 50%;
           animation: cc-spin 0.7s linear infinite;
           flex-shrink: 0;
@@ -302,7 +302,7 @@ export default function ClientConcernsPage() {
           border-collapse: collapse;
           font-size: 0.82rem;
         }
-        .cc-table thead tr { border-bottom: 1.5px solid #f0ebe4; }
+        .cc-table thead tr { border-bottom: 1.5px solid #f1f5fc; }
         .cc-table th {
           padding: 0.85rem 1.25rem;
           text-align: left;
@@ -311,11 +311,11 @@ export default function ClientConcernsPage() {
           letter-spacing: 0.1em;
           text-transform: uppercase;
           color: #9aa3b0;
-          background: #faf8f5;
+          background: #f1f5fc;
           white-space: nowrap;
         }
         .cc-table tbody tr {
-          border-bottom: 1px solid #f5f0eb;
+          border-bottom: 1px solid #f1f5fc;
           transition: background 0.12s;
         }
         .cc-table tbody tr:last-child { border-bottom: none; }
@@ -368,7 +368,7 @@ export default function ClientConcernsPage() {
           max-width: 72px;
           max-height: 52px;
           border-radius: 7px;
-          border: 1px solid #e2d9d0;
+          border: 1px solid #dde5f0;
           display: block;
           object-fit: cover;
           transition: transform 0.15s;
@@ -402,11 +402,11 @@ export default function ClientConcernsPage() {
         .cc-empty-icon {
           width: 46px; height: 46px;
           border-radius: 13px;
-          background: #f5f0eb;
+          background: #f1f5fc;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          color: #c0b8b0;
+          color: #dde5f0;
           margin-bottom: 0.75rem;
         }
         .cc-empty-title { font-size: 0.88rem; font-weight: 600; color: #6b7585; margin-bottom: 0.2rem; }
@@ -418,7 +418,7 @@ export default function ClientConcernsPage() {
           align-items: center;
           justify-content: space-between;
           padding: 1rem 1.25rem;
-          border-top: 1px solid #f0ebe4;
+          border-top: 1px solid #f1f5fc;
           gap: 1rem;
           flex-wrap: wrap;
         }
@@ -429,7 +429,7 @@ export default function ClientConcernsPage() {
           display: flex; align-items: center; gap: 0.3rem;
           padding: 0.48rem 0.9rem;
           background: #fff;
-          border: 1.5px solid #e2d9d0;
+          border: 1.5px solid #dde5f0;
           border-radius: 10px;
           font-size: 0.78rem;
           font-family: 'DM Sans', sans-serif;
@@ -440,15 +440,15 @@ export default function ClientConcernsPage() {
           transition: all 0.15s;
         }
         .cc-pag-btn:hover:not(:disabled) {
-          border-color: #c9a84c;
-          background: #fffbf2;
+          border-color: #155EEF;
+          background: #f1f5fc;
           transform: translateY(-1px);
         }
         .cc-pag-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
         .cc-pag-current {
           padding: 0.48rem 0.85rem;
           background: #0f1f38;
-          color: #f5f0eb;
+          color: #f1f5fc;
           border-radius: 10px;
           font-size: 0.78rem;
           font-weight: 600;

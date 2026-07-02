@@ -54,7 +54,7 @@ function ZonalHouseIcon({ size = 30, onClick }: { size?: number; onClick?: () =>
     <button onClick={onClick} title="Go to Dashboard" style={{ background: "none", border: "none", padding: 0, cursor: onClick ? "pointer" : "default", display: "flex", alignItems: "center", flexShrink: 0 }}>
       <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect width="40" height="40" rx="8" fill="#1e3a8a" />
-        <path d="M20 9L8 19.5H11V31H17.5V24H22.5V31H29V19.5H32L20 9Z" fill="#c9a84c" stroke="#c9a84c" strokeWidth="0.5" strokeLinejoin="round" />
+        <path d="M20 9L8 19.5H11V31H17.5V24H22.5V31H29V19.5H32L20 9Z" fill="#8fb4ff" stroke="#8fb4ff" strokeWidth="0.5" strokeLinejoin="round" />
       </svg>
     </button>
   );
@@ -77,7 +77,7 @@ function getPriceTier(p: number) {
   if (p > 100_000) return { label: "Prime",      bg: "bg-amber-100",   text: "text-amber-800",   dot: "bg-amber-400"   };
   if (p > 50_000)  return { label: "High-value", bg: "bg-violet-100",  text: "text-violet-800",  dot: "bg-violet-400"  };
   if (p > 20_000)  return { label: "Mid-market", bg: "bg-emerald-100", text: "text-emerald-800", dot: "bg-emerald-400" };
-  return                  { label: "Value",      bg: "bg-[#c9a84c]/10", text: "text-[#9a7a20]",  dot: "bg-[#c9a84c]"  };
+  return                  { label: "Value",      bg: "bg-[#155EEF]/10", text: "text-[#0f49c4]",  dot: "bg-[#155EEF]"  };
 }
 
 // ── Establishment hazard-profile helpers (design: .epx panel) ──────────────────
@@ -1300,7 +1300,7 @@ export function Home() {
             const Icon = type==="street"?MapIcon:type==="terrain"?TerrainIcon:SatelliteIcon;
             const labels: Record<string,string> = {street:"Street",terrain:"Terrain",satellite:"Satellite"};
             return (
-              <button key={type} onClick={()=>setMapType(type)} className={["flex items-center gap-2 px-3 py-2.5 text-xs font-semibold transition border-b border-gray-100 last:border-b-0", mapType===type?"text-[#f5f0eb]":"text-gray-600 hover:bg-gray-50"].join(" ")} style={mapType===type?{background:"#1e3a8a"}:undefined}>
+              <button key={type} onClick={()=>setMapType(type)} className={["flex items-center gap-2 px-3 py-2.5 text-xs font-semibold transition border-b border-gray-100 last:border-b-0", mapType===type?"text-[#f1f5fc]":"text-gray-600 hover:bg-gray-50"].join(" ")} style={mapType===type?{background:"#1e3a8a"}:undefined}>
                 <Icon size={14} /><span className="hidden sm:inline">{labels[type]}</span>
               </button>
             );
@@ -1326,18 +1326,18 @@ export function Home() {
             className="absolute z-50 w-[88vw] sm:w-[340px]"
             style={areaCardPos ? { left: areaCardPos.x, top: areaCardPos.y } : { top: 16, left: 16 }}
           >
-            <div className="rounded-2xl border-2 border-[#c9a84c] bg-white/95 backdrop-blur-xl overflow-hidden" style={{boxShadow:"0 26px 50px -16px rgba(15,23,42,0.42), 0 0 22px -6px rgba(201,168,76,0.28)"}}>
+            <div className="rounded-2xl border-2 border-[#155EEF] bg-white/95 backdrop-blur-xl overflow-hidden" style={{boxShadow:"0 26px 50px -16px rgba(15,23,42,0.42), 0 0 22px -6px rgba(21,94,239,0.28)"}}>
               <div
                 onPointerDown={startAreaCardDrag}
                 className="px-4 py-2.5 flex items-center justify-between cursor-move select-none touch-none"
                 style={{background:"#1e3a8a"}}
                 title="Drag to move"
               >
-                <div className="text-sm font-bold text-[#f5f0eb] flex items-center gap-2 min-w-0">
-                  <Ruler size={15} style={{color:"#c9a84c"}}/>
+                <div className="text-sm font-bold text-[#f1f5fc] flex items-center gap-2 min-w-0">
+                  <Ruler size={15} style={{color:"#8fb4ff"}}/>
                   <span className="truncate">Land Area</span>
                   {areaCardMin && landArea != null && (
-                    <span className="font-extrabold whitespace-nowrap" style={{color:"#c9a84c"}}>· {fmtArea(landArea, areaUnit)}</span>
+                    <span className="font-extrabold whitespace-nowrap" style={{color:"#8fb4ff"}}>· {fmtArea(landArea, areaUnit)}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-0.5 shrink-0" onPointerDown={(e)=>e.stopPropagation()}>
@@ -1356,7 +1356,7 @@ export function Home() {
                 ) : (
                   <div className="space-y-2.5">
                     {/* unit toggle */}
-                    <div className="flex items-center gap-1 rounded-lg p-0.5 w-fit" style={{background:"#f1f0ec"}}>
+                    <div className="flex items-center gap-1 rounded-lg p-0.5 w-fit" style={{background:"#f1f5fc"}}>
                       {([["sqm","sqm"],["ha","ha"],["sqft","ft²"]] as Array<["sqm"|"ha"|"sqft",string]>).map(([u,lbl])=>(
                         <button key={u} onClick={()=>setAreaUnit(u)} className="px-2.5 py-1 rounded-md text-[11px] font-bold transition" style={areaUnit===u?{background:"#1e3a8a",color:"#fff"}:{color:"#6b7280"}}>{lbl}</button>
                       ))}
@@ -1388,8 +1388,8 @@ export function Home() {
                       </div>
                     )}
                     {estValue != null && (
-                      <div className="rounded-xl p-3" style={farFromZone?{background:"#f8f7f5",border:"1px solid #e8e0d8",opacity:0.75}:{background:"#f5f0eb",border:"1px solid #e8e0d8"}}>
-                        <div className="text-[10px] font-bold uppercase tracking-wider" style={{color:"#9a7a20"}}>Est. Land Value {farFromZone ? "(zonal may not apply)" : "(BIR Zonal)"}</div>
+                      <div className="rounded-xl p-3" style={farFromZone?{background:"#f1f5fc",border:"1px solid #dde5f0",opacity:0.75}:{background:"#f1f5fc",border:"1px solid #dde5f0"}}>
+                        <div className="text-[10px] font-bold uppercase tracking-wider" style={{color:"#0f49c4"}}>Est. Land Value {farFromZone ? "(zonal may not apply)" : "(BIR Zonal)"}</div>
                         <div className="text-xl font-black" style={{color:"#1e3a8a"}}>{fmtPesoNumber(estValue)}</div>
                         <div className="text-[10px] text-gray-500 mt-0.5">{Math.round(landArea).toLocaleString("en-PH")} sqm × {fmtPesoNumber(zonal!)}/sqm</div>
                       </div>
@@ -1408,8 +1408,8 @@ export function Home() {
                   </button>
                 )}
                 <div className="mt-2 flex items-center gap-2">
-                  <button onClick={()=>{ setLandArea(null); setClearDrawSignal(n=>n+1); setDrawMode(true); }} className="flex-1 rounded-full border px-3 py-2 text-xs font-bold transition" style={{borderColor:"#e2d9d0",background:"#fff",color:"#374151"}}>Clear & Redraw</button>
-                  <button onClick={()=>setDrawMode(false)} className="flex-1 rounded-full px-3 py-2 text-xs font-bold transition text-[#f5f0eb]" style={{background:"#1e3a8a"}}>Done</button>
+                  <button onClick={()=>{ setLandArea(null); setClearDrawSignal(n=>n+1); setDrawMode(true); }} className="flex-1 rounded-full border px-3 py-2 text-xs font-bold transition" style={{borderColor:"#dde5f0",background:"#fff",color:"#374151"}}>Clear & Redraw</button>
+                  <button onClick={()=>setDrawMode(false)} className="flex-1 rounded-full px-3 py-2 text-xs font-bold transition text-[#f1f5fc]" style={{background:"#1e3a8a"}}>Done</button>
                 </div>
               </div>
               )}
@@ -1441,7 +1441,7 @@ export function Home() {
               />
               <button
                 onClick={()=>{ const r=String(me?.role||'').toLowerCase(); router.push(r==='admin'? '/admin' : '/dashboard'); }}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold border border-[#e8e0d8] bg-white text-[#1e3a8a] hover:bg-[#fff8e6]"
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold border border-[#dde5f0] bg-white text-[#1e3a8a] hover:bg-[#f1f5fc]"
                 title="Back to Dashboard"
               >
                 <ChevronLeft size={12} /> Back to Dashboard
@@ -1454,11 +1454,11 @@ export function Home() {
               {/* Token pill + request (hidden for admin) */}
               {!isAdmin && (
               <div className="hidden sm:flex items-center gap-2">
-                <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{ color: "#0f1f38", background: "#f5f0eb" }} title="Zonal tokens available">
+                <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{ color: "#0f1f38", background: "#f1f5fc" }} title="Zonal tokens available">
                   Tokens: {tokenBalance === null ? "—" : tokenBalance}
                 </span>
                 {tokenBalance === 0 && (
-                  <button onClick={()=>router.push('/dashboard/request')} className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-[#e8e0d8] bg-white text-[#1e3a8a] hover:bg-[#fff8e6]">
+                  <button onClick={()=>router.push('/dashboard/request')} className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-[#dde5f0] bg-white text-[#1e3a8a] hover:bg-[#f1f5fc]">
                     Request Tokens
                   </button>
                 )}
@@ -1466,7 +1466,7 @@ export function Home() {
               )}
             </div>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" size={15} style={{color:"#c9a84c"}} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" size={15} style={{color:"#8fb4ff"}} />
               <input value={regionSearch} onChange={e=>setRegionSearch(e.target.value)} placeholder="Search city or province…" className="zsearch w-full rounded-xl border-0 pl-9 pr-8 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none transition" style={{background:"rgba(255,255,255,0.10)"}} />
               {searchLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2"><span className="zspin" /></div>}
               {regionSearch&&!searchLoading&&<button onClick={()=>setRegionSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition"><X size={15} /></button>}
@@ -1474,22 +1474,22 @@ export function Home() {
             {/* Mobile tokens bar (clear and visible) — hidden for admin */}
             {!isAdmin && (
             <div className="mt-2 flex items-center justify-between sm:hidden">
-              <span className="text-[11px] font-extrabold px-2 py-1 rounded-lg border border-[#e8e0d8] bg-white text-[#1e3a8a]" title="Zonal tokens available">
+              <span className="text-[11px] font-extrabold px-2 py-1 rounded-lg border border-[#dde5f0] bg-white text-[#1e3a8a]" title="Zonal tokens available">
                 Tokens: {tokenBalance === null ? "—" : tokenBalance}
               </span>
               {tokenBalance === 0 && (
-                <button onClick={()=>router.push('/dashboard/request')} className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-[#e8e0d8] bg-white text-[#1e3a8a] hover:bg-[#fff8e6]">
+                <button onClick={()=>router.push('/dashboard/request')} className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-[#dde5f0] bg-white text-[#1e3a8a] hover:bg-[#f1f5fc]">
                   Request Tokens
                 </button>
               )}
             </div>
             )}
             <div className="mt-2.5 flex items-center gap-2">
-              <button onClick={()=>setShowFilters(v=>!v)} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition" style={showFilters?{background:"#f5f0eb",color:"#1e3a8a"}:{background:"rgba(255,255,255,0.10)",color:"#f5f0eb"}}>
+              <button onClick={()=>setShowFilters(v=>!v)} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition" style={showFilters?{background:"#f1f5fc",color:"#1e3a8a"}:{background:"rgba(255,255,255,0.10)",color:"#f1f5fc"}}>
                 <SlidersHorizontal size={13} />Filters
               </button>
               {isDev&&(
-                <button onClick={()=>{ if(typeof window!=="undefined"){localStorage.removeItem("facetCitiesCacheV3");localStorage.removeItem("facetBarangaysCacheV3");localStorage.removeItem("zonalCacheV1");loadCities(domain).catch(()=>{});} }} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition" style={{background:"rgba(255,255,255,0.10)",color:"#f5f0eb"}} title="Clear caches (dev only)">
+                <button onClick={()=>{ if(typeof window!=="undefined"){localStorage.removeItem("facetCitiesCacheV3");localStorage.removeItem("facetBarangaysCacheV3");localStorage.removeItem("zonalCacheV1");loadCities(domain).catch(()=>{});} }} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition" style={{background:"rgba(255,255,255,0.10)",color:"#f1f5fc"}} title="Clear caches (dev only)">
                   <RefreshCw size={13}/> Refresh
                 </button>
               )}
@@ -1502,7 +1502,7 @@ export function Home() {
             <div className="px-3 pt-3 shrink-0">
               {searchLoading?(
                 <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                  <div className="px-3 py-2 bg-[#f5f0eb] border-b border-[#e8e0d8]"><div className="h-3 w-24 rounded bg-[#1e3a8a]/15 animate-pulse"/></div>
+                  <div className="px-3 py-2 bg-[#f1f5fc] border-b border-[#dde5f0]"><div className="h-3 w-24 rounded bg-[#1e3a8a]/15 animate-pulse"/></div>
                   <div className="divide-y divide-gray-100">
                     {[0,1,2].map(i=>(
                       <div key={i} className="px-3 py-2.5 flex items-center gap-2 animate-pulse">
@@ -1517,10 +1517,10 @@ export function Home() {
                 </div>
               ):matches.length>0?(
                 <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                  <div className="px-3 py-2 bg-[#f5f0eb] border-b border-[#e8e0d8] text-[11px] font-bold text-[#1e3a8a] uppercase tracking-wide flex items-center gap-1.5">{searchMode==="city"?<MapPin size={12}/>:<MapIcon size={12}/>}{searchMode==="city"?"Cities Found":"Provinces Found"} ({matches.length})</div>
+                  <div className="px-3 py-2 bg-[#f1f5fc] border-b border-[#dde5f0] text-[11px] font-bold text-[#1e3a8a] uppercase tracking-wide flex items-center gap-1.5">{searchMode==="city"?<MapPin size={12}/>:<MapIcon size={12}/>}{searchMode==="city"?"Cities Found":"Provinces Found"} ({matches.length})</div>
                   <div className="max-h-56 overflow-auto">
                     {matches.map((m,idx)=>(
-                      <button key={idx} className="w-full text-left px-3 py-2.5 text-sm hover:bg-[#f5f0eb] border-b last:border-b-0 transition"
+                      <button key={idx} className="w-full text-left px-3 py-2.5 text-sm hover:bg-[#f1f5fc] border-b last:border-b-0 transition"
                         onClick={()=>{
                           citiesReqGenerationRef.current++; setDomain(m.domain); setSelectedProvince(m.province); setSelectedProvinceCity(m.city);
                           setCity(""); setBarangay(""); setClassification(""); setQ(""); setPage(1); setRows([]); setErr("");
@@ -1581,7 +1581,7 @@ export function Home() {
                 </div>
               </div>
               <div className="flex gap-2 pt-0.5">
-                <button onClick={()=>searchZonal({page:1})} disabled={loading} className="flex-1 rounded-xl px-4 py-2 text-xs font-bold transition disabled:opacity-50 flex items-center justify-center gap-2 text-[#f5f0eb]" style={{background:"#1e3a8a"}}>
+                <button onClick={()=>searchZonal({page:1})} disabled={loading} className="flex-1 rounded-xl px-4 py-2 text-xs font-bold transition disabled:opacity-50 flex items-center justify-center gap-2 text-[#f1f5fc]" style={{background:"#1e3a8a"}}>
                   {loading?<><Zap size={13} className="animate-spin"/>Searching<span className="zdots"><i/><i/><i/></span></>:"Search"}
                 </button>
                 <button onClick={()=>{setCity("");setBarangay("");setClassification("");setQ("");setPage(1);setRows([]);}} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 transition">Clear</button>
@@ -1595,9 +1595,9 @@ export function Home() {
           <div className="px-4 py-2.5 sticky top-0 bg-gray-50 border-b border-gray-100 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wide">Results</span>
-              {loading&&<Zap size={12} className="animate-spin text-[#c9a84c]"/>}
+              {loading&&<Zap size={12} className="animate-spin text-[#155EEF]"/>}
             </div>
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{color:"#9a7a20",background:"rgba(201,168,76,0.12)"}}>
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{color:"#0f49c4",background:"rgba(21,94,239,0.12)"}}>
               {totalRows?<>#{showingFrom.toLocaleString()}–{showingTo.toLocaleString()} of {totalRows.toLocaleString()}</>:"No results"}
             </span>
           </div>
@@ -1626,8 +1626,8 @@ export function Home() {
                 return (
                   <button key={`${r.rowIndex}-${i}`} onClick={()=>selectRow(r)}
                     className={["w-full text-left rounded-2xl border-2 p-3 transition-all duration-200", isActive?"":"border-gray-200 bg-white"].join(" ")}
-                    style={isActive?{borderColor:"#c9a84c",background:"linear-gradient(180deg,#f8f3ec,#f2ebdf)",boxShadow:"0 12px 28px -14px rgba(201,168,76,.5), inset 3px 0 0 #c9a84c"}:undefined}
-                    onMouseEnter={e=>{ if(!isActive){const t=e.currentTarget as HTMLElement; t.style.borderColor="rgba(201,168,76,0.45)"; t.style.background="rgba(245,240,235,0.6)"; t.style.boxShadow="0 12px 26px -13px rgba(15,23,42,0.22)"; t.style.transform="translateY(-1px)";} }}
+                    style={isActive?{borderColor:"#155EEF",background:"linear-gradient(180deg,#f1f5fc,#f1f5fc)",boxShadow:"0 12px 28px -14px rgba(21,94,239,.5), inset 3px 0 0 #155EEF"}:undefined}
+                    onMouseEnter={e=>{ if(!isActive){const t=e.currentTarget as HTMLElement; t.style.borderColor="rgba(21,94,239,0.45)"; t.style.background="rgba(241,245,252,0.6)"; t.style.boxShadow="0 12px 26px -13px rgba(15,23,42,0.22)"; t.style.transform="translateY(-1px)";} }}
                     onMouseLeave={e=>{ if(!isActive){const t=e.currentTarget as HTMLElement; t.style.borderColor=""; t.style.background=""; t.style.boxShadow=""; t.style.transform="";} }}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
@@ -1672,7 +1672,7 @@ export function Home() {
             <div className="px-4 py-3 flex items-center justify-between shrink-0" style={{background:"#1e3a8a"}}>
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{background:"#1e40af"}}><FileText size={15}/></div>
-                <div className="text-sm font-bold text-[#f5f0eb]">Property Report</div>
+                <div className="text-sm font-bold text-[#f1f5fc]">Property Report</div>
               </div>
               <button onClick={()=>setRightOpen(false)} className="rounded-xl p-1.5 transition text-white/50 hover:text-white" style={{background:"rgba(255,255,255,0.08)"}} title="Close"><X size={16}/></button>
             </div>
@@ -1707,26 +1707,26 @@ export function Home() {
                   <div className="mt-3 rounded-2xl overflow-hidden shadow-md ring-1 ring-black/5">
                     <div className="zhero p-4 flex items-center justify-between gap-3" style={{background:"linear-gradient(135deg,#1e3a8a,#1e40af)"}}>
                       <div className="min-w-0">
-                        <div className="text-[10px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{color:"#c9a84c"}}><Coins size={12}/> Zonal Value</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{color:"#8fb4ff"}}><Coins size={12}/> Zonal Value</div>
                         <div className="text-3xl font-black text-white leading-none drop-shadow-sm">{parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])?fmtPesoNumber(parseZonalValueToNumber(selectedRow["ZonalValuepersqm.-"])!):"Not Appraised"}</div>
-                        <div className="text-[11px] font-semibold mt-1.5" style={{color:"rgba(201,168,76,0.85)"}}>per square meter</div>
+                        <div className="text-[11px] font-semibold mt-1.5" style={{color:"rgba(21,94,239,0.85)"}}>per square meter</div>
                       </div>
                       <div className="text-right shrink-0">
                         <div className="font-bold text-lg text-white truncate max-w-[170px]">{String(selectedRow["City-"]??"")}</div>
                         <div className="text-xs font-semibold truncate max-w-[170px]" style={{color:"rgba(255,255,255,0.7)"}}>{String(selectedRow["Barangay-"]??"")}</div>
-                        <div className="truncate max-w-[170px] text-xs font-medium mt-0.5" style={{color:"rgba(201,168,76,0.7)"}}>{String(selectedRow["Street/Subdivision-"]??"")}</div>
+                        <div className="truncate max-w-[170px] text-xs font-medium mt-0.5" style={{color:"rgba(21,94,239,0.7)"}}>{String(selectedRow["Street/Subdivision-"]??"")}</div>
                       </div>
                     </div>
                     {String(selectedRow["Classification-"]??"").trim()&&(
-                      <div className="px-4 py-1.5 flex items-center gap-2" style={{background:"#f5f0eb",borderTop:"1px solid #e8e0d8"}}>
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{background:"#c9a84c"}}/>
+                      <div className="px-4 py-1.5 flex items-center gap-2" style={{background:"#f1f5fc",borderTop:"1px solid #dde5f0"}}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{background:"#155EEF"}}/>
                         <span className="text-[11px] font-bold uppercase tracking-wide" style={{color:"#1e3a8a"}}>{String(selectedRow["Classification-"]??"")}</span>
                       </div>
                     )}
                     {floodRisk&&(()=>{
                       const fc=({0:{bg:"#ecfdf5",dot:"#10b981",txt:"No flood"},1:{bg:"#fef9c3",dot:"#ca8a04",txt:"Low flood risk"},2:{bg:"#ffedd5",dot:"#ea580c",txt:"Moderate flood risk"},3:{bg:"#fee2e2",dot:"#dc2626",txt:"High flood risk"}} as any)[floodRisk.level]||{bg:"#f3f4f6",dot:"#9ca3af",txt:floodRisk.label};
                       return (
-                        <div className="px-4 py-1.5 flex items-center gap-2" style={{background:fc.bg,borderTop:"1px solid #e8e0d8"}}>
+                        <div className="px-4 py-1.5 flex items-center gap-2" style={{background:fc.bg,borderTop:"1px solid #dde5f0"}}>
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{background:fc.dot}}/>
                           <span className="text-[11px] font-bold uppercase tracking-wide" style={{color:"#1e3a8a"}}>{fc.txt} · 100-yr flood</span>
                         </div>
@@ -1735,7 +1735,7 @@ export function Home() {
                     {landslideRisk&&(()=>{
                       const lc=({0:{bg:"#ecfdf5",dot:"#10b981",txt:"No landslide"},1:{bg:"#fef9c3",dot:"#ca8a04",txt:"Low landslide risk"},2:{bg:"#ffedd5",dot:"#9a3412",txt:"Moderate landslide risk"},3:{bg:"#fee2e2",dot:"#78350f",txt:"High landslide risk"}} as any)[landslideRisk.level]||{bg:"#f3f4f6",dot:"#9ca3af",txt:landslideRisk.label};
                       return (
-                        <div className="px-4 py-1.5 flex items-center gap-2" style={{background:lc.bg,borderTop:"1px solid #e8e0d8"}}>
+                        <div className="px-4 py-1.5 flex items-center gap-2" style={{background:lc.bg,borderTop:"1px solid #dde5f0"}}>
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{background:lc.dot}}/>
                           <span className="text-[11px] font-bold uppercase tracking-wide" style={{color:"#1e3a8a"}}>{lc.txt} · landslide</span>
                         </div>
@@ -1744,7 +1744,7 @@ export function Home() {
                     {stormSurgeRisk&&(()=>{
                       const sc=({0:{bg:"#ecfdf5",dot:"#10b981",txt:"No storm surge"},1:{bg:"#ede9fe",dot:"#8b5cf6",txt:"Low storm-surge risk"},2:{bg:"#ddd6fe",dot:"#7c3aed",txt:"Moderate storm-surge risk"},3:{bg:"#e9d5ff",dot:"#6d28d9",txt:"High storm-surge risk"}} as any)[stormSurgeRisk.level]||{bg:"#f3f4f6",dot:"#9ca3af",txt:stormSurgeRisk.label};
                       return (
-                        <div className="px-4 py-1.5 flex items-center gap-2" style={{background:sc.bg,borderTop:"1px solid #e8e0d8"}}>
+                        <div className="px-4 py-1.5 flex items-center gap-2" style={{background:sc.bg,borderTop:"1px solid #dde5f0"}}>
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{background:sc.dot}}/>
                           <span className="text-[11px] font-bold uppercase tracking-wide" style={{color:"#1e3a8a"}}>{sc.txt} · worst-case surge</span>
                         </div>
@@ -1754,7 +1754,7 @@ export function Home() {
                       const qc=({0:{bg:"#ecfdf5",dot:"#10b981"},1:{bg:"#fef9c3",dot:"#ca8a04"},2:{bg:"#ffedd5",dot:"#ea580c"},3:{bg:"#fee2e2",dot:"#dc2626"}} as any)[faultRisk.level]||{bg:"#f3f4f6",dot:"#9ca3af"};
                       const dist = faultRisk.distance_m < 1000 ? `${faultRisk.distance_m} m` : `${(faultRisk.distance_m/1000).toFixed(1)} km`;
                       return (
-                        <div className="px-4 py-1.5 flex items-center gap-2" style={{background:qc.bg,borderTop:"1px solid #e8e0d8"}}>
+                        <div className="px-4 py-1.5 flex items-center gap-2" style={{background:qc.bg,borderTop:"1px solid #dde5f0"}}>
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{background:qc.dot}}/>
                           <span className="text-[11px] font-bold uppercase tracking-wide" style={{color:"#1e3a8a"}}>{dist} from {faultRisk.name}</span>
                         </div>
@@ -1781,8 +1781,8 @@ export function Home() {
                     const brgyName = String(selectedRow["Barangay-"] ?? "").trim() || "this area";
                     return (
                       <div className="mt-3 rounded-2xl border border-gray-200 overflow-hidden">
-                        <div className="px-3 py-1.5 flex items-center gap-1.5" style={{background:"#f5f0eb",borderBottom:"1px solid #e8e0d8"}}>
-                          <Coins size={12} style={{color:"#9a7a20"}}/>
+                        <div className="px-3 py-1.5 flex items-center gap-1.5" style={{background:"#f1f5fc",borderBottom:"1px solid #dde5f0"}}>
+                          <Coins size={12} style={{color:"#0f49c4"}}/>
                           <span className="text-[11px] font-bold uppercase tracking-wide" style={{color:"#1e3a8a"}}>Nearby Zonal Values</span>
                           <span className="text-[10px] text-gray-500 ml-auto">{stats.count} {whole ? "in" : "loaded for"} {brgyName}</span>
                         </div>
@@ -1806,11 +1806,11 @@ export function Home() {
                   <div className="mt-3 flex items-center gap-2">
                     {/* Primary actions (scrollable) */}
                     <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-1 min-w-0">
-                      <button onClick={()=>{ setAutoPreview(false); setRightOpen(true); }} className="shrink-0 rounded-full px-4 py-2 text-xs font-bold transition text-[#f5f0eb]" style={{background:"#1e3a8a"}}>Open Report</button>
+                      <button onClick={()=>{ setAutoPreview(false); setRightOpen(true); }} className="shrink-0 rounded-full px-4 py-2 text-xs font-bold transition text-[#f1f5fc]" style={{background:"#1e3a8a"}}>Open Report</button>
                       <button
                         onClick={()=>{ if(drawMode){ setDrawMode(false); } else { setLandArea(null); setClearDrawSignal(n=>n+1); setAreaCardMin(false); setMapType("satellite"); setDrawMode(true); if(typeof window!=="undefined"&&window.innerWidth<640){ setBottomOpen(false); } } }}
                         className="shrink-0 inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-bold transition"
-                        style={drawMode?{borderColor:"#c9a84c",background:"#c9a84c",color:"#1e3a8a"}:{borderColor:"#c9a84c",background:"#fff",color:"#1e3a8a"}}
+                        style={drawMode?{borderColor:"#155EEF",background:"#155EEF",color:"#fff"}:{borderColor:"#155EEF",background:"#fff",color:"#1e3a8a"}}
                         title="Draw your land boundary on the map to estimate its area and value"
                       >
                         <Ruler size={13}/> {drawMode?"Drawing…":"Measure Land"}
@@ -1830,7 +1830,7 @@ export function Home() {
                       <button
                         onClick={()=>setToolsOpen(v=>!v)}
                         className="inline-flex items-center gap-1 rounded-full border px-3 py-2 text-xs font-bold transition"
-                        style={toolsOpen?{borderColor:"#c9a84c",background:"#f5f0eb",color:"#1e3a8a"}:{borderColor:"#e2d9d0",background:"#fff",color:"#1e3a8a"}}
+                        style={toolsOpen?{borderColor:"#155EEF",background:"#f1f5fc",color:"#1e3a8a"}:{borderColor:"#dde5f0",background:"#fff",color:"#1e3a8a"}}
                         title="More tools"
                       >
                         Tools <ChevronDown size={13} style={{transform: toolsOpen?"rotate(180deg)":"none", transition:"transform .2s"}}/>
@@ -1849,25 +1849,25 @@ export function Home() {
                                 else{setStreetGeo(null);setShowStreetHighlight(false);setDetailsErr("Street line not found near this pin.");}
                               }}
                               disabled={streetGeoLoading}
-                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f5f0eb] transition border-b border-gray-100 disabled:opacity-50"
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f1f5fc] transition border-b border-gray-100 disabled:opacity-50"
                             >
                               <MapPin size={14} style={{color:"#1e3a8a"}}/> {streetGeoLoading?"Finding…":showStreetHighlight?"Hide Street":"Highlight Street"}
                             </button>
                             <button
                               onClick={()=>{ setToolsOpen(false); setCalcOpen(true); }}
-                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f5f0eb] transition border-b border-gray-100"
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f1f5fc] transition border-b border-gray-100"
                             >
                               <Calculator size={14} style={{color:"#1e3a8a"}}/> Cost Calculator
                             </button>
                             <button
                               onClick={()=>{ setToolsOpen(false); setStreetViewOpen(true); }}
-                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f5f0eb] transition border-b border-gray-100"
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f1f5fc] transition border-b border-gray-100"
                             >
                               <Camera size={14} style={{color:"#1e3a8a"}}/> Street View
                             </button>
                             <button
                               onClick={()=>{ setToolsOpen(false); setSnapshotOpen(true); }}
-                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f5f0eb] transition"
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left text-gray-700 hover:bg-[#f1f5fc] transition"
                             >
                               <ImageIcon size={14} style={{color:"#1e3a8a"}}/> Save Image
                             </button>
@@ -2236,7 +2236,7 @@ export function Home() {
                             return (
                               <button key={c.group} type="button"
                                 onClick={() => setScanResults((prev) => prev.map((x, idx) => idx === i ? ({ ...x, value_per_sqm: c.value, classification_code: c.code, pickedGroup: c.group }) : x))}
-                                style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 100, cursor: "pointer", transition: "all .15s ease", border: `1px solid ${active ? "#c9a84c" : "#e6dec8"}`, background: active ? "linear-gradient(180deg,#f0deaa,#c9a84c)" : "#fff", color: active ? "#1a2b56" : "#64748b" }}
+                                style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 100, cursor: "pointer", transition: "all .15s ease", border: `1px solid ${active ? "#155EEF" : "#dde5f0"}`, background: active ? "linear-gradient(180deg,#5b8def,#155EEF)" : "#fff", color: active ? "#fff" : "#64748b" }}
                                 title={`Use the ${c.label.toLowerCase()} value`}>
                                 {c.label} ₱{Number(c.value).toLocaleString("en-PH")}
                               </button>

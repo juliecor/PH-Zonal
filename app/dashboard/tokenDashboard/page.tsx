@@ -64,14 +64,14 @@ export default function DashboardSidebar({ title, links = [] }: Props) {
           position: relative;
         }
         .dsb-link:hover {
-          background: #f5f0eb;
+          background: #f1f5fc;
           color: #0f1f38;
         }
         .dsb-link.active {
           background: #0f1f38;
-          color: #f5f0eb;
+          color: #f1f5fc;
         }
-        .dsb-link.active svg { color: #c9a84c; }
+        .dsb-link.active svg { color: #8fb4ff; }
 
         .dsb-link-icon {
           display: flex;
@@ -89,7 +89,7 @@ export default function DashboardSidebar({ title, links = [] }: Props) {
 
         .dsb-footer {
           padding: 0.75rem;
-          border-top: 1px solid #f0ebe4;
+          border-top: 1px solid #f1f5fc;
           margin-top: auto;
         }
         .dsb-logout {

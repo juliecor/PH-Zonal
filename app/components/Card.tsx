@@ -12,7 +12,7 @@ export default function Card({ padding = true, className = "", style, children }
   return (
     <div
       className={
-        "zv-card bg-white border border-[#e8e0d8] shadow-[0_2px_14px_rgba(15,31,56,0.05)] rounded-[14px] " +
+        "zv-card bg-white border border-[#e9eef8] shadow-[0_2px_14px_rgba(15,31,56,0.05)] rounded-[14px] " +
         (padding ? "p-4 " : "") +
         className
       }
