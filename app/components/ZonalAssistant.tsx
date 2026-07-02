@@ -26,7 +26,8 @@ type Msg = {
   hazards?: NonNullable<HazardData>[];
 };
 
-const LOGO = "/pictures/zonal%20ai-Photoroom.png";
+const LOGO = "/pictures/ai-head.png";       // ZV AI mascot head — header + chat avatars
+const MASCOT = "/pictures/ai-mascot.png";   // full thinking mascot — floating launcher
 const STORAGE_KEY = "zonalAssistantChatV1";
 
 const SUGGESTIONS = [
@@ -213,7 +214,7 @@ export default function ZonalAssistant({
           <span className="za-glow" aria-hidden />
           <span className="za-float relative block">
             <img
-              src={LOGO}
+              src={MASCOT}
               alt="Zonal AI"
               className="relative h-28 w-28 object-contain transition group-hover:scale-110"
               style={{ filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.45))" }}

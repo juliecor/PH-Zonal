@@ -41,9 +41,9 @@ export const metadata: Metadata = {
   publisher: "Leuterio Realty",
   alternates: { canonical: "/" },
   icons: {
-    icon: "/pictures/filipinohomespointer.png",
-    shortcut: "/pictures/filipinohomespointer.png",
-    apple: "/pictures/filipinohomespointer.png",
+    icon: "/pictures/zv-mark.png",
+    shortcut: "/pictures/zv-mark.png",
+    apple: "/pictures/zv-mark.png",
   },
   openGraph: {
     type: "website",
