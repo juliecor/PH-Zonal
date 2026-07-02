@@ -447,6 +447,7 @@ export function Home() {
   const [landPath, setLandPath] = useState<Array<{ lat: number; lng: number }> | null>(null);
   const [areaUnit, setAreaUnit] = useState<"sqm" | "ha" | "sqft">("sqm");
   const [calcOpen, setCalcOpen] = useState(false);
+  const [calcSeed, setCalcSeed] = useState<{ value: number | null; label: string } | null>(null); // seed the calculator from an establishment click
   const [briefOpen, setBriefOpen] = useState(false);
   const [streetViewOpen, setStreetViewOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -1891,9 +1892,9 @@ export function Home() {
       {/* COST CALCULATOR (taxes + fees + loan, one place) */}
       <PropertyCalculator
         open={calcOpen}
-        onClose={()=>setCalcOpen(false)}
-        defaultValue={landArea && parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]) ? landArea * parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"])! : null}
-        locationLabel={selectedTitle}
+        onClose={()=>{ setCalcOpen(false); setCalcSeed(null); }}
+        defaultValue={calcSeed ? calcSeed.value : (landArea && parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"]) ? landArea * parseZonalValueToNumber(selectedRow?.["ZonalValuepersqm.-"])! : null)}
+        locationLabel={calcSeed ? calcSeed.label : selectedTitle}
       />
 
       {/* AI INVESTMENT BRIEF */}
@@ -2088,6 +2089,27 @@ export function Home() {
                 )}
               </div>
             </section>
+
+            {/* Share + cost computation for this establishment (like the app) */}
+            {poiCard.value != null && (
+              <section className="section" aria-label="Share and compute">
+                <ShareResultButton
+                  title={poiCard.name || [poiCard.barangay, poiCard.city].filter(Boolean).join(", ") || "This location"}
+                  name={poiCard.name || "This location"}
+                  address={cleanAddr(poiCard.address) || [poiCard.street, poiCard.barangay, poiCard.city].filter(Boolean).join(" · ")}
+                  valuePerSqm={poiCard.value}
+                  classification={poiCard.classification}
+                />
+                <button
+                  type="button"
+                  onClick={() => { setCalcSeed({ value: Math.round((poiCard.value || 0) * 250), label: poiCard.name || "Selected establishment" }); setCalcOpen(true); }}
+                  className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold text-white transition active:scale-[0.99]"
+                  style={{ background: "#16276a", boxShadow: "0 8px 18px -8px rgba(22,39,106,0.6)" }}
+                >
+                  <Coins size={16} /> Compute cost &amp; taxes
+                </button>
+              </section>
+            )}
 
             {/* HAZARD PROFILE — above nearby values */}
             <section className="section" aria-label="Hazard profile">
